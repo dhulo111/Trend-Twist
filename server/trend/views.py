@@ -130,7 +130,7 @@ class RequestLoginOTPView(APIView):
             send_mail(subject='Your TrendTwist Login OTP', message=f'Your One-Time Password is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
         except Exception as e:
             print(f"Error sending email: {e}") # Debug print
-            return Response({"error": f"Failed to send OTP email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"SMTP Error (Check render env vars): {str(e)}"}, status=status.HTTP_501_INTERNAL_SERVER_ERROR)
         
         return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
 
