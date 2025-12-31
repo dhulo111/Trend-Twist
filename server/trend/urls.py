@@ -1,0 +1,101 @@
+# backend/api/urls.py
+
+from django.urls import path, include # Added 'include' for the API grouping
+from rest_framework_simplejwt.views import TokenRefreshView # Re-added for session refresh
+from . import views
+
+urlpatterns = [
+    # ----------------------------------------------------------------------
+    # 1. AUTHENTICATION & SESSIONS
+    # ----------------------------------------------------------------------
+    
+    # JWT Refresh (Re-added for session persistence)
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'), 
+    
+    # OTP & Google Auth
+    path('auth/google/', views.GoogleLoginView.as_view(), name='google_login'),
+    path('auth/login/request-otp/', views.RequestLoginOTPView.as_view(), name='request_login_otp'),
+    path('auth/login/verify-otp/', views.VerifyLoginOTPView.as_view(), name='verify_login_otp'),
+    path('auth/register/request-otp/', views.RequestRegisterOTPView.as_view(), name='request_register_otp'),
+    path('auth/register/verify-only-otp/', views.VerifyOnlyOTPView.as_view(), name='verify_only_otp'),
+    path('auth/register/complete/', views.CompleteRegistrationView.as_view(), name='complete_registration'),
+
+
+    # ----------------------------------------------------------------------
+    # 2. USER, PROFILE & SEARCH
+    # ----------------------------------------------------------------------
+    
+    # Profile Management
+    path('user/', views.CurrentUserProfileView.as_view(), name='current_user_profile'),
+    path('profile/update/', views.ProfileUpdateView.as_view(), name='profile_update'),
+    path('profiles/<str:username>/', views.UserProfileDetailView.as_view(), name='user_profile_detail'),
+    path('users/<int:user_id>/posts/', views.UserPostListView.as_view(), name='user_posts_list'),
+    
+    # Live User Search (NEW)
+    path('users/search/', views.UserSearchView.as_view(), name='user_search'),
+
+
+    # ----------------------------------------------------------------------
+    # 3. FOLLOW & REQUESTS (Private Accounts)
+    # ----------------------------------------------------------------------
+
+    # Toggle Follow/Send Request
+    path('users/<int:pk>/follow/', views.FollowToggleView.as_view(), name='follow_toggle'),
+    
+    # Follower/Following Lists
+    path('profiles/<str:username>/followers/', views.FollowerListView.as_view(), name='follower_list'),
+    path('profiles/<str:username>/following/', views.FollowingListView.as_view(), name='following_list'),
+
+    # Follow Request Inbox (NEW)
+    path('requests/', views.FollowRequestListView.as_view(), name='follow_request_list'),
+    path('requests/<int:pk>/<str:action>/', views.FollowRequestActionView.as_view(), name='follow_request_action'),
+    
+
+    # ----------------------------------------------------------------------
+    # 4. LIVE CHAT (Inbox & Detail)
+    # ----------------------------------------------------------------------
+
+    # Inbox List
+    path('chats/', views.ChatRoomListView.as_view(), name='chat_inbox'),
+    
+    # Chat History/Room Detail (Uses user ID to identify the conversation partner)
+    path('chats/<int:user_id>/', views.ChatRoomDetailView.as_view(), name='chat_detail'),
+
+
+    # ----------------------------------------------------------------------
+    # 5. CONTENT (Posts, Stories, Trends)
+    # ----------------------------------------------------------------------
+
+    # Posts
+    path('posts/', views.PostListCreateView.as_view(), name='post_list_create'),
+    path('posts/<int:pk>/', views.PostDetailView.as_view(), name='post_detail'),
+    
+    # Engagement
+    path('posts/<int:pk>/like/', views.LikeToggleView.as_view(), name='like_toggle'),
+    path('posts/<int:pk>/comments/', views.CommentListCreateView.as_view(), name='comment_list_create'),
+    path('comments/<int:pk>/', views.CommentDetailView.as_view(), name='comment_detail'),
+    path('posts/<int:pk>/twists/', views.TwistListCreateView.as_view(), name='twist_list_create'),
+
+    # Stories
+    path('stories/', views.StoryListCreateView.as_view(), name='story_list_create'),
+    path('stories/<int:story_id>/view/', views.RegisterStoryView.as_view(), name='register_story_view'),
+    path('stories/<int:pk>/', views.StoryDetailDeleteView.as_view(), name='story_delete'),
+    path('stories/user/<int:user_id>/', views.UserStoryListView.as_view(), name='user_story_list'),
+path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), name='story_analytics'),
+    # Trends
+    path('trends/hashtags/', views.TrendingHashtagsView.as_view(), name='trending_hashtags'),
+
+    # Reels
+    path('reels/', views.ReelListCreateView.as_view(), name='reel_list_create'),
+    path('reels/<int:pk>/', views.ReelDetailView.as_view(), name='reel_detail'),
+    path('reels/user/<int:user_id>/', views.UserReelListView.as_view(), name='user_reel_list'),
+    path('reels/<int:pk>/like/', views.ReelLikeToggleView.as_view(), name='reel_like_toggle'),
+    path('reels/<int:pk>/comments/', views.ReelCommentListCreateView.as_view(), name='reel_comment_list_create'),
+    path('reels/<int:pk>/share/', views.ShareReelView.as_view(), name='share_reel'),
+
+    # ----------------------------------------------------------------------
+    # 6. NOTIFICATIONS
+    # ----------------------------------------------------------------------
+    path('notifications/', views.NotificationListView.as_view(), name='notification_list'),
+    path('notifications/<int:pk>/<str:action>/', views.NotificationActionView.as_view(), name='notification_action'),
+]

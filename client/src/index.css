@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: hsl(var(--bg-primary));
+  --color-bg-secondary: hsl(var(--bg-secondary));
+  --color-bg-accent: hsl(var(--bg-accent));
+  --color-text-primary: hsl(var(--text-primary));
+  --color-text-secondary: hsl(var(--text-secondary));
+  --color-text-accent: hsl(var(--text-accent));
+  --color-border: hsl(var(--border));
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+}
+
+@layer base {
+  :root {
+    /* Premium Light Mode */
+    --bg-primary: 210 20% 98%; /* Very light blueish gray */
+    --bg-secondary: 0 0% 100%;
+    --bg-accent: 250 60% 98%; 
+    --text-primary: 220 20% 10%;
+    --text-secondary: 220 10% 40%;
+    --text-accent: 260 85% 60%; /* Vibrant Purple/Violet */
+    --border: 220 20% 92%;
+    
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.5);
+  }
+
+  [data-theme="dark"] {
+    /* Premium Dark Mode (Deep Blue/Purple hints) */
+    --bg-primary: 230 25% 10%; /* Deep dark blue */
+    --bg-secondary: 230 20% 14%;
+    --bg-accent: 230 30% 20%;
+    --text-primary: 220 10% 98%;
+    --text-secondary: 220 15% 70%;
+    --text-accent: 260 100% 75%; /* Bright Neon Purple */
+    --border: 230 20% 20%;
+
+    --glass-bg: rgba(20, 20, 30, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary antialiased;
+    /* Subtle animated gradient background for that "alive" feel */
+    background: linear-gradient(135deg, hsl(var(--bg-primary)) 0%, hsl(var(--bg-accent)) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Glassmorphism Utilities */
+  
+  /* Base Glass Effect (No Shape Presumptions) */
+  .glass {
+    @apply backdrop-blur-xl border border-glass-border shadow-lg;
+    background: var(--glass-bg);
+  }
+  
+  /* Flat Glass (For Full Width/Page Containers) */
+  .glass-flat {
+    @apply backdrop-blur-xl border border-glass-border shadow-lg border-x-0 border-t-0 rounded-none;
+    background: var(--glass-bg);
+  }
+
+  /* Glass Panel (Rounded Component Base) */
+  .glass-panel {
+    @apply backdrop-blur-xl border border-glass-border shadow-lg rounded-2xl;
+    background: var(--glass-bg);
+  }
+
+  /* Card Utility (Glass Panel + Padding) */
+  .card {
+     @apply backdrop-blur-xl border border-glass-border shadow-lg rounded-2xl p-6;
+     background: var(--glass-bg);
+  }
+  
+  /* Always Dark Glass (for Reels/Media overlays) */
+  .glass-dark {
+    @apply backdrop-blur-xl border border-white/10 shadow-lg text-white;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+
