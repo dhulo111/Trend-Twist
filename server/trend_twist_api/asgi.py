@@ -8,7 +8,7 @@ import trend.routing # <-- Import our new routing file
 
 from trend.middleware import JwtAuthMiddleware # Import Custom Middleware
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trend_twist_api.settings')
+os.environ['DJANGO_SETTINGS_MODULE'] = 'trend_twist_api.settings'
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(), # Standard HTTP calls (for DRF)
