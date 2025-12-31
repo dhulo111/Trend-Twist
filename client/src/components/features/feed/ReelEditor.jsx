@@ -456,7 +456,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   // --- RENDER ---
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative select-none bg-black">
-      <div ref={wrapperRef} className="relative w-full h-full max-w-[420px] bg-black overflow-hidden shadow-2xl rounded-xl border border-white/10">
+      <div ref={wrapperRef} className="relative w-full h-full md:max-w-[420px] md:h-auto md:aspect-[9/16] bg-black overflow-hidden md:shadow-2xl md:rounded-3xl md:border border-white/10 shrink-0">
 
         {/* Layer 1: Video Background */}
         <video
@@ -478,34 +478,41 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
         {/* Layer 3: UI Controls */}
 
         {/* Top Bar */}
-        <div className="absolute top-0 inset-x-0 p-4 flex justify-between z-[100] bg-gradient-to-b from-black/80 to-transparent">
-          {["text", "draw", "filter", "sticker_edit"].includes(activeTool) ? (
+        {/* Top Bar */}
+        {/* Top Bar (Contextual Tools Only) */}
+        {["text", "draw", "filter", "sticker_edit"].includes(activeTool) && (
+          <div className="absolute top-0 inset-x-0 p-4 pt-12 md:pt-6 flex justify-between items-start z-[100] bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
             <div className="w-full flex justify-between items-center">
               <button
                 onClick={handleDeleteObject}
-                className="bg-red-500/80 p-2 rounded-full text-white backdrop-blur-md hover:bg-red-600 transition shadow-lg"
+                className="bg-red-500/80 p-2 rounded-full text-white backdrop-blur-md hover:bg-red-600 transition shadow-lg pointer-events-auto"
               >
                 <IoTrash size={20} />
               </button>
-              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-bold shadow-lg">
+              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-bold shadow-lg pointer-events-auto">
                 <IoCheckmark /> Done
               </button>
             </div>
-          ) : (
-            <>
-              <button onClick={onCancel} className="bg-black/40 p-2 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition"><IoCloseOutline size={24} /></button>
-              <div className="flex gap-4">
-                <button onClick={() => setActiveTool('music')} className="bg-black/40 p-2 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition"><IoMusicalNotes size={22} /></button>
-              </div>
-              <button onClick={handleFinish} className="px-5 py-2 bg-cyan-500 text-black font-bold rounded-full shadow-lg hover:brightness-110">Next</button>
-            </>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Bottom Navigation Bar (Main View) */}
+        {activeTool === 'none' && (
+          <div className="absolute bottom-0 inset-x-0 p-6 pb-20 md:pb-8 flex justify-between items-center z-[100] bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
+            <button onClick={onCancel} className="bg-white/10 p-3 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition pointer-events-auto border border-white/10">
+              <IoCloseOutline size={28} />
+            </button>
+            <button onClick={handleFinish} className="px-8 py-3 bg-cyan-500 text-black font-bold text-lg rounded-full shadow-lg hover:brightness-110 pointer-events-auto active:scale-95 transition-transform">
+              Next
+            </button>
+          </div>
+        )}
 
         {/* Side Menu Tools */}
         {activeTool === 'none' && (
-          <div className="absolute right-4 top-24 flex flex-col gap-4 z-[100] animate-in slide-in-from-right-10">
+          <div className="absolute right-4 top-20 flex flex-col gap-4 z-[100] animate-in slide-in-from-right-10">
             {[
+              { id: 'music', icon: IoMusicalNotes, action: () => setActiveTool('music'), label: 'Audio' },
               { id: 'text', icon: IoTextOutline, action: handleAddText, label: 'Text' },
               { id: 'draw', icon: IoBrushOutline, action: () => { setActiveTool('draw'); toggleDrawingMode(true); }, label: 'Draw' },
               { id: 'sticker', icon: IoHappyOutline, action: () => setActiveTool('sticker_menu'), label: 'Sticker' },
@@ -577,7 +584,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Text Toolbar */}
         {activeTool === 'text' && (
-          <ToolbarContainer className="bottom-24">
+          <ToolbarContainer className="bottom-24 md:bottom-28">
             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2">
               {EDITOR_FONTS.map((font) => (
                 <button
@@ -609,7 +616,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Draw Toolbar */}
         {activeTool === 'draw' && (
-          <ToolbarContainer className="bottom-24">
+          <ToolbarContainer className="bottom-24 md:bottom-28">
             <div className="flex justify-between items-center mb-4">
               <span className="text-white text-xs font-bold uppercase">Brush Tools</span>
               <button onClick={() => {
@@ -704,7 +711,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Filter UI */}
         {activeTool === 'filter' && (
-          <div className="absolute bottom-24 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-4 z-[100]">
+          <div className="absolute bottom-24 md:bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-4 z-[100]">
             {FILTER_TYPES.map(f => (
               <button key={f} onClick={() => setFilterType(f)} className={`flex-shrink-0 w-20 h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-[0_0_15px_#facc15]' : 'border-white/20'}`}>
                 <div className={`w-full h-full bg-gray-800 ${getFilterClass(f)}`}>

@@ -39,7 +39,7 @@ const EditProfilePage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
             {/* Left Side: Title & Info (Optional, or just keep it simple) */}
             <div className="lg:col-span-4 flex flex-col justify-start pt-4">
-              <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-text-primary to-text-accent mb-4">
+              <h1 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-text-primary to-text-accent mb-4">
                 Edit Profile
               </h1>
               <p className="text-text-secondary text-lg">

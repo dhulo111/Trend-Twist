@@ -159,10 +159,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
           onTouchStart={() => setIsPaused(true)}
           onTouchEnd={() => setIsPaused(false)}
         >
-          {/* --- Close Button --- */}
-          <button onClick={onClose} className="absolute top-4 right-4 z-50 text-white hover:text-gray-300 transition-colors">
-            <IoCloseOutline className="h-8 w-8" />
-          </button>
+
 
           {/* --- Story Content Area --- */}
           <div className="relative w-full max-w-lg h-full md:h-[90vh] md:max-h-[900px] overflow-hidden rounded-lg shadow-2xl bg-black">
@@ -182,7 +179,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
             </div>
 
             {/* --- Story Header (User Info & Analytics Button) --- */}
-            <div className="absolute top-5 left-4 right-4 z-40 flex items-center justify-between">
+            <div className="absolute top-6 left-3 right-3 z-40 flex items-center justify-between">
               <div className="flex items-center space-x-3 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
                 <Avatar src={currentGroup.profile_picture} size="sm" />
                 <p className="font-semibold text-white">
@@ -215,6 +212,15 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
                     {isDeleting ? <Spinner size="sm" className="text-red-500" /> : <IoTrashOutline className="h-6 w-6" />}
                   </button>
                 )}
+
+                {/* --- Close Button (Always Visible) --- */}
+                <button
+                  onClick={onClose}
+                  className="p-1 rounded-full text-white hover:bg-white/20 transition-colors"
+                  title="Close"
+                >
+                  <IoCloseOutline className="h-8 w-8 drop-shadow-md" />
+                </button>
               </div>
             </div>
 
@@ -279,14 +285,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
                 )}
               </motion.div>
 
-              {/* --- Caption Overlay --- */}
-              {currentStory.caption && (
-                <div className="absolute bottom-20 left-0 right-0 p-4 text-center z-40 pointer-events-none">
-                  <p className="text-white text-lg font-semibold bg-black/30 backdrop-blur-sm p-2 rounded-lg inline-block shadow-lg">
-                    {currentStory.caption.replace(/ \[Music: .*\]/, '')} {/* Clean caption */}
-                  </p>
-                </div>
-              )}
+            
 
             </div>
 

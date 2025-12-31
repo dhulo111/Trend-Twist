@@ -192,28 +192,28 @@ const ProfilePage = () => {
         <div className='mt-8'>
 
           {/* 2. Tabs */}
-          <div className="flex justify-center border-t border-border mb-6">
+          <div className="flex justify-center border-t border-border mb-4 md:mb-6">
             <button
               onClick={() => setActiveTab('posts')}
-              className={`flex items-center space-x-2 px-8 py-4 border-t-2 transition-all ${activeTab === 'posts' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+              className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'posts' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
             >
-              <IoGridOutline className="h-5 w-5" />
-              <span className="font-semibold text-sm tracking-wider">POSTS</span>
+              <IoGridOutline className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="font-semibold text-xs md:text-sm tracking-wider">POSTS</span>
             </button>
             <button
               onClick={() => setActiveTab('reels')}
-              className={`flex items-center space-x-2 px-8 py-4 border-t-2 transition-all ${activeTab === 'reels' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+              className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'reels' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
             >
-              <IoFilmOutline className="h-5 w-5" />
-              <span className="font-semibold text-sm tracking-wider">REELS</span>
+              <IoFilmOutline className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="font-semibold text-xs md:text-sm tracking-wider">REELS</span>
             </button>
             {isOwner && userDrafts.length > 0 && (
               <button
                 onClick={() => setActiveTab('drafts')}
-                className={`flex items-center space-x-2 px-8 py-4 border-t-2 transition-all ${activeTab === 'drafts' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+                className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'drafts' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
               >
-                <IoFilmOutline className="h-5 w-5 opacity-50" />
-                <span className="font-semibold text-sm tracking-wider">DRAFTS</span>
+                <IoFilmOutline className="h-4 w-4 md:h-5 md:w-5 opacity-50" />
+                <span className="font-semibold text-xs md:text-sm tracking-wider">DRAFTS</span>
               </button>
             )}
           </div>
@@ -281,12 +281,12 @@ const ProfilePage = () => {
             </div>
           ) : (
             // Locked View
-            <div className="text-center py-16 text-text-secondary border border-border rounded-xl card mt-8">
-              <IoLockClosed className="h-16 w-16 mx-auto mb-4 text-text-secondary" />
-              <h3 className="text-2xl font-bold text-text-primary">
+            <div className="text-center py-10 md:py-16 text-text-secondary border border-border rounded-xl card mt-4 md:mt-8">
+              <IoLockClosed className="h-10 w-10 md:h-16 md:w-16 mx-auto mb-3 md:mb-4 text-text-secondary" />
+              <h3 className="text-xl md:text-2xl font-bold text-text-primary">
                 This Account is Private
               </h3>
-              <p className="mt-2">
+              <p className="mt-2 text-sm md:text-base">
                 {profileData.has_pending_request
                   ? "Your follow request is pending review."
                   : "Follow this user to see their content."}

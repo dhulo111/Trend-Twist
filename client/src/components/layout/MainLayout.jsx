@@ -7,6 +7,7 @@ import Navbar from './Navbar';
 const MainLayout = () => {
   const location = useLocation();
   const isFixedPage = location.pathname.startsWith('/reels') || location.pathname.startsWith('/messages');
+  const isFullScreenPage = location.pathname.startsWith('/create/reel');
 
   // Apply the saved theme on initial load
   useEffect(() => {
@@ -17,11 +18,11 @@ const MainLayout = () => {
   return (
     <div className="flex min-h-screen bg-transparent text-text-primary font-sans selection:bg-text-accent selection:text-white">
       {/* 1. Navigation Bar (Responsive: Sidebar on Desktop, Bottom Bar on Mobile) */}
-      <Navbar />
+      {!isFullScreenPage && <Navbar />}
 
       {/* 2. Main Content Area */}
       <main
-        className={`flex-1 w-full h-screen md:pl-64 pb-16 pt-16 md:pt-0 md:pb-0 transition-all duration-300 ${isFixedPage ? 'overflow-hidden' : 'overflow-y-auto scroll-smooth'
+        className={`flex-1 w-full h-screen ${!isFullScreenPage ? 'md:pl-64 pb-16 pt-16 md:pt-0 md:pb-0' : 'p-0'} transition-all duration-300 ${isFixedPage || isFullScreenPage ? 'overflow-hidden' : 'overflow-y-auto scroll-smooth'
           }`}
       >
         <div className={`w-full ${isFixedPage ? 'h-full' : 'min-h-full'} animate-in fade-in slide-in-from-bottom-4 duration-500`}>

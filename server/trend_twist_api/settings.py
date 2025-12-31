@@ -42,6 +42,7 @@ INSTALLED_APPS = [
 
     # Our Custom App
     'trend', 
+    'storages', # Supabase/S3 Storage 
 ]
 
 MIDDLEWARE = [
@@ -68,10 +69,7 @@ ROOT_URLCONF = 'trend_twist_api.urls'
 # ... (Templates/WSGI/Databases remain same)
 
 # --- Static/Media Files ---
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# Enable Whitenoise storage
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -149,10 +147,64 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# --- Static/Media Files (No change) ---
+# --- Static/Media Files ---
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
+# Default STORAGES (Local/Filesystem)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Supabase Storage (S3 Compatible) - PRODUCTION OVERRIDE
+if 'SUPABASE_ACCESS_KEY_ID' in os.environ:
+    AWS_ACCESS_KEY_ID = os.environ.get('SUPABASE_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('SUPABASE_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('SUPABASE_STORAGE_BUCKET_NAME')
+    AWS_S3_ENDPOINT_URL = os.environ.get('SUPABASE_S3_ENDPOINT_URL')
+    AWS_S3_REGION_NAME = 'us-east-1'
+    
+    # S3 Config
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    
+    # Handle Bucket Name with Spaces for URL
+    from urllib.parse import quote, urlparse
+    _bucket_name = AWS_STORAGE_BUCKET_NAME
+    _bucket_name_url = quote(_bucket_name) # Encodes "trend twist" -> "trend%20twist"
+    
+    _s3_endpoint = urlparse(AWS_S3_ENDPOINT_URL)
+    _s3_domain = _s3_endpoint.netloc 
+    AWS_S3_CUSTOM_DOMAIN = f"{_s3_domain}/storage/v1/object/public/{_bucket_name_url}"
+    
+    # Update STORAGES for Django 5.0+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "access_key": AWS_ACCESS_KEY_ID,
+            "secret_key": AWS_SECRET_ACCESS_KEY,
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "endpoint_url": AWS_S3_ENDPOINT_URL,
+            "region_name": AWS_S3_REGION_NAME,
+            "default_acl": AWS_DEFAULT_ACL,
+            "file_overwrite": AWS_S3_FILE_OVERWRITE,
+            "querystring_auth": AWS_QUERYSTRING_AUTH,
+            "object_parameters": AWS_S3_OBJECT_PARAMETERS,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+        }
+    }
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
 # --- DRF / JWT (UPDATED for ROTATION FIX) ---
 REST_FRAMEWORK = {

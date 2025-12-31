@@ -128,11 +128,11 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
 
 
   return (
-    <div className="w-full glass-flat mb-6 py-10 px-6 animate-in fade-in slide-in-from-top-4 duration-700 relative overflow-hidden">
+    <div className="w-full glass-flat mb-4 md:mb-6 py-6 md:py-10 px-4 md:px-6 animate-in fade-in slide-in-from-top-4 duration-700 relative overflow-hidden">
       {/* Decorative gradient overlay for premium feel */}
       <div className="absolute inset-0 bg-gradient-to-r from-text-accent/5 to-transparent pointer-events-none" />
 
-      <div className="relative flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-12 max-w-5xl mx-auto">
+      <div className="relative flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-12 max-w-5xl mx-auto">
 
         {/* 1. Avatar Section (Story Ring Integration) */}
         <div className="flex-shrink-0 flex flex-col items-center">
@@ -166,9 +166,9 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
         </div>
 
         {/* 2. Details and Action */}
-        <div className="flex-grow">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-3xl font-bold text-text-primary mr-4">
+        <div className="flex-grow w-full md:w-auto text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center justify-between mb-2 space-y-2 md:space-y-0">
+            <h1 className="text-2xl md:text-3xl font-bold text-text-primary md:mr-4">
               {profileData.username}
             </h1>
             <div className="flex-shrink-0">
@@ -177,7 +177,7 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
           </div>
 
           {/* Full Name and Private Tag */}
-          <p className="text-lg text-text-secondary mb-3 flex items-center space-x-2">
+          <p className="text-base md:text-lg text-text-secondary mb-3 flex items-center justify-center md:justify-start space-x-2">
             <span className='font-semibold'>{profileData.first_name} {profileData.last_name}</span>
             {isPrivate && (
               <span className="text-xs px-2 py-0.5 bg-background-accent text-text-accent rounded-full flex items-center">
@@ -187,36 +187,36 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
           </p>
 
           {/* Stats: Display Live Counts (CLICKABLE) */}
-          <div className="mt-4 flex space-x-6 md:space-x-10 mb-4 border-t border-b border-border/50 py-2">
+          <div className="mt-4 flex justify-center md:justify-start space-x-4 md:space-x-10 mb-4 border-t border-b border-border/50 py-2">
 
             {/* Posts Count (Not Clickable) */}
-            <div className="text-center rounded-md p-1 m-1">
+            <div className="text-center rounded-md p-1 min-w-[60px]">
               <span className="block text-lg font-bold text-text-primary">
                 {postsCount}
               </span>
-              <span className="text-sm text-text-secondary">Posts</span>
+              <span className="text-xs md:text-sm text-text-secondary">Posts</span>
             </div>
 
             {/* Followers Count */}
             <div
-              className="text-center cursor-pointer hover:bg-background-accent/30 rounded-md p-1 m-1 transition-colors"
+              className="text-center cursor-pointer hover:bg-background-accent/30 rounded-md p-1 min-w-[60px] transition-colors"
               onClick={() => handleStatClick('followers')}
             >
               <span className="block text-lg font-bold text-text-primary">
                 {followersCount}
               </span>
-              <span className="text-sm text-text-secondary">Followers</span>
+              <span className="text-xs md:text-sm text-text-secondary">Followers</span>
             </div>
 
             {/* Following Count */}
             <div
-              className="text-center cursor-pointer hover:bg-background-accent/30 rounded-md p-1 m-1 transition-colors"
+              className="text-center cursor-pointer hover:bg-background-accent/30 rounded-md p-1 min-w-[60px] transition-colors"
               onClick={() => handleStatClick('following')}
             >
               <span className="block text-lg font-bold text-text-primary">
                 {followingCount}
               </span>
-              <span className="text-sm text-text-secondary">Following</span>
+              <span className="text-xs md:text-sm text-text-secondary">Following</span>
             </div>
           </div>
 

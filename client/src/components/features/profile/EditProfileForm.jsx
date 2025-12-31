@@ -101,12 +101,12 @@ const EditProfileForm = ({ onSuccess }) => {
       <form onSubmit={handleSubmit} className="space-y-8">
 
         {/* --- Profile Picture Section --- */}
-        <div className="flex items-center space-x-6 pb-6 border-b border-white/10">
-          <div className="relative group">
+        <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 pb-6 border-b border-white/10">
+          <div className="relative group flex-shrink-0">
             <Avatar
               src={previewImage}
               alt="Profile Preview"
-              size="2xl"
+              size="lg"
               className="cursor-pointer border-4 border-bg-secondary shadow-xl transition-transform group-hover:scale-105"
               onClick={handleOpenFileInput}
             />
@@ -115,7 +115,7 @@ const EditProfileForm = ({ onSuccess }) => {
             </div>
           </div>
 
-          <div className="flex flex-col items-start">
+          <div className="flex flex-col items-center md:items-start text-center md:text-left">
             <h3 className="text-lg font-bold text-text-primary">Profile Photo</h3>
             <p className="text-sm text-text-secondary mb-3">Recommended: Square JPG, PNG</p>
             <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={loading} />
@@ -200,20 +200,20 @@ const EditProfileForm = ({ onSuccess }) => {
           {/* --- 2. Privacy Settings --- */}
           <div className="md:col-span-2">
             <h3 className="text-lg font-bold text-text-primary mb-4">Privacy & Access</h3>
-            <div className="flex items-center justify-between rounded-xl bg-bg-primary/40 p-5 border border-white/10 hover:border-text-accent/30 transition-colors cursor-pointer" onClick={() => setIsPrivate(!isPrivate)}>
-              <div className="pr-4">
-                <label htmlFor="isPrivateToggle" className="font-semibold text-text-primary block text-lg pointer-events-none">
+            <div className="flex items-start md:items-center justify-between rounded-xl bg-bg-primary/40 p-4 md:p-5 border border-white/10 hover:border-text-accent/30 transition-colors cursor-pointer" onClick={() => setIsPrivate(!isPrivate)}>
+              <div className="pr-4 flex-1">
+                <label htmlFor="isPrivateToggle" className="font-semibold text-text-primary block text-base md:text-lg pointer-events-none">
                   Private Account
                 </label>
-                <p className='text-sm text-text-secondary pointer-events-none'>
-                  Only approved followers will see your photos and videos. This won't affect existing followers.
+                <p className='text-xs md:text-sm text-text-secondary pointer-events-none mt-1'>
+                  Only approved followers will see your photos and videos.
                 </p>
               </div>
               {/* Toggle Switch */}
               <button
                 type="button"
                 id="isPrivateToggle"
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 ${isPrivate ? 'bg-text-accent' : 'bg-gray-300 dark:bg-gray-700'}`}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 flex-shrink-0 mt-1 md:mt-0 ${isPrivate ? 'bg-text-accent' : 'bg-gray-300 dark:bg-gray-700'}`}
                 disabled={loading}
               >
                 <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />

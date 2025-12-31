@@ -15,7 +15,8 @@ const Avatar = ({ src, alt = 'avatar', size = 'md', className = '', onClick }) =
   let finalSrc = null;
 
   if (cleanSrc && !isDefaultImage) {
-    const needsPrefix = !cleanSrc.startsWith('http');
+    // FIX: Don't prepend backend URL for blob: (local preview) or http/https
+    const needsPrefix = !cleanSrc.startsWith('http') && !cleanSrc.startsWith('blob:');
     finalSrc = needsPrefix
       ? `${MEDIA_BASE_URL}${cleanSrc.startsWith('/') ? cleanSrc : '/' + cleanSrc}`
       : cleanSrc;
