@@ -10,7 +10,7 @@ const config = {
   // Reads VITE_API_BASE_URL from the frontend/.env file
   // Fallback to the default Django runserver address
   API_BASE_URL:
-    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api",
+    import.meta.env.VITE_API_BASE_URL || "https://trend-twist.onrender.com",
 
   // Reads VITE_GOOGLE_CLIENT_ID from the .env file (used in main.jsx)
   GOOGLE_CLIENT_ID:
