@@ -125,7 +125,8 @@ class RequestLoginOTPView(APIView):
         try:
             send_mail(subject='Your TrendTwist Login OTP', message=f'Your One-Time Password is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
         except Exception as e:
-            return Response({"error": "Failed to send OTP email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Error sending email: {e}") # Debug print
+            return Response({"error": f"Failed to send OTP email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
 
@@ -175,7 +176,8 @@ class RequestRegisterOTPView(APIView):
         try:
             send_mail(subject='Verify Your Email for TrendTwist', message=f'Your email verification code is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
         except Exception as e:
-            return Response({"error": "Failed to send OTP email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Error sending email: {e}") # Debug print
+            return Response({"error": f"Failed to send OTP email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
 
