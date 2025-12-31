@@ -119,8 +119,12 @@ class RequestLoginOTPView(APIView):
         except User.DoesNotExist:
             return Response({"error": "Account not found. Please register first."}, status=status.HTTP_404_NOT_FOUND)
         
-        otp_code = str(random.randint(100000, 999999))
-        otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
+        try:
+            otp_code = str(random.randint(100000, 999999))
+            otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
+        except Exception as e:
+            print(f"Error creating OTP record: {e}")
+            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         try:
             send_mail(subject='Your TrendTwist Login OTP', message=f'Your One-Time Password is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
@@ -170,8 +174,12 @@ class RequestRegisterOTPView(APIView):
         if User.objects.filter(email=email).exists():
             return Response({"error": "This email is already in use. Please log in."}, status=status.HTTP_400_BAD_REQUEST)
         
-        otp_code = str(random.randint(100000, 999999))
-        otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
+        try:
+            otp_code = str(random.randint(100000, 999999))
+            otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
+        except Exception as e:
+            print(f"Error creating OTP record: {e}")
+            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         try:
             send_mail(subject='Verify Your Email for TrendTwist', message=f'Your email verification code is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
