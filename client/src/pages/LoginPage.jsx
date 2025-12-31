@@ -142,7 +142,7 @@ const LoginPage = () => {
             Discover what's new. Join the next trend.
           </p>
           <img
-            src="./src/assets/images/login.jpg"
+            src="https://gosharpener.com/content/uploads/photos/2024/09/sngine_554b7fb4220580094ff96ca152962eb8.jpg"
             alt="Login Graphic"
             className="mt-12 w-full max-w-lg rounded-2xl shadow-2xl"
           />
