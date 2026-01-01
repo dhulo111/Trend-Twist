@@ -128,8 +128,6 @@ WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 # --- Database (Postgres for Render, SQLite for local) ---
 DATABASES = {
     'default': dj_database_url.config(
-        # Feel free to change this to your local postgres URL if needed, 
-        # or keep using sqlite locally.
         default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
         conn_max_age=600
     )
