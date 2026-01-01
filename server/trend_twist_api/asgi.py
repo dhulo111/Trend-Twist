@@ -1,22 +1,25 @@
-# backend/trend_twist_api/asgi.py (UPDATED)
-
 import os
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
-import trend.routing # <-- Import our new routing file
 
-from trend.middleware import JwtAuthMiddleware # Import Custom Middleware
+# 1. Set the settings module BEFORE importing anything else
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trend_twist_api.settings')
 
-os.environ['DJANGO_SETTINGS_MODULE'] = 'trend_twist_api.settings'
+# 2. Initialize the Django ASGI application early to ensure the AppRegistry is populated
+# This must happen before importing routing, consumers, or middleware that use models.
+django_asgi_app = get_asgi_application()
+
+# 3. Now it's safe to import our custom consumers and middleware
+from channels.routing import ProtocolTypeRouter, URLRouter
+from trend.middleware import JwtAuthMiddleware
+import trend.routing
 
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(), # Standard HTTP calls (for DRF)
+    "http": django_asgi_app, # Standard HTTP calls
     
     # WebSocket handling for live features using JWT
     "websocket": JwtAuthMiddleware(
         URLRouter(
-            trend.routing.websocket_urlpatterns # <-- Use routing.py for WS URLs
+            trend.routing.websocket_urlpatterns
         )
     ),
 })
