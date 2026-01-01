@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+import dj_database_url # Database URL parser
 from dotenv import load_dotenv # Used to load secrets from .env file
 
 # Load environment variables from .env
@@ -124,12 +125,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 
 
-# --- Database (MYSQL for XAMPP) ---
+# --- Database (Postgres for Render, SQLite for local) ---
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3', # આ BASE_DIR માં db.sqlite3 નામની ફાઈલ બનાવશે
-    }
+    'default': dj_database_url.config(
+        # Feel free to change this to your local postgres URL if needed, 
+        # or keep using sqlite locally.
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600
+    )
 }
 
 
