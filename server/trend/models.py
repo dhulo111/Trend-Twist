@@ -170,6 +170,17 @@ class StoryView(models.Model):
     def __str__(self):
         return f"{self.user.username} viewed Story {self.story.id}"
 
+class StoryLike(models.Model):
+    story = models.ForeignKey(Story, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('story', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} likes Story {self.story.id}"
+
 
 # --- 6. Live Chat Models (For Django Channels) ---
 
@@ -180,7 +191,7 @@ class ChatRoom(models.Model):
     user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_rooms_as_user1')
     user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_rooms_as_user2')
     last_message_at = models.DateTimeField(auto_now_add=True) 
-
+    
     class Meta:
         # Ensures that a room is unique regardless of user order
         unique_together = ('user1', 'user2') 
@@ -200,6 +211,9 @@ class ChatMessage(models.Model):
     
     # Optional: Attach a reel to the message
     shared_reel = models.ForeignKey('Reel', on_delete=models.SET_NULL, null=True, blank=True, related_name='shared_in_chats')
+    
+    # Optional: Reply to a story
+    story_reply = models.ForeignKey(Story, on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
     def __str__(self):
         return f"Message in {self.room.id} by {self.author.username}"
@@ -251,6 +265,7 @@ class Notification(models.Model):
         ('follow_accept', 'Follow Accept'),
         ('comment_post', 'Comment Post'),
         ('comment_reel', 'Comment Reel'),
+        ('story_like', 'Story Like'),
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
@@ -260,6 +275,7 @@ class Notification(models.Model):
     # Optional links to content
     post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True)
     reel = models.ForeignKey(Reel, on_delete=models.CASCADE, null=True, blank=True)
+    story = models.ForeignKey(Story, on_delete=models.CASCADE, null=True, blank=True)
     
     # For Follow Requests specifically (so we can accept/reject from notification)
     follow_request_ref = models.ForeignKey(FollowRequest, on_delete=models.SET_NULL, null=True, blank=True)

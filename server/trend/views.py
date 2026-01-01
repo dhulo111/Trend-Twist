@@ -24,8 +24,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
-    Reel, ReelLike, ReelComment 
+    Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
+    Reel, ReelLike, ReelComment, StoryLike 
 )
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 # Import all serializers
 from .serializers import (
     UserSerializer, ProfileSerializer, PostSerializer, CommentSerializer, TwistSerializer,
@@ -119,7 +122,15 @@ class RequestLoginOTPView(APIView):
         except User.DoesNotExist:
             return Response({"error": "Account not found. Please register first."}, status=status.HTTP_404_NOT_FOUND)
         
+        # Validate Email Settings before creating DB record
+        if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+            print("CRITICAL: EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is NOT set.")
+            return Response({"error": "Server Email Misconfiguration: EMAIL_HOST_USER/PASSWORD missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         try:
+            old_otp = OTPRequest.objects.filter(email=email, is_verified=False)
+            old_otp.delete() # Cleanup old requests
+            
             otp_code = str(random.randint(100000, 999999))
             otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
         except Exception as e:
@@ -127,10 +138,20 @@ class RequestLoginOTPView(APIView):
             return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         try:
-            send_mail(subject='Your TrendTwist Login OTP', message=f'Your One-Time Password is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
+            print(f"Attempting to send OTP to {email} using {settings.EMAIL_HOST_USER}...")
+            send_mail(
+                subject='Your TrendTwist Login OTP', 
+                message=f'Your One-Time Password is: {otp_code}', 
+                from_email=settings.DEFAULT_FROM_EMAIL, 
+                recipient_list=[email],
+                fail_silently=False
+            )
+            print("Email sent successfully.")
         except Exception as e:
-            print(f"Error sending email: {e}") # Debug print
-            return Response({"error": f"SMTP Error (Check render env vars): {str(e)}"}, status=status.HTTP_501_INTERNAL_SERVER_ERROR)
+            print(f"SMTP Error: {e}") 
+            # Delete the OTP request since it wasn't sent
+            otp_request.delete()
+            return Response({"error": f"Failed to send email. Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
 
@@ -174,7 +195,14 @@ class RequestRegisterOTPView(APIView):
         if User.objects.filter(email=email).exists():
             return Response({"error": "This email is already in use. Please log in."}, status=status.HTTP_400_BAD_REQUEST)
         
+        if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+             print("CRITICAL: EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is NOT set.")
+             return Response({"error": "Server Email Misconfiguration: EMAIL_HOST_USER/PASSWORD missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         try:
+            # Clean up old unverified requests
+            OTPRequest.objects.filter(email=email, is_verified=False).delete()
+            
             otp_code = str(random.randint(100000, 999999))
             otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
         except Exception as e:
@@ -182,10 +210,18 @@ class RequestRegisterOTPView(APIView):
             return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         try:
-            send_mail(subject='Verify Your Email for TrendTwist', message=f'Your email verification code is: {otp_code}', from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email])
+            print(f"Attempting to send OTP to {email}...")
+            send_mail(
+                subject='Verify Your Email for TrendTwist', 
+                message=f'Your email verification code is: {otp_code}', 
+                from_email=settings.DEFAULT_FROM_EMAIL, 
+                recipient_list=[email],
+                fail_silently=False
+            )
         except Exception as e:
-            print(f"Error sending email: {e}") # Debug print
-            return Response({"error": f"SMTP Error (Check render env vars): {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"SMTP Error: {e}") # Debug print
+            otp_request.delete()
+            return Response({"error": f"SMTP Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
 
@@ -452,6 +488,67 @@ class ChatRoomDetailView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class SendMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        recipient_username = request.data.get('recipient_username')
+        content = request.data.get('content')
+        story_id = request.data.get('story_id')
+        
+        if not recipient_username or not content:
+             return Response({"error": "Recipient and content are required."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        try:
+            recipient = User.objects.get(username=recipient_username)
+        except User.DoesNotExist:
+             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+             
+        # Create/Get Room
+        room, created = ChatRoom.objects.get_or_create(
+            user1=min(request.user, recipient, key=lambda u: u.id),
+            user2=max(request.user, recipient, key=lambda u: u.id)
+        )
+        room.last_message_at = timezone.now()
+        room.save()
+        
+        # Optional: Link story
+        story_ref = None
+        if story_id:
+            try:
+                story_ref = Story.objects.get(id=story_id)
+            except Story.DoesNotExist: pass
+            
+        # Create Message
+        msg = ChatMessage.objects.create(
+            room=room,
+            author=request.user,
+            content=content,
+            story_reply=story_ref
+        )
+        
+        # Broadcast to WebSocket Group
+        channel_layer = get_channel_layer()
+        user_ids = sorted([str(request.user.id), str(recipient.id)])
+        room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
+        room_group_name = f'chat_{room_name}'
+        
+        async_to_sync(channel_layer.group_send)(
+            room_group_name,
+            {
+                'type': 'chat_message',
+                'id': msg.id,
+                'content': msg.content,
+                'author': request.user.id,
+                'author_username': request.user.username,
+                'timestamp': msg.timestamp.isoformat(),
+                'is_read': False 
+            }
+        )
+
+        return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+
 # ----------------------------------------------------------------------
 #                       CONTENT & ENGAGEMENT
 # ----------------------------------------------------------------------
@@ -571,6 +668,31 @@ class StoryDetailDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly] # Ensures only the author can delete
 
     # NOTE: The lookup field will be 'pk' (story ID) by default.
+
+class StoryLikeToggleView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, pk):
+        try:
+            story = Story.objects.get(pk=pk)
+        except Story.DoesNotExist: return Response({"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        like_obj, created = StoryLike.objects.get_or_create(story=story, user=request.user)
+        if not created:
+            # Unlike
+            like_obj.delete()
+            return Response({"status": "unliked"}, status=status.HTTP_200_OK)
+        
+        # Like
+        if story.author != request.user:
+             Notification.objects.create(
+                recipient=story.author,
+                sender=request.user,
+                notification_type='story_like',
+                story=story
+            )
+            
+        return Response({"status": "liked"}, status=status.HTTP_201_CREATED)
+
     
 class StoryAnalyticsView(generics.ListAPIView):
     """

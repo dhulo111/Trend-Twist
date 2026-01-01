@@ -57,10 +57,10 @@ const ReelsPage = () => {
   };
 
   return (
-    <div className="h-full w-full bg-black flex justify-center">
+    <div className="h-full w-full bg-black flex justify-center items-center">
 
-      {/* Centered Column for Reels (Mobile Wrapper style) */}
-      <div className="relative w-full md:w-[420px] h-full bg-black shadow-2xl overflow-hidden flex flex-col">
+      {/* Centered Column for Reels (Mobile Wrapper style - adjusted for "somewhat small" request) */}
+      <div className="relative w-[94%] h-[94%] md:w-[420px] md:h-full bg-black shadow-2xl overflow-hidden flex flex-col rounded-xl">
 
         {/* Feed Container */}
         <div
@@ -75,7 +75,7 @@ const ReelsPage = () => {
             reels.map(reel => (
               // On mobile, subtract nav heights (16 top + 16 bottom = 8rem or ~128px)
               // We use min-h to ensure snap works
-              <div key={reel.id} className="w-full h-full snap-start shrink-0 relative flex justify-center bg-black">
+              <div key={reel.id} className="w-full h-full snap-start [scroll-snap-stop:always] shrink-0 relative flex justify-center bg-black">
                 {/* 
                      Pass basic props. 
                      Note: ReelCard is now w-full h-full, so it fills this 420px container on desktop 

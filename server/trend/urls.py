@@ -81,6 +81,9 @@ urlpatterns = [
     path('stories/<int:story_id>/view/', views.RegisterStoryView.as_view(), name='register_story_view'),
     path('stories/<int:pk>/', views.StoryDetailDeleteView.as_view(), name='story_delete'),
     path('stories/user/<int:user_id>/', views.UserStoryListView.as_view(), name='user_story_list'),
+    path('stories/<int:pk>/like/', views.StoryLikeToggleView.as_view(), name='story_like_toggle'),
+    path('messages/send/', views.SendMessageView.as_view(), name='send_message'),
+
 path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), name='story_analytics'),
     # Trends
     path('trends/hashtags/', views.TrendingHashtagsView.as_view(), name='trending_hashtags'),

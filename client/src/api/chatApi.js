@@ -34,3 +34,17 @@ export const getChatHistory = async (userId) => {
 
 // Note: Sending new messages is handled directly by the WebSocket (ChatConsumer),
 // not via a standard REST API call.
+// UPDATE: We now have a REST endpoint for quick messages (like from Story Viewer)
+export const sendMessage = async (recipientUsername, content, storyId = null) => {
+  try {
+    const response = await axiosInstance.post('/messages/send/', {
+      recipient_username: recipientUsername,
+      content,
+      story_id: storyId
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error sending message:", error);
+    throw error;
+  }
+};

@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoCloseOutline, IoChevronBack, IoChevronForward, IoEyeOutline, IoTrashOutline, IoAddCircleOutline, IoMusicalNotes } from 'react-icons/io5';
-import { registerView, deleteStory } from '../../../api/storyApi';
+import { IoCloseOutline, IoChevronBack, IoChevronForward, IoEyeOutline, IoTrashOutline, IoAddCircleOutline, IoMusicalNotes, IoHeart, IoHeartOutline, IoPaperPlaneOutline } from 'react-icons/io5';
+import { registerView, deleteStory, likeStory } from '../../../api/storyApi';
+import { sendMessage } from '../../../api/chatApi';
 import { AuthContext } from '../../../context/AuthContext';
 import Avatar from '../../common/Avatar';
 import Spinner from '../../common/Spinner';
@@ -23,6 +24,9 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
   const [isMediaLoaded, setIsMediaLoaded] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
   const currentGroup = storyGroups[currentGroupIndex];
   const currentStory = currentGroup?.stories[currentStoryIndex];
@@ -45,8 +49,16 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
       setCurrentStoryIndex(0);
       setIsPaused(false);
       setIsMediaLoaded(false);
+      setMessageText('');
     }
   }, [isOpen, initialGroupIndex, totalGroups]);
+
+  // Sync isLiked state when story changes
+  useEffect(() => {
+    if (currentStory) {
+      setIsLiked(currentStory.is_liked || false);
+    }
+  }, [currentStory]);
 
   // --- Navigation Handlers ---
   const handleNext = useCallback(() => {
@@ -142,188 +154,252 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
       setIsDeleting(false);
       alert("Failed to delete story.");
     }
-  };
+  }
+};
 
-  if (!isOpen || !currentGroup || !currentStory) return null;
+// --- Like Handler ---
+const handleLike = async (e) => {
+  e.stopPropagation();
+  const newLikedState = !isLiked;
+  setIsLiked(newLikedState); // Optimistic update
+  try {
+    await likeStory(currentStory.id);
+  } catch (error) {
+    console.error("Failed to like story", error);
+    setIsLiked(!newLikedState); // Revert on fail
+  }
+};
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onMouseDown={() => setIsPaused(true)}
-          onMouseUp={() => setIsPaused(false)}
-          onTouchStart={() => setIsPaused(true)}
-          onTouchEnd={() => setIsPaused(false)}
-        >
+// --- Send Message Handler ---
+const handleSendMessage = async (e) => {
+  if (e) e.stopPropagation();
+  if (!messageText.trim() || isSending) return;
+
+  setIsSending(true);
+  try {
+    await sendMessage(currentGroup.username, messageText, currentStory.id);
+    setMessageText('');
+    // Optional: Show a toast or feedback
+    alert("Reply sent!");
+  } catch (error) {
+    console.error("Failed to send reply", error);
+    alert("Failed to send message.");
+  } finally {
+    setIsSending(false);
+    setIsPaused(false); // Resume story
+  }
+};
+
+if (!isOpen || !currentGroup || !currentStory) return null;
+
+return (
+  <AnimatePresence>
+    {isOpen && (
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onMouseDown={() => setIsPaused(true)}
+        onMouseUp={() => setIsPaused(false)}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
+      >
 
 
-          {/* --- Story Content Area --- */}
-          <div className="relative w-full max-w-lg h-full md:h-[90vh] md:max-h-[900px] overflow-hidden rounded-lg shadow-2xl bg-black">
+        {/* --- Story Content Area --- */}
+        <div className="relative w-full max-w-lg h-full md:h-[90vh] md:max-h-[900px] overflow-hidden rounded-lg shadow-2xl bg-black">
 
-            {/* --- Progress Bars (Timeline) --- */}
-            <div className="absolute top-0 left-0 right-0 z-40 flex space-x-1 p-2">
-              {currentGroup.stories.map((story, index) => (
-                <div key={story.id} className="flex-1 h-1 bg-white/40 rounded-full overflow-hidden">
-                  <motion.div
-                    ref={el => progressBarRefs.current[index] = el}
-                    className="h-full bg-white"
-                    initial={false}
-                    animate={getProgressStyles(index)}
-                  />
-                </div>
-              ))}
+          {/* --- Progress Bars (Timeline) --- */}
+          <div className="absolute top-0 left-0 right-0 z-40 flex space-x-1 p-2">
+            {currentGroup.stories.map((story, index) => (
+              <div key={story.id} className="flex-1 h-1 bg-white/40 rounded-full overflow-hidden">
+                <motion.div
+                  ref={el => progressBarRefs.current[index] = el}
+                  className="h-full bg-white"
+                  initial={false}
+                  animate={getProgressStyles(index)}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* --- Story Header (User Info & Analytics Button) --- */}
+          <div className="absolute top-6 left-3 right-3 z-40 flex items-center justify-between">
+            <div className="flex items-center space-x-3 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+              <Avatar src={currentGroup.profile_picture} size="sm" />
+              <p className="font-semibold text-white">
+                {currentGroup.username}
+                <span className="ml-2 text-xs font-normal text-white/70">
+                  {new Date(currentStory.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </p>
             </div>
 
-            {/* --- Story Header (User Info & Analytics Button) --- */}
-            <div className="absolute top-6 left-3 right-3 z-40 flex items-center justify-between">
-              <div className="flex items-center space-x-3 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-                <Avatar src={currentGroup.profile_picture} size="sm" />
-                <p className="font-semibold text-white">
-                  {currentGroup.username}
-                  <span className="ml-2 text-xs font-normal text-white/70">
-                    {new Date(currentStory.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </p>
-              </div>
-
-              <div className='flex items-center space-x-2 pointer-events-auto'>
-                {/* --- Analytics Button (ONLY Owner) --- */}
-                {isOwner && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setIsAnalyticsOpen(true); }}
-                    className="p-1 rounded-full text-white/70 hover:text-white transition-colors bg-black/20"
-                    title="View Story Views"
-                  >
-                    <IoEyeOutline className="h-6 w-6" />
-                  </button>
-                )}
-                {/* --- Delete Button (ONLY Owner) --- */}
-                {isOwner && (
-                  <button
-                    onClick={handleDeleteStory}
-                    className="p-1 rounded-full text-white/70 hover:text-red-500 transition-colors bg-black/20"
-                    title="Delete Story"
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? <Spinner size="sm" className="text-red-500" /> : <IoTrashOutline className="h-6 w-6" />}
-                  </button>
-                )}
-
-                {/* --- Close Button (Always Visible) --- */}
+            <div className='flex items-center space-x-2 pointer-events-auto'>
+              {/* --- Analytics Button (ONLY Owner) --- */}
+              {isOwner && (
                 <button
-                  onClick={onClose}
-                  className="p-1 rounded-full text-white hover:bg-white/20 transition-colors"
-                  title="Close"
+                  onClick={(e) => { e.stopPropagation(); setIsAnalyticsOpen(true); }}
+                  className="p-1 rounded-full text-white/70 hover:text-white transition-colors bg-black/20"
+                  title="View Story Views"
                 >
-                  <IoCloseOutline className="h-8 w-8 drop-shadow-md" />
+                  <IoEyeOutline className="h-6 w-6" />
                 </button>
-              </div>
-            </div>
-
-            {/* --- Music Badge (If Music Exists) --- */}
-            {currentStory.music_title && (
-              <div className="absolute top-16 left-4 z-40 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10 animate-fade-in pointer-events-none">
-                <IoMusicalNotes className="text-cyan-400 animate-pulse text-sm" />
-                <span className="text-white text-xs font-bold shadow-black drop-shadow-md">{currentStory.music_title}</span>
-              </div>
-            )}
-
-            {/* --- Navigation Buttons (Clickable areas) --- */}
-            <div className="absolute inset-0 z-30 flex items-center justify-between">
-              <div className="w-1/3 h-full cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }} />
-              <div className="w-1/3 h-full cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }} />
-            </div>
-
-            {/* --- Main Media Content --- */}
-            <div className="w-full h-full flex items-center justify-center bg-black relative">
-              {!isMediaLoaded && (
-                <div className='absolute'><Spinner size="lg" className='text-white' /></div>
               )}
-
-              {/* Audio Element */}
-              {currentStory.music_file && (
-                <audio
-                  ref={audioRef}
-                  src={currentStory.music_file}
-                  loop
-                  muted={false}
-                  playsInline
-                />
-              )}
-
-              <motion.div
-                key={currentStory.id}
-                initial={{ scale: 0.95, opacity: 0.5 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0.5 }}
-                transition={{ duration: 0.2 }}
-                className="w-full h-full flex items-center justify-center"
-              >
-                {currentStory.media_file?.endsWith('.mp4') || currentStory.media_file?.endsWith('.mov') ? (
-                  <video
-                    src={currentStory.media_file}
-                    className={`max-w-full max-h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
-                    autoPlay
-                    muted={!!currentStory.music_file} // Mute video if external music is playing
-                    playsInline
-                    onLoadedData={() => setIsMediaLoaded(true)}
-                    onError={() => setIsMediaLoaded(true)}
-                    loop
-                  />
-                ) : (
-                  <img
-                    src={currentStory.media_file}
-                    alt="Story Content"
-                    className={`max-w-full max-h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
-                    onLoad={() => setIsMediaLoaded(true)}
-                    onError={() => setIsMediaLoaded(true)}
-                  />
-                )}
-              </motion.div>
-
-            
-
-            </div>
-
-            {/* --- Send Message / Add New Story --- */}
-            <div className="absolute bottom-0 left-0 right-0 z-40 p-4 pointer-events-auto">
-              {isOwner ? (
-                // Owner option: Add New Story button
-                <Button
-                  onClick={() => navigate('create/story')}
-                  className='w-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white'
+              {/* --- Delete Button (ONLY Owner) --- */}
+              {isOwner && (
+                <button
+                  onClick={handleDeleteStory}
+                  className="p-1 rounded-full text-white/70 hover:text-red-500 transition-colors bg-black/20"
+                  title="Delete Story"
+                  disabled={isDeleting}
                 >
-                  <IoAddCircleOutline className='h-6 w-6' />
-                  <span>Add New Story</span>
-                </Button>
-              ) : (
-                // Viewer option: Reply Input
-                <input
-                  type="text"
-                  placeholder="Send Message"
-                  className="w-full rounded-full bg-white/20 px-4 py-3 text-white placeholder-white/80 focus:outline-none backdrop-blur-sm border border-white/30"
-                  disabled={isPaused}
-                  onFocus={() => setIsPaused(true)}
-                  onBlur={() => setIsPaused(false)}
-                />
+                  {isDeleting ? <Spinner size="sm" className="text-red-500" /> : <IoTrashOutline className="h-6 w-6" />}
+                </button>
               )}
+
+              {/* --- Close Button (Always Visible) --- */}
+              <button
+                onClick={onClose}
+                className="p-1 rounded-full text-white hover:bg-white/20 transition-colors"
+                title="Close"
+              >
+                <IoCloseOutline className="h-8 w-8 drop-shadow-md" />
+              </button>
             </div>
           </div>
-        </motion.div>
-      )}
 
-      {/* --- Render the Analytics Modal --- */}
-      <StoryAnalyticsModal
-        isOpen={isAnalyticsOpen}
-        onClose={() => setIsAnalyticsOpen(false)}
-        storyId={currentStory?.id}
-      />
-    </AnimatePresence>
-  );
-};
+          {/* --- Music Badge (If Music Exists) --- */}
+          {currentStory.music_title && (
+            <div className="absolute top-16 left-4 z-40 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10 animate-fade-in pointer-events-none">
+              <IoMusicalNotes className="text-cyan-400 animate-pulse text-sm" />
+              <span className="text-white text-xs font-bold shadow-black drop-shadow-md">{currentStory.music_title}</span>
+            </div>
+          )}
+
+          {/* --- Navigation Buttons (Clickable areas) --- */}
+          <div className="absolute inset-0 z-30 flex items-center justify-between">
+            <div className="w-1/3 h-full cursor-pointer" onClick={(e) => { e.stopPropagation(); handlePrev(); }} />
+            <div className="w-1/3 h-full cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNext(); }} />
+          </div>
+
+          {/* --- Main Media Content --- */}
+          <div className="w-full h-full flex items-center justify-center bg-black relative">
+            {!isMediaLoaded && (
+              <div className='absolute'><Spinner size="lg" className='text-white' /></div>
+            )}
+
+            {/* Audio Element */}
+            {currentStory.music_file && (
+              <audio
+                ref={audioRef}
+                src={currentStory.music_file}
+                loop
+                muted={false}
+                playsInline
+              />
+            )}
+
+            <motion.div
+              key={currentStory.id}
+              initial={{ scale: 0.95, opacity: 0.5 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0.5 }}
+              transition={{ duration: 0.2 }}
+              className="w-full h-full flex items-center justify-center"
+            >
+              {currentStory.media_file?.endsWith('.mp4') || currentStory.media_file?.endsWith('.mov') ? (
+                <video
+                  src={currentStory.media_file}
+                  className={`max-w-full max-h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
+                  autoPlay
+                  muted={!!currentStory.music_file} // Mute video if external music is playing
+                  playsInline
+                  onLoadedData={() => setIsMediaLoaded(true)}
+                  onError={() => setIsMediaLoaded(true)}
+                  loop
+                />
+              ) : (
+                <img
+                  src={currentStory.media_file}
+                  alt="Story Content"
+                  className={`max-w-full max-h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
+                  onLoad={() => setIsMediaLoaded(true)}
+                  onError={() => setIsMediaLoaded(true)}
+                />
+              )}
+            </motion.div>
+
+
+
+          </div>
+
+          {/* --- Send Message / Add New Story --- */}
+          <div className="absolute bottom-0 left-0 right-0 z-40 p-4 pointer-events-auto">
+            {isOwner ? (
+              // Owner option: Add New Story button
+              <Button
+                onClick={() => navigate('create/story')}
+                className='w-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white'
+              >
+                <IoAddCircleOutline className='h-6 w-6' />
+                <span>Add New Story</span>
+              </Button>
+            ) : (
+
+              // Viewer option: Reply Input and Like Button
+              <div className="flex items-center space-x-3 w-full max-w-sm mx-auto pointer-events-auto">
+                {/* Like Button */}
+                <button
+                  onClick={handleLike}
+                  className="flex-shrink-0 transition-transform active:scale-95"
+                >
+                  {isLiked ? (
+                    <IoHeart className="text-red-500 text-4xl drop-shadow-md animate-in zoom-in spin-in-6 duration-300" />
+                  ) : (
+                    <IoHeartOutline className="text-white text-4xl drop-shadow-md hover:scale-110 transition-transform" />
+                  )}
+                </button>
+
+                {/* Message Input */}
+                <div className="relative flex-1">
+                  <input
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSendMessage();
+                    }}
+                    type="text"
+                    placeholder="Send Message"
+                    className="w-full rounded-full bg-white/20 px-4 py-3 pr-10 text-white placeholder-white/80 focus:outline-none backdrop-blur-sm border border-white/30 focus:bg-white/30 transition-all"
+                    disabled={isPaused}
+                    onFocus={() => setIsPaused(true)}
+                    onBlur={() => setIsPaused(false)}
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim() || isSending}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 text-white p-2 rounded-full hover:bg-white/20 transition-colors ${!messageText.trim() && 'opacity-50 cursor-not-allowed'}`}
+                  >
+                    {isSending ? <Spinner size="sm" className="text-white" /> : <IoPaperPlaneOutline size={20} />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    )}
+
+    {/* --- Render the Analytics Modal --- */}
+    <StoryAnalyticsModal
+      isOpen={isAnalyticsOpen}
+      onClose={() => setIsAnalyticsOpen(false)}
+      storyId={currentStory?.id}
+    />
+  </AnimatePresence >
+);
+
 
 export default StoryViewerModal;

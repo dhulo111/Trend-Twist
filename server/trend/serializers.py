@@ -173,16 +173,27 @@ class StorySerializer(serializers.ModelSerializer):
     author_username = serializers.ReadOnlyField(source='author.username')
     author_profile_picture = serializers.ImageField(source='author.profile.profile_picture', read_only=True)
     is_viewed = serializers.SerializerMethodField()
+    likes_count = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = Story
-        fields = ['id', 'author', 'author_username', 'media_file', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration']
+        fields = ['id', 'author', 'author_username', 'media_file', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration', 'likes_count', 'is_liked']
         read_only_fields = ['author']
         
     def get_is_viewed(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return obj.views.filter(user=request.user).exists()
+        return False
+
+    def get_likes_count(self, obj):
+        return obj.likes.count()
+
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.likes.filter(user=request.user).exists()
         return False
 
 # --- 6. Live Chat Serializers (NEW) ---

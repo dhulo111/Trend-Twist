@@ -82,3 +82,14 @@ export const getStoriesByUser = async (userId) => {
     return [];
   }
 };
+
+
+export const likeStory = async (storyId) => {
+  try {
+    const response = await axiosInstance.post(`/stories/${storyId}/like/`);
+    return response.data;
+  } catch (error) {
+    console.error("Error liking story:", error);
+    throw error;
+  }
+};
