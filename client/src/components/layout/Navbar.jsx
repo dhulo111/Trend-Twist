@@ -198,6 +198,10 @@ const Navbar = () => {
           </span>
         </Link>
         <div className="flex items-center space-x-3">
+
+          <Link to="/search">
+            <IoSearchOutline className="text-text-primary text-2xl" />
+          </Link>
           <ThemeToggle />
           <Link to="/notifications">
             <IoHeartOutline className="text-text-primary text-2xl" />
