@@ -49,3 +49,8 @@ export const shareReel = async (id, recipientIds) => {
     const response = await axiosInstance.post(`/reels/${id}/share/`, { recipient_ids: recipientIds });
     return response.data;
 };
+
+export const registerReelView = async (id) => {
+    const response = await axiosInstance.post(`/reels/${id}/view/`);
+    return response.data;
+};

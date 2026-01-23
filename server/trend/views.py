@@ -882,6 +882,26 @@ class ReelCommentListCreateView(generics.ListCreateAPIView):
         
     def get_serializer_context(self): return {'request': self.request}
 
+class RegisterReelViewView(APIView):
+    """POST /api/reels/<pk>/view/ - Increment view count."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, pk):
+        try:
+            reel = Reel.objects.get(pk=pk)
+            
+            # Prevent self-view counting
+            if request.user.is_authenticated and reel.author == request.user:
+                 return Response({"status": "ignored_self_view"}, status=status.HTTP_200_OK)
+
+            # Atomic increment
+            from django.db.models import F
+            reel.views_count = F('views_count') + 1
+            reel.save(update_fields=['views_count'])
+            return Response({"status": "viewed"}, status=status.HTTP_200_OK)
+        except Reel.DoesNotExist:
+            return Response({"error": "Reel not found"}, status=status.HTTP_404_NOT_FOUND)
+
 # --- Notifications Views ---
 from .models import Notification
 from .serializers import NotificationSerializer

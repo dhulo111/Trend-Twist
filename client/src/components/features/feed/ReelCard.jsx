@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { FaHeart, FaComment, FaShare, FaMusic, FaPlay, FaRegHeart, FaTrash, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
 import { IoPaperPlaneOutline, IoEllipsisVertical } from 'react-icons/io5';
-import { likeReel, deleteReel } from '../../../api/reelApi';
+import { likeReel, deleteReel, registerReelView } from '../../../api/reelApi';
 import { toggleFollow } from '../../../api/userApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReelCommentDrawer from './ReelCommentDrawer';
@@ -31,6 +31,7 @@ const ReelCard = ({ reel, onReelDeleted }) => {
   const audioRef = useRef(new Audio());
   const [isMuted, setIsMuted] = useState(false);
   const [metadata, setMetadata] = useState(null);
+  const hasViewedRef = useRef(false);
 
   useEffect(() => {
     if (currentUser && reel.author === currentUser.id) {
@@ -40,12 +41,27 @@ const ReelCard = ({ reel, onReelDeleted }) => {
 
   // ... (keep all useEffects exactly as they are)
   useEffect(() => {
+    // Reset ref if component is reused for different reel (conceptually)
+    // although `key={reel.id}` in parent usually prevents this.
+    hasViewedRef.current = false;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
         if (entry.isIntersecting) {
           videoRef.current?.play().catch(() => { });
           setIsPlaying(true);
+
+          if (!hasViewedRef.current) {
+            hasViewedRef.current = true; // Mark immediately synchronously
+
+            // Don't count own views
+            const isAhthor = currentUser && (currentUser.id === reel.author || currentUser.username === reel.author_username);
+            if (!isAhthor) {
+              registerReelView(reel.id).catch(e => console.error("View count error", e));
+            }
+          }
+
         } else {
           videoRef.current?.pause();
           audioRef.current?.pause();
@@ -57,7 +73,7 @@ const ReelCard = ({ reel, onReelDeleted }) => {
 
     if (videoRef.current) observer.observe(videoRef.current);
     return () => videoRef.current && observer.unobserve(videoRef.current);
-  }, []);
+  }, [reel.id]);
 
   useEffect(() => {
     if (reel.editor_json) {

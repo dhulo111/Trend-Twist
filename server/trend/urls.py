@@ -95,6 +95,7 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('reels/<int:pk>/like/', views.ReelLikeToggleView.as_view(), name='reel_like_toggle'),
     path('reels/<int:pk>/comments/', views.ReelCommentListCreateView.as_view(), name='reel_comment_list_create'),
     path('reels/<int:pk>/share/', views.ShareReelView.as_view(), name='share_reel'),
+    path('reels/<int:pk>/view/', views.RegisterReelViewView.as_view(), name='register_reel_view'),
 
     # ----------------------------------------------------------------------
     # 6. NOTIFICATIONS
