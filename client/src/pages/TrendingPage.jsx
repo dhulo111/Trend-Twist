@@ -1,56 +1,77 @@
-// frontend/src/pages/TrendingPage.jsx
-
-import React from 'react';
-import TrendingList from '../components/features/trends/TrendingList'; // Import the main trending list
+import React, { useState, useEffect } from 'react';
+import CreateTwistInput from '../components/features/trends/components/CreateTwistInput';
+import TwistCard from '../components/features/feed/TwistCard';
+import Spinner from '../components/common/Spinner';
+import { getPublicTwists } from '../api/postApi';
+import { IoPlanetOutline } from 'react-icons/io5';
 
 const TrendingPage = () => {
+  const [twists, setTwists] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAllTwists = async () => {
+    setLoading(true);
+    try {
+      // Fetch all public twists (not filtered by tag)
+      const response = await getPublicTwists('');
+      setTwists(response);
+    } catch (e) {
+      console.error("Error loading twists", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllTwists();
+  }, []);
+
+  const handleRefresh = async () => {
+    // Background refresh without full loading spinner
+    try {
+      const response = await getPublicTwists('');
+      setTwists(response);
+    } catch (e) { console.error(e); }
+  };
+
   return (
-    <div className="w-full min-h-screen px-4 lg:px-8 pb-12 pt-4">
+    <div className="w-full min-h-screen pb-20 pt-6">
 
-      {/* --- Header --- */}
-      <h1 className="mb-6 text-3xl font-bold text-text-primary">
-        🔥 What's Trending Now
-      </h1>
+      <div className="max-w-2xl mx-auto px-4">
 
-      {/* --- Main Dashboard Area --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-        {/* 1. Trending Hashtags (Main Component) */}
-        <div className="lg:col-span-2 card">
-          <TrendingList />
-        </div>
-
-        {/* 2. Right Sidebar (Analytics/Tutorials Placeholder) */}
-        <div className="lg:col-span-1 space-y-6">
-
-          {/* Trend Explanation Card */}
-          <div className="card">
-            <h3 className="font-semibold text-xl text-text-accent mb-2">
-              Understanding the "Twist"
-            </h3>
-            <p className="text-text-secondary text-sm">
-              The core of TrendTwist is the Twist feature, which is how a trend evolves. The more a post is 'Twisted' by others, the higher it and its related hashtags rank on this dashboard.
-            </p>
-            <button
-              className="mt-3 text-sm text-text-primary font-medium hover:text-text-accent"
-              onClick={() => alert("Opening Trend Tutorial Video...")}
-            >
-              Watch Tutorial
-            </button>
+        {/* --- Header --- */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-3 bg-accent/20 rounded-full text-accent">
+            <IoPlanetOutline size={32} />
           </div>
-
-          {/* Live Data Feed Placeholder */}
-          <div className="card">
-            <h3 className="font-semibold text-xl text-text-primary mb-2">
-              Live Updates
-            </h3>
-            <p className="text-text-secondary text-sm">
-              Live feed of the most recent posts that use the current top #1 trend.
-            </p>
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Global Feed</h1>
+            <p className="text-gray-400 text-sm">See what the world is twisting about right now.</p>
           </div>
         </div>
+
+        {/* --- Create Input --- */}
+        <CreateTwistInput onPostCreated={handleRefresh} />
+
+        {/* --- Feed --- */}
+        <div className='flex flex-col gap-4'>
+          {loading ? (
+            <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
+          ) : twists.length > 0 ? (
+            twists.map(twist => (
+              <div key={twist.id} className="bg-[#1A1A1A] border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-colors">
+                <TwistCard post={twist} onUpdate={handleRefresh} />
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-20 bg-[#1A1A1A] rounded-2xl border border-white/5">
+              <p className="text-gray-500 text-lg">No twists yet.</p>
+              <p className="text-gray-600 text-sm mt-1">Be the first to start the conversation!</p>
+            </div>
+          )}
+        </div>
+
       </div>
-
     </div>
   );
 };

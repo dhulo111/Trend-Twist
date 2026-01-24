@@ -9,7 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 import PostList from '../components/features/feed/PostList';
 import StoryCircle from '../components/features/feed/StoryCircle';
 import StoryViewerModal from '../components/features/feed/StoryViewerModal';
-import TrendingList from '../components/features/trends/TrendingList';
+import HomeTwistSidebar from '../components/features/trends/HomeTwistSidebar';
 
 // --- Common UI ---
 import Spinner from '../components/common/Spinner';
@@ -231,9 +231,8 @@ const HomePage = () => {
           </div>
 
           {/* --- B. Right Sidebar Column (Trending List & Suggestions) --- */}
-          <div className="hidden lg:block lg:w-2/5 sticky top-4 h-full pt-4">
-            <TrendingList />
-            {/* NOTE: You can add the Follow Suggestions component here */}
+          <div className="hidden lg:block lg:w-[35%] sticky top-4 h-full pt-4 min-w-[350px]">
+            <HomeTwistSidebar />
           </div>
         </div>
       </div>

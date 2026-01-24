@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 /**
  * Renders the list of top 10 trending hashtags.
  */
-const TrendingList = () => {
+const TrendingList = ({ onTrendClick, activeTrend }) => {
   const [hashtags, setHashtags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,28 +82,39 @@ const TrendingList = () => {
       {/* --- Hashtags List --- */}
       <div className="space-y-3">
         {hashtags.length > 0 ? (
-          hashtags.map((tag, index) => (
-            <div
-              key={tag.id}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-background-accent transition-colors"
-            >
-              {/* Rank and Name */}
-              <Link to={`/search?q=%23${tag.name}`} className="flex items-center space-x-3 group">
-                <span className="text-lg font-bold text-text-secondary w-6 text-center">
-                  #{index + 1}
-                </span>
-                <span className="text-text-primary font-semibold group-hover:text-text-accent transition-colors">
-                  #{tag.name}
-                </span>
-              </Link>
+          hashtags.map((tag, index) => {
+            const isActive = activeTrend === tag.name;
+            return (
+              <div
+                key={tag.id}
+                onClick={() => onTrendClick && onTrendClick(tag.name)}
+                className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${isActive
+                  ? 'bg-background-accent/20 border-accent/50 shadow-[0_0_15px_rgba(255,0,80,0.15)]'
+                  : 'bg-transparent border-transparent hover:bg-background-accent hover:border-white/5'
+                  }`}
+              >
+                {/* Rank and Name */}
+                <div className="flex items-center space-x-3 group w-full">
+                  <span className={`text-lg font-bold w-6 text-center ${isActive ? 'text-accent' : 'text-text-secondary'}`}>
+                    #{index + 1}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className={`font-bold transition-colors ${isActive ? 'text-accent' : 'text-text-primary'}`}>
+                      #{tag.name}
+                    </span>
+                    <span className="text-xs text-text-secondary">
+                      {tag.post_count} Posts
+                    </span>
+                  </div>
+                </div>
 
-              {/* Post Count */}
-              {/* Note: post_count is the actual field returned by the simplified view in views.py */}
-              <span className="text-sm text-text-secondary">
-                {tag.post_count} Posts
-              </span>
-            </div>
-          ))
+                {/* Arrow Icon for improved affordability */}
+                <div className={`text-accent transition-opacity ${isActive ? 'opacity-100' : 'opacity-0'}`}>
+                  <IoMdTrendingUp />
+                </div>
+              </div>
+            );
+          })
         ) : (
           <p className="text-center text-text-secondary p-4">
             No active trends found right now.

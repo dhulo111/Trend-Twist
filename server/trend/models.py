@@ -128,14 +128,33 @@ class Like(models.Model):
         return f"{self.user.username} likes Post {self.post.id}"
 
 class Twist(models.Model):
-    original_post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='twists')
-    twist_author = models.ForeignKey(User, on_delete=models.CASCADE)
-    content = models.TextField()
+    """
+    Standalone text-first content (Twitter-like).
+    """
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='twists', null=True)
+    content = models.TextField(blank=True, null=True)
     media_file = models.FileField(upload_to='twists/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Retwist logic (Simple reference to another twist)
+    original_twist = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='retwists')
 
     def __str__(self):
-        return f"Twist by {self.twist_author.username} on {self.original_post.id}"
+        return f"Twist by {self.author.username}"
+
+class TwistLike(models.Model):
+    twist = models.ForeignKey(Twist, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('twist', 'user')
+
+class TwistComment(models.Model):
+    twist = models.ForeignKey(Twist, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.CharField(max_length=280)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 # --- 5. Story Models ---
@@ -212,6 +231,9 @@ class ChatMessage(models.Model):
     # Optional: Attach a reel to the message
     shared_reel = models.ForeignKey('Reel', on_delete=models.SET_NULL, null=True, blank=True, related_name='shared_in_chats')
     
+    # Optional: Attach a post to the message
+    shared_post = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True, related_name='shared_in_chats')
+
     # Optional: Reply to a story
     story_reply = models.ForeignKey(Story, on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
@@ -261,10 +283,12 @@ class Notification(models.Model):
     TYPES = [
         ('like_post', 'Like Post'),
         ('like_reel', 'Like Reel'),
+        ('like_twist', 'Like Twist'),
         ('follow_request', 'Follow Request'),
         ('follow_accept', 'Follow Accept'),
         ('comment_post', 'Comment Post'),
         ('comment_reel', 'Comment Reel'),
+        ('comment_twist', 'Comment Twist'),
         ('story_like', 'Story Like'),
     ]
 
@@ -276,6 +300,7 @@ class Notification(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True)
     reel = models.ForeignKey(Reel, on_delete=models.CASCADE, null=True, blank=True)
     story = models.ForeignKey(Story, on_delete=models.CASCADE, null=True, blank=True)
+    twist = models.ForeignKey(Twist, on_delete=models.CASCADE, null=True, blank=True)
     
     # For Follow Requests specifically (so we can accept/reject from notification)
     follow_request_ref = models.ForeignKey(FollowRequest, on_delete=models.SET_NULL, null=True, blank=True)

@@ -25,7 +25,7 @@ from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
-    Reel, ReelLike, ReelComment, StoryLike 
+    Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike
 )
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -35,7 +35,7 @@ from .serializers import (
     FollowerSerializer, FollowingSerializer, HashtagSerializer,
     OTPRequestSerializer, OTPVerifySerializer, CompleteRegistrationSerializer,
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
-    ReelSerializer, ReelCommentSerializer
+    ReelSerializer, ReelCommentSerializer, TwistCommentSerializer
 )
 from channels.db import database_sync_to_async
 # --- Permissions ---
@@ -553,20 +553,54 @@ class SendMessageView(APIView):
 #                       CONTENT & ENGAGEMENT
 # ----------------------------------------------------------------------
 
+
 class PostListCreateView(generics.ListCreateAPIView):
-    """List posts from followed users (respecting privacy) or create a new post."""
+    """List posts from followed users (Main Feed) or create a new post."""
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
     def get_queryset(self):
         user = self.request.user
+        search_query = self.request.query_params.get('search', None) # Simplified search
+        
+        # Base Feed: Following + Self
         following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
-        following_users = list(following_users) + [user.id] # Include own posts
+        following_users = list(following_users) + [user.id]
 
-        return Post.objects.filter(author_id__in=following_users).order_by('-created_at')
+        queryset = Post.objects.filter(author_id__in=following_users)
+
+        # Basic text search support for main feed
+        if search_query:
+            queryset = queryset.filter(content__icontains=search_query)
+
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer): serializer.save(author=self.request.user)
+    def get_serializer_context(self): return {'request': self.request}
+
+
+# NEW: Public/Trending Feed View
+class PublicPostListView(generics.ListAPIView):
+    """
+    GET /api/posts/public/?tag=<trend>
+    Returns PUBLIC posts matching a specific hashtag or search term.
+    """
+    serializer_class = PostSerializer
+    permission_classes = [AllowAny] # It's a public discovery feed
+    
+    def get_queryset(self):
+        tag = self.request.query_params.get('tag', None)
+        queryset = Post.objects.filter(author__profile__is_private=False).order_by('-created_at')
+        
+        if tag:
+            # Filter by hashtag (naive text search for now, ideally use Hashtag model relations)
+            # Or use the Hashtag model reverse lookup if it was reliably populated.
+            # For robustness sake -> Text Search
+            queryset = queryset.filter(content__icontains=f"#{tag}")
+            
+        return queryset
+
     def get_serializer_context(self): return {'request': self.request}
 
 class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -611,20 +645,125 @@ class CommentDetailView(generics.DestroyAPIView):
     def get_serializer_context(self): return {'request': self.request}
 
 
+
+# --- Twist Views (Standalone) ---
+
 class TwistListCreateView(generics.ListCreateAPIView):
-    """GET/POST /api/posts/<pk>/twists/"""
+    """
+    GET /api/twists/ - List twists from following users (Feed)
+    POST /api/twists/ - Create a new twist
+    """
     serializer_class = TwistSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser] 
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        post_id = self.kwargs['pk']
-        return Twist.objects.filter(original_post_id=post_id).order_by('-created_at')
+        # Similar feed logic to Posts: Following + Self
+        user = self.request.user
+        following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
+        following_users = list(following_users) + [user.id]
+
+        return Twist.objects.filter(author_id__in=following_users).order_by('-created_at')
+
+    def perform_create(self, serializer): serializer.save(author=self.request.user)
+    def get_serializer_context(self): return {'request': self.request}
+
+
+class TwistDetailView(generics.RetrieveDestroyAPIView):
+    """DELETE /api/twists/<pk>/"""
+    queryset = Twist.objects.all()
+    serializer_class = TwistSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    def get_serializer_context(self): return {'request': self.request}
+
+
+class TwistLikeToggleView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request, pk):
+        try:
+            twist = Twist.objects.get(pk=pk)
+        except Twist.DoesNotExist: return Response({"error": "Twist not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        like_obj, created = TwistLike.objects.get_or_create(user=request.user, twist=twist)
+        if not created:
+            like_obj.delete()
+            return Response({"status": "unliked"}, status=status.HTTP_200_OK)
+        
+        # Make notification
+        if twist.author != request.user:
+            Notification.objects.create(
+                recipient=twist.author,
+                sender=request.user,
+                notification_type='like_twist',
+                twist=twist
+            )
+            
+        return Response({"status": "liked"}, status=status.HTTP_201_CREATED)
+
+class PublicTwistListView(generics.ListAPIView):
+    """
+    GET /api/twists/public/?tag=<trend>
+    Returns PUBLIC twists matching a specific hashtag or search term.
+    """
+    serializer_class = TwistSerializer
+    permission_classes = [AllowAny] 
+    
+    def get_queryset(self):
+        tag = self.request.query_params.get('tag', None)
+        # All public twists (no check for private profile logic yet since Twist model doesn't have it explicitly, 
+        # but we can assume author.profile.is_private. Let's add that check.)
+        
+        queryset = Twist.objects.filter(author__profile__is_private=False).order_by('-created_at')
+        
+        if tag:
+            queryset = queryset.filter(content__icontains=f"#{tag}")
+            
+        return queryset
+
+    def get_serializer_context(self): return {'request': self.request}
+    
+class UserTwistListView(generics.ListAPIView):
+    """GET /api/twists/user/<user_id>/"""
+    serializer_class = TwistSerializer
+    permission_classes = [AllowAny] 
+    
+    def get_queryset(self):
+        user_id = self.kwargs['user_id']
+        # Add basic privacy check hook here later if needed
+        return Twist.objects.filter(author_id=user_id).order_by('-created_at')
+    
+    
+    def get_serializer_context(self): return {'request': self.request}
+
+class TwistCommentListCreateView(generics.ListCreateAPIView):
+    """GET/POST /api/twists/<pk>/comments/"""
+    serializer_class = TwistCommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        twist_id = self.kwargs['pk']
+        return TwistComment.objects.filter(twist_id=twist_id).order_by('created_at')
 
     def perform_create(self, serializer):
-        original_post = Post.objects.get(pk=self.kwargs['pk'])
-        serializer.save(twist_author=self.request.user, original_post=original_post)
+        twist = Twist.objects.get(pk=self.kwargs['pk'])
+        comment = serializer.save(author=self.request.user, twist=twist)
         
+        # Notify author
+        if twist.author != self.request.user:
+            Notification.objects.create(
+                recipient=twist.author,
+                sender=self.request.user,
+                notification_type='comment_twist',
+                twist=twist
+            )
+        
+    def get_serializer_context(self): return {'request': self.request}
+
+class TwistCommentDetailView(generics.DestroyAPIView):
+    """DELETE /api/twist-comments/<pk>/"""
+    queryset = TwistComment.objects.all()
+    serializer_class = TwistCommentSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     def get_serializer_context(self): return {'request': self.request}
 
 
@@ -1085,6 +1224,76 @@ class ShareReelView(APIView):
                         'is_read': False,
                         'shared_reel': msg.shared_reel.id,
                         'shared_reel_data': serialized_msg['shared_reel_data']
+                    }
+                )
+                created_messages.append(msg.id)
+
+            except User.DoesNotExist:
+                continue
+        
+        return Response({"status": "shared", "count": len(created_messages)}, status=status.HTTP_200_OK)
+
+class SharePostView(APIView):
+    """
+    POST /api/posts/<id>/share/
+    Body: { "user_ids": [1, 2, 5] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            post = Post.objects.get(pk=pk)
+        except Post.DoesNotExist:
+            return Response({"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        recipient_ids = request.data.get('user_ids', [])
+        if not recipient_ids:
+             return Response({"error": "No recipients selected"}, status=status.HTTP_400_BAD_REQUEST)
+
+        created_messages = []
+        
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from .serializers import ChatMessageSerializer
+        channel_layer = get_channel_layer()
+
+        for user_id in recipient_ids:
+            try:
+                recipient = User.objects.get(pk=user_id)
+                # Ensure Chat Room Exists
+                room, _ = ChatRoom.objects.get_or_create(
+                    user1=min(request.user, recipient, key=lambda u: u.id),
+                    user2=max(request.user, recipient, key=lambda u: u.id)
+                )
+                room.last_message_at = timezone.now()
+                room.save()
+
+                # Create Message
+                msg = ChatMessage.objects.create(
+                    room=room,
+                    author=request.user,
+                    content=f"Shared a post: {post.content[:20] if post.content else 'Post'}", # Fallback text
+                    shared_post=post
+                )
+                
+                # Broadcast via WebSocket
+                user_ids = sorted([str(request.user.id), str(recipient.id)])
+                room_group_name = f'chat_{user_ids[0]}_{user_ids[1]}'
+                
+                serialized_msg = ChatMessageSerializer(msg).data
+                
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {
+                        'type': 'chat_message',
+                        'id': msg.id,
+                        'content': msg.content,
+                        'author': request.user.id,
+                        'author_username': request.user.username,
+                        'timestamp': msg.timestamp.isoformat(),
+                        'is_read': False,
+                        'shared_post': msg.shared_post.id,
+                        'shared_post_data': serialized_msg['shared_post_data']
                     }
                 )
                 created_messages.append(msg.id)

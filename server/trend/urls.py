@@ -68,6 +68,7 @@ urlpatterns = [
 
     # Posts
     path('posts/', views.PostListCreateView.as_view(), name='post_list_create'),
+    path('posts/public/', views.PublicPostListView.as_view(), name='public_post_list'),
     path('posts/<int:pk>/', views.PostDetailView.as_view(), name='post_detail'),
     
     # Engagement
@@ -75,6 +76,16 @@ urlpatterns = [
     path('posts/<int:pk>/comments/', views.CommentListCreateView.as_view(), name='comment_list_create'),
     path('comments/<int:pk>/', views.CommentDetailView.as_view(), name='comment_detail'),
     path('posts/<int:pk>/twists/', views.TwistListCreateView.as_view(), name='twist_list_create'),
+    path('posts/<int:pk>/share/', views.SharePostView.as_view(), name='share_post'),
+
+    # Twists (Standalone)
+    path('twists/', views.TwistListCreateView.as_view(), name='twist_list_create_standalone'),
+    path('twists/public/', views.PublicTwistListView.as_view(), name='public_twist_list'),
+    path('twists/<int:pk>/', views.TwistDetailView.as_view(), name='twist_detail'),
+    path('twists/<int:pk>/like/', views.TwistLikeToggleView.as_view(), name='twist_like'),
+    path('users/<int:user_id>/twists/', views.UserTwistListView.as_view(), name='user_twist_list'),
+    path('twists/<int:pk>/comments/', views.TwistCommentListCreateView.as_view(), name='twist_comment_list_create'),
+    path('twist-comments/<int:pk>/', views.TwistCommentDetailView.as_view(), name='twist_comment_detail'),
 
     # Stories
     path('stories/', views.StoryListCreateView.as_view(), name='story_list_create'),

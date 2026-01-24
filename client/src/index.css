@@ -48,6 +48,16 @@
     background-attachment: fixed;
     min-height: 100vh;
   }
+  /* Global Hide Scrollbar */
+  ::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+  
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 @layer utilities {

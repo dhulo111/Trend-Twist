@@ -11,6 +11,7 @@ import HomePage from '../pages/HomePage';
 import ProfilePage from '../pages/ProfilePage';
 import TrendingPage from '../pages/TrendingPage';
 import PostDetailPage from '../pages/PostDetailPage';
+import TwistDetailPage from '../pages/TwistDetailPage';
 import SettingsPage from '../pages/SettingsPage';
 import EditProfilePage from '../pages/EditProfilePage';
 
@@ -64,6 +65,7 @@ const AppRoutes = () => {
 
         {/* --- Content Details --- */}
         <Route path="post/:postId" element={<PostDetailPage />} />
+        <Route path="twists/:twistId" element={<TwistDetailPage />} /> {/* NEW */}
         <Route path="edit" element={<EditProfilePage />} />
 
         {/* --- Reels (Now inside Layout) --- */}

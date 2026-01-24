@@ -7,9 +7,10 @@ import { getReelsByUser } from '../api/reelApi'; // Import Reel API
 import Spinner from '../components/common/Spinner';
 import ProfileHeader from '../components/features/profile/ProfileHeader';
 import Button from '../components/common/Button';
-import { IoGridOutline, IoLockClosed, IoTimeOutline, IoHeartOutline, IoFilmOutline, IoPlay } from 'react-icons/io5';
+import { IoGridOutline, IoLockClosed, IoTimeOutline, IoHeartOutline, IoFilmOutline, IoPlay, IoRepeatOutline } from 'react-icons/io5';
 import { AuthContext } from '../context/AuthContext';
 import StoryViewerModal from '../components/features/feed/StoryViewerModal';
+import TwistCard from '../components/features/feed/TwistCard';
 
 // --- Grid Items ---
 const PostGridItem = ({ post }) => (
@@ -58,6 +59,7 @@ const ProfilePage = () => {
   const [profileData, setProfileData] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [userReels, setUserReels] = useState([]); // Reels State
+  const [userTwists, setUserTwists] = useState([]); // Twists State
   const [userDrafts, setUserDrafts] = useState([]); // Drafts State
   const [userStories, setUserStories] = useState(null);
 
@@ -72,8 +74,22 @@ const ProfilePage = () => {
   const [viewerGroups, setViewerGroups] = useState([]);
   const [initialGroupIndex, setInitialGroupIndex] = useState(0);
 
-
   // --- 1. Fetch User's Posts ---
+  // ... (fetchPosts)
+
+  // --- 1.5 Fetch User's Twists ---
+  const fetchTwists = useCallback(async (userId) => {
+    try {
+      const twistsData = await PostApi.getTwistsByUser(userId);
+      setUserTwists(twistsData);
+    } catch (e) {
+      console.error("Error fetching user twists:", e);
+      setUserTwists([]);
+    }
+  }, []);
+
+  // --- 2. Fetch User's Reels ---
+  // ... (fetchReels)
   const fetchPosts = useCallback(async (userId) => {
     try {
       const postsData = await PostApi.getPostsByUser(userId);
@@ -140,12 +156,14 @@ const ProfilePage = () => {
         // Fetch posts, reels, and stories concurrently
         await Promise.all([
           fetchPosts(data.id),
+          fetchTwists(data.id),
           fetchReels(data.id),
           fetchStories(data.id, data.username, data.profile?.profile_picture)
         ]);
         setLoadingContent(false);
       } else {
         setUserPosts([]);
+        setUserTwists([]);
         setUserReels([]);
         setUserStories(null);
       }
@@ -155,7 +173,7 @@ const ProfilePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [username, currentUser, fetchPosts, fetchReels, fetchStories]);
+  }, [username, currentUser, fetchPosts, fetchReels, fetchStories, fetchTwists]);
 
   useEffect(() => {
     fetchProfile();
@@ -201,6 +219,13 @@ const ProfilePage = () => {
               <span className="font-semibold text-xs md:text-sm tracking-wider">POSTS</span>
             </button>
             <button
+              onClick={() => setActiveTab('twists')}
+              className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'twists' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+            >
+              <IoRepeatOutline className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="font-semibold text-xs md:text-sm tracking-wider">TWISTS</span>
+            </button>
+            <button
               onClick={() => setActiveTab('reels')}
               className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'reels' ? 'border-text-accent text-text-accent' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
             >
@@ -228,15 +253,30 @@ const ProfilePage = () => {
                   {/* POSTS GRID */}
                   {activeTab === 'posts' && (
                     <div className="grid grid-cols-3 gap-1 md:gap-3">
-                      {userPosts.length > 0 ? (
-                        userPosts.map((post) => <PostGridItem key={post.id} post={post} />)
+                      {userPosts.filter(p => p.media_file).length > 0 ? (
+                        userPosts.filter(p => p.media_file).map((post) => <PostGridItem key={post.id} post={post} />)
                       ) : (
                         <div className="col-span-3 text-center text-text-secondary p-12 card border border-border">
                           <IoGridOutline className="mx-auto text-4xl mb-3 opacity-50" />
-                          <h3 className="text-lg font-semibold">No Posts Yet</h3>
-                          {isOwner && (
-                            <Button className="mt-3" to="/create/post" variant="primary">Share a Post</Button>
-                          )}
+                          <h3 className="text-lg font-semibold">No Media Posts</h3>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TWISTS FEED (Twitter Style) */}
+                  {activeTab === 'twists' && (
+                    <div className="max-w-2xl mx-auto space-y-4">
+                      {userTwists.length > 0 ? (
+                        userTwists.map((twist) => (
+                          <div key={twist.id} className="border border-white/10 rounded-xl bg-[#000000] overflow-hidden">
+                            <TwistCard post={twist} />
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center text-text-secondary p-12 card border border-border">
+                          <IoRepeatOutline className="mx-auto text-4xl mb-3 opacity-50" />
+                          <h3 className="text-lg font-semibold">No Twists Yet</h3>
                         </div>
                       )}
                     </div>
