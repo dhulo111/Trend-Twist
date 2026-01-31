@@ -7,29 +7,50 @@ import { getReelsByUser } from '../api/reelApi'; // Import Reel API
 import Spinner from '../components/common/Spinner';
 import ProfileHeader from '../components/features/profile/ProfileHeader';
 import Button from '../components/common/Button';
-import { IoGridOutline, IoLockClosed, IoTimeOutline, IoHeartOutline, IoFilmOutline, IoPlay, IoRepeatOutline } from 'react-icons/io5';
+import { IoGridOutline, IoLockClosed, IoTimeOutline, IoHeartOutline, IoFilmOutline, IoPlay, IoRepeatOutline, IoChatbubbleOutline } from 'react-icons/io5';
 import { AuthContext } from '../context/AuthContext';
 import StoryViewerModal from '../components/features/feed/StoryViewerModal';
 import TwistCard from '../components/features/feed/TwistCard';
 
 // --- Grid Items ---
-const PostGridItem = ({ post }) => (
-  <Link to={`/post/${post.id}`} className="block w-full aspect-square overflow-hidden rounded-lg hover:opacity-85 transition-opacity relative group bg-background-accent/50">
-    <img
-      src={post.media_file || 'https://via.placeholder.com/600x600?text=Trend+Post'}
-      alt={`Post ID ${post.id}`}
-      className="w-full h-full object-cover"
-    />
-    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity space-x-4">
-      <span className="text-white font-semibold text-lg flex items-center">
-        <IoHeartOutline className="h-5 w-5 mr-1" /> {post.likes_count}
-      </span>
-      <span className="text-white font-semibold text-lg flex items-center">
-        <IoTimeOutline className="h-5 w-5 mr-1" /> {post.twists_count}
-      </span>
-    </div>
-  </Link>
-);
+const PostGridItem = ({ post }) => {
+  const isVideo = post.media_file && /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(post.media_file);
+
+  return (
+    <Link to={`/post/${post.id}`} className="block w-full aspect-square overflow-hidden rounded-lg hover:opacity-85 transition-opacity relative group bg-background-accent/50">
+      {isVideo ? (
+        <video
+          src={post.media_file}
+          className="w-full h-full object-cover pointer-events-none"
+          muted
+          playsInline
+        />
+      ) : (
+        <img
+          src={post.media_file || 'https://via.placeholder.com/600x600?text=Trend+Post'}
+          alt={`Post ID ${post.id}`}
+          className="w-full h-full object-cover"
+        />
+      )}
+
+      {/* Video Indicator Icon */}
+      {isVideo && (
+        <div className="absolute top-2 right-2 text-white/90 drop-shadow-md">
+          <IoFilmOutline className="h-5 w-5" />
+        </div>
+      )}
+
+      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity space-x-4">
+        <span className="text-white font-semibold text-lg flex items-center">
+          <IoHeartOutline className="h-5 w-5 mr-1" /> {post.likes_count}
+        </span>
+        <span className="text-white font-semibold text-lg flex items-center">
+          <IoChatbubbleOutline className="h-5 w-5 mr-1" /> {post.comments_count || 0}
+        </span>
+      </div>
+    </Link>
+  );
+};
 
 const ReelGridItem = ({ reel }) => (
   <Link to={`/reels`} state={{ initialReelId: reel.id }} className="block w-full aspect-[9/16] overflow-hidden rounded-lg hover:opacity-85 transition-opacity relative group bg-black">
@@ -269,7 +290,7 @@ const ProfilePage = () => {
                     <div className="max-w-2xl mx-auto space-y-4">
                       {userTwists.length > 0 ? (
                         userTwists.map((twist) => (
-                          <div key={twist.id} className="border border-white/10 rounded-xl bg-[#000000] overflow-hidden">
+                          <div key={twist.id} className="border border-border rounded-xl bg-background-secondary overflow-hidden">
                             <TwistCard post={twist} />
                           </div>
                         ))

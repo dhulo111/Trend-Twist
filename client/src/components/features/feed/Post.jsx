@@ -7,7 +7,8 @@ import {
   IoEllipsisHorizontal,
   IoBookmarkOutline,
   IoBookmark,
-  IoPaperPlaneOutline
+  IoPaperPlaneOutline,
+  IoRepeatOutline
 } from 'react-icons/io5';
 import { GiTwister } from 'react-icons/gi';
 import { FaRegChartBar } from 'react-icons/fa';
@@ -15,6 +16,7 @@ import Avatar from '../../common/Avatar';
 import { toggleLike, deletePost } from '../../../api/postApi';
 import { AuthContext } from '../../../context/AuthContext';
 import SharePostModal from './SharePostModal';
+import CreateTwistModal from './CreateTwistModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
@@ -28,6 +30,7 @@ const Post = ({ post, onUpdate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false); // Mock state for Save/Bookmark
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isTwistModalOpen, setIsTwistModalOpen] = useState(false);
 
   // Double tap like state
   const [showBigHeart, setShowBigHeart] = useState(false);
@@ -145,28 +148,28 @@ const Post = ({ post, onUpdate }) => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full relative group glass bg-black/40 border border-white/5 rounded-2xl mb-6 overflow-hidden hover:border-white/10 transition-colors"
+        className="w-full relative group bg-background-secondary border border-border rounded-2xl mb-6 overflow-hidden hover:border-text-secondary/20 transition-colors"
       >
 
         {/* --- 1. Post Header --- */}
-        <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/20 to-transparent">
+        <div className="flex items-center justify-between p-4 mix-blend-normal">
           <div className="flex items-center space-x-3">
             <Link to={`/profile/${post.author_username}`} className="relative">
               <div className="absolute -inset-0.5 bg-gradient-to-tr from-pink-500 to-yellow-500 rounded-full opacity-70 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative p-[2px] bg-black rounded-full">
+              <div className="relative p-[2px] bg-background-secondary rounded-full">
                 <Avatar
                   src={post.author_profile_picture}
                   alt={post.author_username}
                   size="md"
-                  className="rounded-full border-2 border-black"
+                  className="rounded-full border-2 border-background-secondary"
                 />
               </div>
             </Link>
             <div>
-              <Link to={`/profile/${post.author_username}`} className="font-bold text-white hover:text-gray-200 transition-colors">
+              <Link to={`/profile/${post.author_username}`} className="font-bold text-text-primary hover:text-text-secondary transition-colors">
                 {post.author_username}
               </Link>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-text-secondary">
                 {post.location && <span>{post.location} • </span>}
                 {formatTimeAgo(post.created_at)}
               </div>
@@ -177,7 +180,7 @@ const Post = ({ post, onUpdate }) => {
           <div className="relative">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+              className="text-text-secondary hover:text-text-primary p-2 rounded-full hover:bg-text-secondary/10 transition-colors"
             >
               <IoEllipsisHorizontal className="h-5 w-5" />
             </button>
@@ -188,19 +191,19 @@ const Post = ({ post, onUpdate }) => {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute right-0 mt-2 w-48 rounded-xl border border-white/10 bg-[#1A1A1A] shadow-2xl z-20 overflow-hidden"
+                  className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-background-secondary shadow-2xl z-20 overflow-hidden"
                 >
                   {isAuthor ? (
                     <>
                       <button
                         onClick={handleDelete}
-                        className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                        className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-500/10 transition-colors"
                       >
                         <span>Delete Post</span>
                       </button>
                       <Link
                         to={`/post/${post.id}/analytics`}
-                        className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-white/5 transition-colors"
+                        className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-text-secondary/10 transition-colors"
                       >
                         <FaRegChartBar className="h-4 w-4" />
                         <span>Analytics</span>
@@ -208,7 +211,7 @@ const Post = ({ post, onUpdate }) => {
                     </>
                   ) : (
                     <button
-                      className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-white/5 transition-colors"
+                      className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-text-secondary/10 transition-colors"
                     >
                       <span>Report Post</span>
                     </button>
@@ -225,7 +228,7 @@ const Post = ({ post, onUpdate }) => {
           onDoubleClick={handleDoubleTap}
         >
           {post.media_file ? (
-            post.media_file.endsWith('.mp4') || post.media_file.endsWith('.mov') ? (
+            /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(post.media_file) ? (
               <video
                 src={post.media_file}
                 className="w-full h-full object-cover"
@@ -242,7 +245,7 @@ const Post = ({ post, onUpdate }) => {
               />
             )
           ) : (
-            <div className="w-full h-64 bg-gray-800 flex items-center justify-center text-gray-500">
+            <div className="w-full h-64 bg-background-tertiary flex items-center justify-center text-text-secondary">
               No Media
             </div>
           )}
@@ -269,46 +272,52 @@ const Post = ({ post, onUpdate }) => {
               <motion.button
                 whileTap={{ scale: 0.8 }}
                 onClick={handleLike}
-                className={`focus:outline-none transition-colors ${localIsLiked ? 'text-red-500' : 'text-white hover:text-gray-300'}`}
+                className={`focus:outline-none transition-colors ${localIsLiked ? 'text-red-500' : 'text-text-primary hover:text-text-secondary'}`}
               >
                 {localIsLiked ? <IoHeartSharp size={26} /> : <IoHeartOutline size={26} />}
               </motion.button>
 
-              <Link to={`/post/${post.id}`} className="text-white hover:text-gray-300 transition-colors">
-                <IoChatbubbleOutline size={24} className="-rotate-90" style={{ transform: 'scaleX(-1)' }} />
+              <Link to={`/post/${post.id}`} className="text-text-primary hover:text-text-secondary transition-colors">
+                <IoChatbubbleOutline size={24} style={{ transform: 'scaleX(-1)' }} />
               </Link>
 
-              {/* Share Button (Reels Share Option) */}
+              <button
+                onClick={() => setIsTwistModalOpen(true)}
+                className="text-text-primary hover:text-text-secondary transition-colors"
+                title="Twist (Quote)"
+              >
+                <IoRepeatOutline size={26} />
+              </button>
+
               <button
                 onClick={() => setIsShareModalOpen(true)}
-                className="text-white hover:text-gray-300 transition-colors"
+                className="text-text-primary hover:text-text-secondary transition-colors"
                 title="Share Post"
               >
                 <IoPaperPlaneOutline size={24} className="-translate-y-[1px]" />
               </button>
-
             </div>
 
             <motion.button
               whileTap={{ scale: 0.8 }}
               onClick={handleSave}
-              className="text-white hover:text-gray-300 transition-colors"
+              className="text-text-primary hover:text-text-secondary transition-colors"
             >
-              {isSaved ? <IoBookmark size={26} /> : <IoBookmarkOutline size={26} />}
+              {isSaved ? <IoBookmark size={24} /> : <IoBookmarkOutline size={24} />}
             </motion.button>
           </div>
 
           {/* Likes */}
           <div className="mb-2">
-            <p className="font-semibold text-white text-sm">
+            <p className="font-semibold text-text-primary text-sm">
               {localLikesCount.toLocaleString()} likes
             </p>
           </div>
 
           {/* Caption */}
           <div className="mb-2">
-            <span className="font-bold text-white mr-2">{post.author_username}</span>
-            <span className="text-gray-300 text-sm whitespace-pre-wrap">
+            <span className="font-bold text-text-primary mr-2">{post.author_username}</span>
+            <span className="text-text-primary text-sm whitespace-pre-wrap">
               {renderContentWithHashtags(post.content)}
             </span>
           </div>
@@ -317,7 +326,7 @@ const Post = ({ post, onUpdate }) => {
           {post.comments_count > 0 && (
             <Link
               to={`/post/${post.id}`}
-              className="text-gray-500 text-sm hover:text-gray-300 transition-colors block mt-2"
+              className="text-text-secondary text-sm hover:text-text-primary transition-colors block mt-2"
             >
               View all {post.comments_count} comments
             </Link>
@@ -325,10 +334,10 @@ const Post = ({ post, onUpdate }) => {
 
           {/* Add a comment input simplified */}
           <div className="mt-3 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden">
+            <div className="w-6 h-6 rounded-full bg-background-tertiary overflow-hidden">
               <Avatar src={currentUser?.profile?.profile_picture} size="xs" />
             </div>
-            <Link to={`/post/${post.id}`} className="text-gray-500 text-sm flex-1 cursor-text">
+            <Link to={`/post/${post.id}`} className="text-text-secondary text-sm flex-1 cursor-text">
               Add a comment...
             </Link>
           </div>
@@ -342,6 +351,18 @@ const Post = ({ post, onUpdate }) => {
             isOpen={isShareModalOpen}
             onClose={() => setIsShareModalOpen(false)}
             postId={post.id}
+          />
+        )}
+
+        {isTwistModalOpen && (
+          <CreateTwistModal
+            isOpen={isTwistModalOpen}
+            onClose={() => setIsTwistModalOpen(false)}
+            originalPost={post}
+            onSuccess={() => {
+              // Optionally refresh or show toast
+              if (onUpdate) onUpdate();
+            }}
           />
         )}
       </AnimatePresence>

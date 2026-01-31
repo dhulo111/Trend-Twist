@@ -46,6 +46,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
+        # Fetch and send the OTHER user's status to the current user
+        other_user_status = await self.get_user_profile_status(self.other_user_id)
+        if other_user_status:
+            await self.send(text_data=json.dumps({
+                'type': 'user_status',
+                'username': other_user_status['username'],
+                'is_online': other_user_status['is_online'],
+                'last_seen': other_user_status['last_seen']
+            }))
+
     async def disconnect(self, close_code):
         # Leave room group
         if hasattr(self, 'room_group_name'):
@@ -113,6 +123,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
             return
 
+        # --- Handle Call Signaling ---
+        if data.get('type') in ['call_offer', 'call_answer', 'new_ice_candidate', 'call_ended']:
+            # Forward the signaling data to the other user (room group)
+            # We include the sender's username so the client knows who sent it
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'call_signal',
+                    'data': data,
+                    'sender_username': self.current_user.username
+                }
+            )
+            return
+
         # --- Handle Normal Message ---
         message = data.get('message')
         # If 'message' key is missing, check 'content' as fallback
@@ -160,6 +184,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'is_online': event['is_online'],
              'last_seen': event['last_seen']
         }))
+        
+    async def global_user_status_change(self, event):
+        """Receive global status update and forward to chat client if relevant."""
+        # Only forward if the update is about the OTHER user in this chat
+        if str(event['user_id']) == self.other_user_id:
+             await self.send(text_data=json.dumps({
+                'type': 'user_status',
+                'username': event['username'],
+                'is_online': event['is_online'],
+                'last_seen': event['last_seen']
+            }))
 
     async def message_read_receipt(self, event):
         """Broadcast that a user has read messages."""
@@ -181,6 +216,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
             'id': event['id']
+        }))
+
+    async def call_signal(self, event):
+        """Forward WebRTC signaling message."""
+        # Don't echo back to sender (optional, but good practice in some setups,
+        # though frontend usually filters by checking 'sender_username')
+        if event['sender_username'] == self.current_user.username:
+            return
+
+        await self.send(text_data=json.dumps({
+            'type': 'call_signal', # Correctly identify this as a signal wrapper
+            'data': event['data'],         # The full payload
+            'sender_username': event['sender_username']
         }))
 
     # --- 4. Database Helper (Synchronous operations must be run asynchronously) ---
@@ -244,6 +292,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return False
 
     @database_sync_to_async
+    def get_user_profile_status(self, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            return {
+                'username': user.username,
+                'is_online': profile.is_online,
+                'last_seen': profile.last_seen.isoformat() if profile.last_seen else None
+            }
+        except User.DoesNotExist:
+            return None
+
+    @database_sync_to_async
     def delete_message_db(self, msg_id):
         try:
             msg = ChatMessage.objects.get(id=msg_id, author=self.current_user)
@@ -272,7 +333,17 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
+        # Mark user as online globally
+        # Mark user as online globally and broadcast
+        await self.update_user_status(True)
+        await self.broadcast_status(True)
+
     async def disconnect(self, close_code):
+        # Mark user as offline globally and broadcast
+        if self.user.is_authenticated:
+            await self.update_user_status(False)
+            await self.broadcast_status(False)
+
         # Leave user group
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(
@@ -287,3 +358,50 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'type': event['type'], # 'notification'
             'data': event['data']  # The serializer data
         }))
+
+    @database_sync_to_async
+    def update_user_status(self, is_online):
+        # Re-fetch user profile to ensure we have the latest or create if missing
+        profile, _ = Profile.objects.get_or_create(user=self.user)
+        profile.is_online = is_online
+        profile.last_seen = timezone.now()
+        profile.save()
+
+    async def broadcast_status(self, is_online):
+        """
+        Broadcasts the user's new status to any active chat rooms where this user is a participant.
+        This relies on a convention that ChatConsumers join a group named 'user_chats_<user_id>'
+        OR we can iterate through active chats (expensive).
+        
+        BETTER APPROACH for this scale:
+        Since ChatConsumer groups are 'chat_ID1_ID2', we don't know all of them easily without DB query.
+        However, to keep it simple and effective as requested:
+        We will send a message to a "global_updates" group or iterate known friends.
+        
+        OPTIMIZED:
+        We will iterate over the user's active ChatRooms and send a message to those specific groups.
+        """
+        active_chat_groups = await self.get_user_active_chat_groups()
+        
+        for group in active_chat_groups:
+             await self.channel_layer.group_send(
+                group,
+                {
+                    'type': 'global_user_status_change',
+                    'user_id': self.user.id,
+                    'username': self.user.username,
+                    'is_online': is_online,
+                    'last_seen': timezone.now().isoformat()
+                }
+            )
+
+    @database_sync_to_async
+    def get_user_active_chat_groups(self):
+        # Return list of channel group names for all chat rooms this user belongs to
+        # Group name format is 'chat_minID_maxID'
+        rooms = ChatRoom.objects.filter(Q(user1=self.user) | Q(user2=self.user))
+        groups = []
+        for room in rooms:
+             user_ids = sorted([str(room.user1.id), str(room.user2.id)])
+             groups.append(f'chat_{user_ids[0]}_{user_ids[1]}')
+        return groups

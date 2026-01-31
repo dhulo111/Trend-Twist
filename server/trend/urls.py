@@ -75,7 +75,7 @@ urlpatterns = [
     path('posts/<int:pk>/like/', views.LikeToggleView.as_view(), name='like_toggle'),
     path('posts/<int:pk>/comments/', views.CommentListCreateView.as_view(), name='comment_list_create'),
     path('comments/<int:pk>/', views.CommentDetailView.as_view(), name='comment_detail'),
-    path('posts/<int:pk>/twists/', views.TwistListCreateView.as_view(), name='twist_list_create'),
+    path('posts/<int:post_id>/twists/', views.PostTwistListView.as_view(), name='post_twists_list'),
     path('posts/<int:pk>/share/', views.SharePostView.as_view(), name='share_post'),
 
     # Twists (Standalone)
@@ -86,6 +86,7 @@ urlpatterns = [
     path('users/<int:user_id>/twists/', views.UserTwistListView.as_view(), name='user_twist_list'),
     path('twists/<int:pk>/comments/', views.TwistCommentListCreateView.as_view(), name='twist_comment_list_create'),
     path('twist-comments/<int:pk>/', views.TwistCommentDetailView.as_view(), name='twist_comment_detail'),
+    path('twists/<int:pk>/share/', views.ShareTwistView.as_view(), name='share_twist'),
 
     # Stories
     path('stories/', views.StoryListCreateView.as_view(), name='story_list_create'),

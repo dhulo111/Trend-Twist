@@ -1,25 +1,12 @@
 // frontend/src/components/features/chat/Message.jsx
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
-import { IoEllipsisVertical, IoPencil, IoTrash, IoCheckmark, IoClose } from 'react-icons/io5';
+import { IoPencil, IoTrash, IoCheckmark, IoClose } from 'react-icons/io5';
 
 const Message = ({ message, currentUsername, onEdit, onDelete }) => {
   const isMine = currentUsername === message.author_username;
-  const [showActions, setShowActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
-  const menuRef = useRef(null);
-
-  // Close menu on outside click
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowActions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSaveEdit = () => {
     if (editContent.trim() !== message.content) {
@@ -37,7 +24,6 @@ const Message = ({ message, currentUsername, onEdit, onDelete }) => {
     if (window.confirm("Unsend this message?")) {
       onDelete(message.id);
     }
-    setShowActions(false);
   };
 
   // Style based on who sent the message
@@ -48,34 +34,25 @@ const Message = ({ message, currentUsername, onEdit, onDelete }) => {
   return (
     <div
       className={`flex w-full group relative items-center ${isMine ? 'justify-end flex-row' : 'justify-start flex-row-reverse'}`}
-      onMouseLeave={() => setShowActions(false)}
     >
       {/* Action Menu Trigger (Only for own messages) */}
+      {/* Action Buttons (Only for own messages) */}
       {isMine && !isEditing && (
-        <div className="relative" ref={menuRef}>
+        <div className="flex items-center gap-1 px-1">
           <button
-            onClick={() => setShowActions(!showActions)}
-            className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 text-text-secondary ${showActions ? 'opacity-100' : ''}`}
+            onClick={() => setIsEditing(true)}
+            className="text-text-secondary hover:text-text-primary p-1.5 rounded-full hover:bg-white/5 transition-colors"
+            title="Edit"
           >
-            <IoEllipsisVertical size={16} />
+            <IoPencil size={15} />
           </button>
-
-          {showActions && (
-            <div className="absolute bottom-full right-0 mb-2 w-24 bg-glass-bg backdrop-blur-md rounded-lg shadow-xl border border-border z-20 flex flex-col p-1">
-              <button
-                onClick={() => { setIsEditing(true); setShowActions(false); }}
-                className="flex items-center px-2 py-2 text-xs text-text-primary hover:bg-white/10 rounded"
-              >
-                <IoPencil className="mr-2" /> Edit
-              </button>
-              <button
-                onClick={handleUnsend}
-                className="flex items-center px-2 py-2 text-xs text-red-500 hover:bg-white/10 rounded"
-              >
-                <IoTrash className="mr-2" /> Unsend
-              </button>
-            </div>
-          )}
+          <button
+            onClick={handleUnsend}
+            className="text-text-secondary hover:text-red-500 p-1.5 rounded-full hover:bg-white/5 transition-colors"
+            title="Unsend"
+          >
+            <IoTrash size={15} />
+          </button>
         </div>
       )}
 

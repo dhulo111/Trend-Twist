@@ -72,7 +72,7 @@ const Avatar = ({ src, alt = 'avatar', size = 'md', className = '', onClick }) =
       onClick={onClick}
       // On error, set state to true
       onError={() => {
-        console.error("❌ Avatar failed to load:", finalSrc);
+        // Silently fail to default avatar
         setImageFailed(true);
       }}
     />

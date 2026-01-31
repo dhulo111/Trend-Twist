@@ -1,16 +1,14 @@
-// frontend/src/pages/PostDetailPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostDetail } from '../api/postApi';
+import { getPostDetail, getTwistsForPost } from '../api/postApi';
 import Spinner from '../components/common/Spinner';
-import Post from '../components/features/feed/Post'; // To display the main post
-import CommentSection from '../components/features/feed/CommentSection'; // To manage comments
+import Post from '../components/features/feed/Post';
+import CommentSection from '../components/features/feed/CommentSection';
+import TwistCard from '../components/features/feed/TwistCard';
 import { IoArrowBackOutline } from 'react-icons/io5';
 import Button from '../components/common/Button';
 
 const PostDetailPage = () => {
-  // Get the postId from the URL (routes/index.jsx: path="post/:postId")
   const { postId } = useParams();
   const navigate = useNavigate();
 
@@ -19,7 +17,6 @@ const PostDetailPage = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('comments'); // 'comments' or 'twists'
 
-  // --- Fetch Post Details ---
   const fetchPost = async () => {
     try {
       setLoading(true);
@@ -37,7 +34,6 @@ const PostDetailPage = () => {
     fetchPost();
   }, [postId]);
 
-  // --- Render Loading/Error States ---
   if (loading) {
     return (
       <div className="flex h-64 w-full items-center justify-center">
@@ -59,10 +55,8 @@ const PostDetailPage = () => {
     );
   }
 
-  // If post is loaded, render the content
   return (
     <div className="mx-auto max-w-2xl pb-12">
-
       <div className="mb-6 flex items-center space-x-3">
         <button
           onClick={() => navigate(-1)}
@@ -76,17 +70,14 @@ const PostDetailPage = () => {
         </h1>
       </div>
 
-      {/* --- 1. Main Post Display --- */}
-      {/* We pass a refresh function to Post.jsx so we can update details (like counts) */}
       {post && <Post post={post} onUpdate={fetchPost} />}
 
-      {/* --- 2. Tab Navigation (Comments / Twists) --- */}
       <div className="mt-8 flex space-x-4 border-b border-border">
         <button
           onClick={() => setActiveTab('comments')}
           className={`pb-2 font-semibold transition-colors ${activeTab === 'comments'
-              ? 'border-b-2 border-text-accent text-text-accent'
-              : 'text-text-secondary hover:text-text-primary'
+            ? 'border-b-2 border-text-accent text-text-accent'
+            : 'text-text-secondary hover:text-text-primary'
             }`}
         >
           Comments ({post?.comments_count || 0})
@@ -94,30 +85,62 @@ const PostDetailPage = () => {
         <button
           onClick={() => setActiveTab('twists')}
           className={`pb-2 font-semibold transition-colors ${activeTab === 'twists'
-              ? 'border-b-2 border-text-accent text-text-accent'
-              : 'text-text-secondary hover:text-text-primary'
+            ? 'border-b-2 border-text-accent text-text-accent'
+            : 'text-text-secondary hover:text-text-primary'
             }`}
         >
           Twists ({post?.twists_count || 0})
         </button>
       </div>
 
-      {/* --- 3. Content Area based on Tab --- */}
       <div className="pt-6">
         {activeTab === 'comments' && <CommentSection postId={postId} />}
 
         {activeTab === 'twists' && (
-          <div className="card p-8 text-center text-text-secondary">
-            <h3 className="text-xl font-semibold">
-              Twist Section (Feature Implementation)
-            </h3>
-            <p className="mt-2">
-              This area will show all the 'Twist' posts that responded to the original post.
-            </p>
-            {/* TODO: Add TwistList component here */}
-          </div>
+          <TwistList postId={postId} />
         )}
       </div>
+    </div>
+  );
+};
+
+const TwistList = ({ postId }) => {
+  const [twists, setTwists] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTwists = async () => {
+      setLoading(true);
+      try {
+        const data = await getTwistsForPost(postId);
+        setTwists(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTwists();
+  }, [postId]);
+
+  if (loading) return <div className="text-center py-8"><Spinner /></div>;
+
+  if (twists.length === 0) {
+    return (
+      <div className="text-center text-text-secondary py-12 border border-border rounded-xl">
+        <h3 className="text-lg font-semibold">No Twists Yet</h3>
+        <p>Be the first to Twist this post!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {twists.map(twist => (
+        <div key={twist.id} className="border border-white/10 rounded-xl bg-[#000000] overflow-hidden">
+          <TwistCard post={twist} />
+        </div>
+      ))}
     </div>
   );
 };

@@ -140,7 +140,7 @@ class PostSerializer(serializers.ModelSerializer):
     author_username = serializers.ReadOnlyField(source='author.username')
     author_profile_picture = serializers.ImageField(source='author.profile.profile_picture', read_only=True)
     likes_count = serializers.SerializerMethodField()
-    # twists_count removed
+    twists_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     
     # NEW: To show comment count on the feed
@@ -151,14 +151,16 @@ class PostSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'author', 'author_username', 'author_profile_picture', 
             'content', 'media_file', 'created_at', 
-            'likes_count', 'is_liked', 'hashtags', 'comments_count'
+            'likes_count', 'is_liked', 'hashtags', 'comments_count', 'twists_count'
         ]
         read_only_fields = ['author']
 
     def get_likes_count(self, obj):
         return obj.likes.count()
 
-    # twists_count removed as Twist model is now independent
+    def get_twists_count(self, obj):
+        return obj.twists.count()
+
     is_liked = serializers.SerializerMethodField()
 
     def get_is_liked(self, obj):
@@ -202,10 +204,11 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     author_username = serializers.ReadOnlyField(source='author.username')
     shared_reel_data = serializers.SerializerMethodField()
     shared_post_data = serializers.SerializerMethodField()
+    shared_twist_data = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'author', 'author_username', 'content', 'timestamp', 'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data']
+        fields = ['id', 'room', 'author', 'author_username', 'content', 'timestamp', 'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data', 'shared_twist', 'shared_twist_data']
         read_only_fields = ['author', 'room']
 
     def get_shared_reel_data(self, obj):
@@ -225,6 +228,16 @@ class ChatMessageSerializer(serializers.ModelSerializer):
                 'thumbnail': obj.shared_post.media_file.url if obj.shared_post.media_file else None,
                 'author_username': obj.shared_post.author.username,
                 'content': obj.shared_post.content[:30] + '...' if obj.shared_post.content else ''
+            }
+        return None
+
+    def get_shared_twist_data(self, obj):
+        if obj.shared_twist:
+            return {
+                'id': obj.shared_twist.id,
+                'thumbnail': obj.shared_twist.media_file.url if obj.shared_twist.media_file else None,
+                'author_username': obj.shared_twist.author.username,
+                'content': obj.shared_twist.content[:30] + '...' if obj.shared_twist.content else ''
             }
         return None
 
@@ -287,10 +300,17 @@ class TwistSerializer(serializers.ModelSerializer):
     retwists_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
 
+    original_post_data = serializers.SerializerMethodField()
+
     class Meta:
         model = Twist
-        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'content', 'media_file', 'created_at', 'likes_count', 'comments_count', 'retwists_count', 'is_liked', 'original_twist']
+        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'content', 'media_file', 'created_at', 'likes_count', 'comments_count', 'retwists_count', 'is_liked', 'original_twist', 'original_post', 'original_post_data']
         read_only_fields = ['author']
+
+    def get_original_post_data(self, obj):
+        if obj.original_post:
+            return PostSerializer(obj.original_post, context=self.context).data
+        return None
 
     def get_likes_count(self, obj):
         return obj.likes.count()

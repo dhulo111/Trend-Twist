@@ -130,6 +130,16 @@ export const getPublicTwists = async (tag) => {
     }
 }
 
+export const getTwistsForPost = async (postId) => {
+    try {
+        const response = await axiosInstance.get(`/posts/${postId}/twists/`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching twists for post:", error);
+        throw error;
+    }
+}
+
 export const toggleTwistLike = async (twistId) => {
   try {
     const response = await axiosInstance.post(`/twists/${twistId}/like/`);
@@ -199,3 +209,15 @@ export const sharePost = async (postId, userIds) => {
     throw error;
   }
 };
+
+export const shareTwist = async (twistId, userIds) => {
+    try {
+        const response = await axiosInstance.post(`/twists/${twistId}/share/`, {
+            user_ids: userIds
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Error sharing twist:", error);
+        throw error;
+    }
+}

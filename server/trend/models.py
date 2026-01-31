@@ -138,6 +138,9 @@ class Twist(models.Model):
     
     # Retwist logic (Simple reference to another twist)
     original_twist = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='retwists')
+    
+    # Twist on a Post (Quote Post logic)
+    original_post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name='twists')
 
     def __str__(self):
         return f"Twist by {self.author.username}"
@@ -233,6 +236,9 @@ class ChatMessage(models.Model):
     
     # Optional: Attach a post to the message
     shared_post = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True, related_name='shared_in_chats')
+    
+    # Optional: Attach a twist to the message
+    shared_twist = models.ForeignKey('Twist', on_delete=models.SET_NULL, null=True, blank=True, related_name='shared_in_chats')
 
     # Optional: Reply to a story
     story_reply = models.ForeignKey(Story, on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')

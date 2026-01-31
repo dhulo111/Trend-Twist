@@ -669,6 +669,18 @@ class TwistListCreateView(generics.ListCreateAPIView):
     def get_serializer_context(self): return {'request': self.request}
 
 
+class PostTwistListView(generics.ListAPIView):
+    """GET /api/posts/<post_id>/twists/"""
+    serializer_class = TwistSerializer
+    permission_classes = [AllowAny] # Allow viewing twists on public posts
+    
+    def get_queryset(self):
+        post_id = self.kwargs['post_id']
+        return Twist.objects.filter(original_post_id=post_id).order_by('-created_at')
+
+    def get_serializer_context(self): return {'request': self.request}
+
+
 class TwistDetailView(generics.RetrieveDestroyAPIView):
     """DELETE /api/twists/<pk>/"""
     queryset = Twist.objects.all()
@@ -1294,6 +1306,76 @@ class SharePostView(APIView):
                         'is_read': False,
                         'shared_post': msg.shared_post.id,
                         'shared_post_data': serialized_msg['shared_post_data']
+                    }
+                )
+                created_messages.append(msg.id)
+
+            except User.DoesNotExist:
+                continue
+        
+        return Response({"status": "shared", "count": len(created_messages)}, status=status.HTTP_200_OK)
+
+class ShareTwistView(APIView):
+    """
+    POST /api/twists/<id>/share/
+    Body: { "user_ids": [1, 2, 5] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            twist = Twist.objects.get(pk=pk)
+        except Twist.DoesNotExist:
+            return Response({"error": "Twist not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        recipient_ids = request.data.get('user_ids', [])
+        if not recipient_ids:
+             return Response({"error": "No recipients selected"}, status=status.HTTP_400_BAD_REQUEST)
+
+        created_messages = []
+        
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from .serializers import ChatMessageSerializer
+        channel_layer = get_channel_layer()
+
+        for user_id in recipient_ids:
+            try:
+                recipient = User.objects.get(pk=user_id)
+                # Ensure Chat Room Exists
+                room, _ = ChatRoom.objects.get_or_create(
+                    user1=min(request.user, recipient, key=lambda u: u.id),
+                    user2=max(request.user, recipient, key=lambda u: u.id)
+                )
+                room.last_message_at = timezone.now()
+                room.save()
+
+                # Create Message
+                msg = ChatMessage.objects.create(
+                    room=room,
+                    author=request.user,
+                    content=f"Shared a twist: {twist.content[:20] if twist.content else 'Twist'}",
+                    shared_twist=twist
+                )
+                
+                # Broadcast via WebSocket
+                user_ids = sorted([str(request.user.id), str(recipient.id)])
+                room_group_name = f'chat_{user_ids[0]}_{user_ids[1]}'
+                
+                serialized_msg = ChatMessageSerializer(msg).data
+                
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {
+                        'type': 'chat_message',
+                        'id': msg.id,
+                        'content': msg.content,
+                        'author': request.user.id,
+                        'author_username': request.user.username,
+                        'timestamp': msg.timestamp.isoformat(),
+                        'is_read': False,
+                        'shared_twist': msg.shared_twist.id,
+                        'shared_twist_data': serialized_msg['shared_twist_data']
                     }
                 )
                 created_messages.append(msg.id)
