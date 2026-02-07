@@ -59,15 +59,15 @@ const TwistDetailPage = () => {
       <div className="mb-6 flex items-center gap-4">
         <button
           onClick={() => navigate(-1)}
-          className="rounded-full p-2 text-text-secondary hover:bg-white/10 hover:text-white transition-colors"
+          className="rounded-full p-2 text-text-secondary hover:bg-background-accent hover:text-text-primary transition-colors"
         >
           <IoArrowBackOutline size={24} />
         </button>
-        <h1 className="text-2xl font-bold text-white">Twist</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Twist</h1>
       </div>
 
       {/* Main Twist Card */}
-      <div className="bg-[#1A1A1A] border border-white/5 rounded-2xl overflow-hidden">
+      <div className="bg-background-secondary border border-border rounded-2xl overflow-hidden shadow-sm">
         {twist && <TwistCard post={twist} onUpdate={fetchTwist} />}
       </div>
 

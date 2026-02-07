@@ -137,7 +137,7 @@ const TwistList = ({ postId }) => {
   return (
     <div className="space-y-4">
       {twists.map(twist => (
-        <div key={twist.id} className="border border-white/10 rounded-xl bg-[#000000] overflow-hidden">
+        <div key={twist.id} className="border border-border rounded-xl bg-background-secondary overflow-hidden shadow-sm">
           <TwistCard post={twist} />
         </div>
       ))}

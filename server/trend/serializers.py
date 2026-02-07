@@ -6,7 +6,7 @@ from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest, TwistLike, TwistComment, 
     # NEW MODELS
     FollowRequest, ChatRoom, ChatMessage, Story, StoryView,
-    Reel, ReelLike, ReelComment 
+    Reel, ReelLike, ReelComment, ChatGroup # NEW MODEL
 )
 from django.db.models import Q # Used for efficient chat room lookup
 
@@ -208,8 +208,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'author', 'author_username', 'content', 'timestamp', 'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data', 'shared_twist', 'shared_twist_data']
-        read_only_fields = ['author', 'room']
+        fields = ['id', 'room', 'group', 'author', 'author_username', 'content', 'timestamp', 'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data', 'shared_twist', 'shared_twist_data']
+        read_only_fields = ['author', 'room', 'group']
 
     def get_shared_reel_data(self, obj):
         if obj.shared_reel:
@@ -240,6 +240,37 @@ class ChatMessageSerializer(serializers.ModelSerializer):
                 'content': obj.shared_twist.content[:30] + '...' if obj.shared_twist.content else ''
             }
         return None
+
+class ChatGroupSerializer(serializers.ModelSerializer):
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    members_count = serializers.IntegerField(source='members.count', read_only=True)
+    
+    members_list = serializers.SerializerMethodField()
+    admin_details = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ChatGroup
+        fields = ['id', 'name', 'icon', 'admin', 'admin_details', 'members', 'members_list', 'created_at', 'last_message', 'unread_count', 'members_count', 'last_message_at']
+        read_only_fields = ['admin', 'created_at']
+
+    def get_members_list(self, obj):
+        return UserSerializer(obj.members.all(), many=True, context=self.context).data
+
+    def get_admin_details(self, obj):
+        return UserSerializer(obj.admin, context=self.context).data
+
+    def get_last_message(self, obj):
+        last_msg = obj.messages.order_by('-timestamp').first()
+        if last_msg:
+            return ChatMessageSerializer(last_msg, context=self.context).data
+        return None
+
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.messages.filter(~Q(author=request.user), is_read=False).count()
+        return 0
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     # Finds the 'other' user in the conversation

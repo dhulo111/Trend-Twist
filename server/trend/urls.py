@@ -59,7 +59,13 @@ urlpatterns = [
     path('chats/', views.ChatRoomListView.as_view(), name='chat_inbox'),
     
     # Chat History/Room Detail (Uses user ID to identify the conversation partner)
+    # Chat History/Room Detail (Uses user ID to identify the conversation partner)
     path('chats/<int:user_id>/', views.ChatRoomDetailView.as_view(), name='chat_detail'),
+    
+    # Group Chat (NEW)
+    path('groups/', views.ChatGroupListView.as_view(), name='group_list'),
+    path('groups/<int:pk>/', views.ChatGroupDetailView.as_view(), name='group_detail'),
+    path('groups/<int:pk>/messages/', views.ChatGroupMessageListView.as_view(), name='group_messages'),
 
 
     # ----------------------------------------------------------------------

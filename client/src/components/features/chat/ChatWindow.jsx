@@ -1,17 +1,18 @@
 // frontend/src/components/features/chat/ChatWindow.jsx
 
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { getChatHistory } from '../../../api/chatApi';
+import { getChatHistory, getGroupMessages } from '../../../api/chatApi'; // Import getGroupMessages
 import { AuthContext } from '../../../context/AuthContext';
 import Message from './Message';
 import Input from '../../common/Input';
 import Button from '../../common/Button';
 import Spinner from '../../common/Spinner';
 import Avatar from '../../common/Avatar';
-import { IoSend, IoCallOutline, IoVideocamOutline, IoArrowBack, IoEyeOutline } from 'react-icons/io5';
+import { IoSend, IoCallOutline, IoVideocamOutline, IoArrowBack, IoEyeOutline, IoPeople } from 'react-icons/io5';
 import config from '../../../config';
 import CallInterface from './CallInterface';
 import { useNavigate } from 'react-router-dom';
+import GroupDetailsModal from './GroupDetailsModal';
 
 const iceServers = {
   iceServers: [
@@ -20,7 +21,7 @@ const iceServers = {
   ]
 };
 
-const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
+const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeChat }) => {
   const { authToken, user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -40,6 +41,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [incomingCallData, setIncomingCallData] = useState(null);
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
 
   const peerConnectionRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -62,7 +64,12 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const history = await getChatHistory(otherUser.id);
+        let history;
+        if (isGroup) {
+          history = await getGroupMessages(activeChat.id);
+        } else {
+          history = await getChatHistory(otherUser.id);
+        }
         setMessages(history);
       } catch (e) {
         setMessages([]);
@@ -71,8 +78,10 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
         setLoading(false);
       }
     };
-    fetchHistory();
-  }, [otherUser.id]);
+    if ((isGroup && activeChat) || (!isGroup && otherUser)) {
+      fetchHistory();
+    }
+  }, [activeChat, otherUser, isGroup]);
 
 
   // --- WebRTC Logic (Defined before WS to be available in closure if needed, though with Refs it's flexible) ---
@@ -128,7 +137,6 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
   };
 
   // 3. Handle Signaling Messages
-  // 3. Handle Signaling Messages
   const handleCallSignal = async (signal) => {
     const { data } = signal;
     const { type } = data;
@@ -175,7 +183,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: type === 'video',
-        audio: true
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       setLocalStream(stream);
 
@@ -214,7 +222,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: incomingData.callType === 'video',
-        audio: true
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       setLocalStream(stream);
 
@@ -264,6 +272,8 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
 
   // --- 2. WebSocket Connection Logic ---
   useEffect(() => {
+    if ((isGroup && !activeChat) || (!isGroup && !otherUser)) return;
+
     // Determine WS Host dynamically
     let wsProtocol = 'ws:';
     let wsHost = '127.0.0.1:8000';
@@ -279,14 +289,16 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
       }
     }
 
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat/${otherUser.id}/?token=${authToken.access}`;
+    const endpoint = isGroup ? `group/${activeChat.id}` : otherUser.id;
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/chat/${endpoint}/?token=${authToken.access}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       setWsStatus('Connected.');
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ 'type': 'mark_read' }));
+        // Only mark read for DMs for now, or handle group read receipts later
+        if (!isGroup) ws.send(JSON.stringify({ 'type': 'mark_read' }));
       }
     };
 
@@ -294,15 +306,15 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
       const data = JSON.parse(e.data);
 
       if (data.type === 'user_status') {
-        if (data.username === otherUser.username) {
+        if (!isGroup && data.username === otherUser.username) {
           setIsOnline(data.is_online);
           setLastSeen(data.last_seen);
         }
       } else if (data.type === 'message_read') {
-        setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+        if (!isGroup) setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
       } else if (data.type === 'chat_message') {
         setMessages((prevMessages) => [...prevMessages, data]);
-        if (data.author_username === otherUser.username) {
+        if (!isGroup && data.author_username === otherUser.username) {
           ws.send(JSON.stringify({ 'type': 'mark_read' }));
         }
         if (onMessageUpdate) onMessageUpdate();
@@ -311,7 +323,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
       } else if (data.type === 'message_deleted') {
         setMessages(prev => prev.filter(m => m.id !== data.id));
       } else if (data.type === 'call_signal') {
-        handleCallSignalRef.current(data);
+        if (!isGroup) handleCallSignalRef.current(data);
       }
     };
 
@@ -330,7 +342,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
       ws.close();
       endCallRef.current(false);
     };
-  }, [otherUser.id, authToken]);
+  }, [activeChat, otherUser, isGroup, authToken]);
 
   // --- 3. Scroll to Bottom Effect ---
   useEffect(() => {
@@ -370,15 +382,23 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
     }
   };
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* --- Chat Header --- */}
-      <div className="flex items-center justify-between border-b border-border p-4 bg-glass-bg backdrop-blur-md sticky top-0 z-10">
+  // --- Render Header Info ---
+  const renderHeaderInfo = () => {
+    if (isGroup) {
+      return (
+        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setShowGroupDetails(true)}>
+          <Avatar src={activeChat.icon} size="md" />
+          <div className="flex flex-col">
+            <p className="font-semibold text-text-primary text-sm md:text-base">{activeChat.name}</p>
+            <p className="text-xs text-text-secondary flex items-center">
+              <IoPeople className="mr-1" /> {activeChat.members_count} members
+            </p>
+          </div>
+        </div>
+      );
+    } else {
+      return (
         <div className="flex items-center space-x-3">
-          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-text-primary">
-            <IoArrowBack size={24} />
-          </button>
-
           <Avatar src={otherUser.profile?.profile_picture} size="md" />
           <div
             className="flex flex-col cursor-pointer hover:opacity-80 transition"
@@ -394,26 +414,43 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
             )}
           </div>
         </div>
+      );
+    }
+  };
 
-        {/* Call Buttons */}
-        <div className="flex space-x-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<IoCallOutline />}
-            onClick={() => startCall('voice')}
-          >
-            Call
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<IoVideocamOutline />}
-            onClick={() => startCall('video')}
-          >
-            Video
-          </Button>
+  return (
+    <div className="flex h-full flex-col">
+      {/* --- Chat Header --- */}
+      <div className="flex items-center justify-between border-b border-border p-4 bg-glass-bg backdrop-blur-md sticky top-0 z-10">
+        <div className="flex items-center space-x-3">
+          <button onClick={onBack} className="md:hidden p-2 -ml-2 text-text-primary">
+            <IoArrowBack size={24} />
+          </button>
+
+          {renderHeaderInfo()}
         </div>
+
+        {/* Call Buttons - Only for 1-on-1 for now */}
+        {!isGroup && (
+          <div className="flex space-x-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<IoCallOutline />}
+              onClick={() => startCall('voice')}
+            >
+              Call
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<IoVideocamOutline />}
+              onClick={() => startCall('video')}
+            >
+              Video
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Call Interface Overlay */}
@@ -445,7 +482,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
               />
-              {index === messages.length - 1 && msg.author_username === user?.username && msg.is_read && (
+              {index === messages.length - 1 && !isGroup && msg.author_username === user?.username && msg.is_read && (
                 <div className="flex justify-end pr-2 mt-1">
                   <span className="text-xs text-text-secondary flex items-center">
                     Seen <IoEyeOutline className="ml-1" />
@@ -458,7 +495,26 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate }) => {
         <div ref={chatEndRef} />
       </div>
 
-      {/* --- Message Input --- */}
+      {/* --- Group Details Modal --- */}
+      {showGroupDetails && isGroup && (
+        <GroupDetailsModal
+          group={{ ...activeChat, current_user_id: user.id }} // Pass current user for permission check
+          onClose={() => setShowGroupDetails(false)}
+          onUpdate={(updatedGroup) => {
+            // Update local state or trigger a reload if needed. 
+            // For now, simple reload might is easiest, or just update header info.
+            // Ideally, ChatWindow should receive updated 'activeChat' prop from parent (MessagesPage)
+            if (onMessageUpdate) onMessageUpdate(); // Force refresh
+            setShowGroupDetails(false);
+          }}
+          onDelete={(groupId) => {
+            // Handle deletion: close chat, maybe refresh list
+            onBack(); // Go back to inbox
+          }}
+        />
+      )}
+
+      {/* ... (Existing Message Input Code) ... */}
       <form onSubmit={handleSend} className="flex items-center border-t border-border p-4">
         <Input
           id="chatInput"

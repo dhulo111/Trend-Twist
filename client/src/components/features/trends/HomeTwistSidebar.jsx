@@ -29,12 +29,12 @@ const HomeTwistSidebar = () => {
     <div className="space-y-4">
 
       {/* Header Card */}
-      <div className="bg-[#1A1A1A] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+      <div className="bg-background-secondary border border-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <IoPlanetOutline className="text-accent" size={20} />
-          <h2 className="text-lg font-bold text-white">Top Twists</h2>
+          <h2 className="text-lg font-bold text-text-primary">Top Twists</h2>
         </div>
-        <Link to="/trending" className="p-2 hover:bg-white/5 rounded-full text-gray-400 hover:text-white transition-colors">
+        <Link to="/trending" className="p-2 hover:bg-background-accent/10 rounded-full text-text-secondary hover:text-text-primary transition-colors">
           <IoArrowForward size={18} />
         </Link>
       </div>
@@ -45,7 +45,7 @@ const HomeTwistSidebar = () => {
           <div className="py-10 flex justify-center"><Spinner size="sm" /></div>
         ) : twists.length > 0 ? (
           twists.map(twist => (
-            <div key={twist.id} className="bg-[#1A1A1A] border border-white/5 rounded-xl overflow-hidden hover:border-white/10 transition-colors">
+            <div key={twist.id} className="bg-background-secondary border border-border rounded-xl overflow-hidden hover:border-text-secondary/30 transition-colors shadow-sm">
               {/* Render minimal TwistCard or full one. Standard one is responsive enough. */}
               <div className="scale-[0.95] origin-top-left w-[105%] -mb-2">
                 <TwistCard post={twist} />
@@ -53,13 +53,13 @@ const HomeTwistSidebar = () => {
             </div>
           ))
         ) : (
-          <div className="text-center py-10 text-gray-500">
+          <div className="text-center py-10 text-text-secondary">
             No active twists.
           </div>
         )}
       </div>
 
-      <Link to="/trending" className="block text-center text-sm text-accent hover:underline py-2">
+      <Link to="/trending" className="block text-center text-sm text-text-accent hover:underline py-2">
         View more on Global Feed
       </Link>
 

@@ -24,8 +24,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
-    Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
-    Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike
+    Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike, ChatGroup
 )
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -35,7 +34,7 @@ from .serializers import (
     FollowerSerializer, FollowingSerializer, HashtagSerializer,
     OTPRequestSerializer, OTPVerifySerializer, CompleteRegistrationSerializer,
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
-    ReelSerializer, ReelCommentSerializer, TwistCommentSerializer
+    ReelSerializer, ReelCommentSerializer, TwistCommentSerializer, ChatGroupSerializer # NEW
 )
 from channels.db import database_sync_to_async
 # --- Permissions ---
@@ -475,77 +474,185 @@ class ChatRoomDetailView(APIView):
         
         # Find or create the chat room
         room, created = ChatRoom.objects.get_or_create(
-            user1=min(request.user, other_user, key=lambda u: u.id), 
+            user1=min(request.user, other_user, key=lambda u: u.id),
             user2=max(request.user, other_user, key=lambda u: u.id),
         )
-        
+
         # Mark all unread messages from the other user as read
         ChatMessage.objects.filter(room=room, is_read=False).exclude(author=request.user).update(is_read=True)
 
         messages = ChatMessage.objects.filter(room=room).order_by('timestamp')
         serializer = ChatMessageSerializer(messages, many=True, context={'request': request})
-        
+
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ChatGroupListView(generics.ListCreateAPIView):
+    """GET /api/groups/ - List all chat groups | POST - Create new group"""
+    serializer_class = ChatGroupSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        return self.request.user.chat_groups.all().order_by('-last_message_at')
+
+    def perform_create(self, serializer):
+        group = serializer.save(admin=self.request.user)
+        group.members.add(self.request.user) # Admin is always a member
+
+        # Add other members if provided in request
+        member_ids_str = self.request.data.get('members', '') # "1,2,3"
+        if member_ids_str:
+            member_ids = [int(id) for id in member_ids_str.split(',') if id.isdigit()]
+            users = User.objects.filter(id__in=member_ids)
+            group.members.add(*users)
+
+
+class ChatGroupDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PUT/DELETE /api/groups/<pk>/"""
+    queryset = ChatGroup.objects.all()
+    serializer_class = ChatGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        group = serializer.save()
+        # Handle adding members logic if needed
+        add_members_str = self.request.data.get('add_members', '')
+        if add_members_str:
+            member_ids = [int(id) for id in add_members_str.split(',') if id.isdigit()]
+            users = User.objects.filter(id__in=member_ids)
+            group.members.add(*users)
+
+        remove_members_str = self.request.data.get('remove_members', '')
+        if remove_members_str:
+             if self.request.user != group.admin:
+                 return # Only admin can remove? Or self-leave.
+             member_ids = [int(id) for id in remove_members_str.split(',') if id.isdigit()]
+             users = User.objects.filter(id__in=member_ids)
+             group.members.remove(*users)
+
+class ChatGroupMessageListView(generics.ListAPIView):
+    """GET /api/groups/<pk>/messages/"""
+    serializer_class = ChatMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        group_id = self.kwargs['pk']
+        try:
+             group = ChatGroup.objects.get(pk=group_id)
+        except ChatGroup.DoesNotExist: return ChatMessage.objects.none()
+
+        # Verify membership
+        if self.request.user not in group.members.all():
+            return ChatMessage.objects.none()
+
+        return ChatMessage.objects.filter(group=group).order_by('timestamp')
 
 
 class SendMessageView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
         recipient_username = request.data.get('recipient_username')
+        group_id = request.data.get('group_id')
         content = request.data.get('content')
         story_id = request.data.get('story_id')
-        
-        if not recipient_username or not content:
-             return Response({"error": "Recipient and content are required."}, status=status.HTTP_400_BAD_REQUEST)
-             
-        try:
-            recipient = User.objects.get(username=recipient_username)
-        except User.DoesNotExist:
-             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-             
-        # Create/Get Room
-        room, created = ChatRoom.objects.get_or_create(
-            user1=min(request.user, recipient, key=lambda u: u.id),
-            user2=max(request.user, recipient, key=lambda u: u.id)
-        )
-        room.last_message_at = timezone.now()
-        room.save()
-        
+
+        if not content:
+             return Response({"error": "Content is required."}, status=status.HTTP_400_BAD_REQUEST)
+
         # Optional: Link story
         story_ref = None
         if story_id:
             try:
                 story_ref = Story.objects.get(id=story_id)
             except Story.DoesNotExist: pass
-            
-        # Create Message
-        msg = ChatMessage.objects.create(
-            room=room,
-            author=request.user,
-            content=content,
-            story_reply=story_ref
-        )
-        
-        # Broadcast to WebSocket Group
-        channel_layer = get_channel_layer()
-        user_ids = sorted([str(request.user.id), str(recipient.id)])
-        room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
-        room_group_name = f'chat_{room_name}'
-        
-        async_to_sync(channel_layer.group_send)(
-            room_group_name,
-            {
-                'type': 'chat_message',
-                'id': msg.id,
-                'content': msg.content,
-                'author': request.user.id,
-                'author_username': request.user.username,
-                'timestamp': msg.timestamp.isoformat(),
-                'is_read': False 
-            }
-        )
 
-        return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        # Scenario A: Group Message
+        if group_id:
+            try:
+                group = ChatGroup.objects.get(pk=group_id)
+                if request.user not in group.members.all():
+                     return Response({"error": "Not a member."}, status=status.HTTP_403_FORBIDDEN)
+
+                group.last_message_at = timezone.now()
+                group.save()
+
+                msg = ChatMessage.objects.create(
+                    group=group,
+                    author=request.user,
+                    content=content,
+                    story_reply=story_ref
+                )
+
+                # Broadcast to Group Room
+                channel_layer = get_channel_layer()
+                room_group_name = f'chat_group_{group.id}'
+
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {
+                        'type': 'chat_message',
+                        'id': msg.id,
+                        'content': msg.content,
+                        'author': request.user.id,
+                        'author_username': request.user.username,
+                        'timestamp': msg.timestamp.isoformat(),
+                        'is_read': False,
+                        # Pass group_id so client knows where to put it
+                        'group_id': group.id
+                    }
+                )
+                return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+            except ChatGroup.DoesNotExist:
+                return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Scenario B: Direct Message (Existing Logic)
+        elif recipient_username:
+            try:
+                recipient = User.objects.get(username=recipient_username)
+            except User.DoesNotExist:
+                 return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Create/Get Room
+            room, created = ChatRoom.objects.get_or_create(
+                user1=min(request.user, recipient, key=lambda u: u.id),
+                user2=max(request.user, recipient, key=lambda u: u.id)
+            )
+            room.last_message_at = timezone.now()
+            room.save()
+
+            # Create Message
+            msg = ChatMessage.objects.create(
+                room=room,
+                author=request.user,
+                content=content,
+                story_reply=story_ref
+            )
+
+            # Broadcast to WebSocket Group
+            channel_layer = get_channel_layer()
+            user_ids = sorted([str(request.user.id), str(recipient.id)])
+            room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
+            room_group_name = f'chat_{room_name}'
+
+            async_to_sync(channel_layer.group_send)(
+                room_group_name,
+                {
+                    'type': 'chat_message',
+                    'id': msg.id,
+                    'content': msg.content,
+                    'author': request.user.id,
+                    'author_username': request.user.username,
+                    'timestamp': msg.timestamp.isoformat(),
+                    'is_read': False
+                }
+            )
+
+            return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+        else:
+            return Response({"error": "Recipient or Group ID required."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 

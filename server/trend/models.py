@@ -221,11 +221,26 @@ class ChatRoom(models.Model):
     def __str__(self):
         return f"Chat between {self.user1.username} and {self.user2.username}"
 
+class ChatGroup(models.Model):
+    """
+    A generic chat group (Instagram-like) supporting multiple members.
+    """
+    name = models.CharField(max_length=255)
+    icon = models.ImageField(upload_to='groups/', blank=True, null=True)
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name='admin_groups')
+    members = models.ManyToManyField(User, related_name='chat_groups')
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_message_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
 class ChatMessage(models.Model):
     """
-    A single message within a chat room.
+    A single message within a chat room OR a chat group.
     """
-    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -244,7 +259,11 @@ class ChatMessage(models.Model):
     story_reply = models.ForeignKey(Story, on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
     def __str__(self):
-        return f"Message in {self.room.id} by {self.author.username}"
+        if self.room:
+            return f"Message in Room {self.room.id} by {self.author.username}"
+        elif self.group:
+            return f"Message in Group {self.group.id} by {self.author.username}"
+        return f"Message {self.id}"
 
 
 # --- 7. Reel Models (Instagram Reels Clone) ---

@@ -37,7 +37,7 @@ const Comment = ({ comment, onDelete }) => {
   };
 
   return (
-    <div className="flex space-x-3 py-3 border-b border-white/10 hover:bg-white/[0.02] px-2 transition-colors">
+    <div className="flex space-x-3 py-3 border-b border-border hover:bg-background-accent/5 px-2 transition-colors">
       {/* Avatar and Link to Profile */}
       <Link to={`/profile/${comment.author_username}`} className='flex-shrink-0'>
         <Avatar src={comment.author_profile_picture} size="sm" />
@@ -46,10 +46,10 @@ const Comment = ({ comment, onDelete }) => {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <div className="text-sm">
-            <Link to={`/profile/${comment.author_username}`} className="font-bold text-white mr-2 hover:underline">
+            <Link to={`/profile/${comment.author_username}`} className="font-bold text-text-primary mr-2 hover:underline">
               {comment.author_username}
             </Link>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-text-secondary">
               {formatTimeAgo(comment.created_at)}
             </span>
           </div>
@@ -64,7 +64,7 @@ const Comment = ({ comment, onDelete }) => {
             </button>
           )}
         </div>
-        <p className="mt-0.5 text-gray-200 text-sm whitespace-pre-wrap">{comment.text}</p>
+        <p className="mt-0.5 text-text-primary text-sm whitespace-pre-wrap">{comment.text}</p>
       </div>
     </div>
   );
@@ -144,14 +144,14 @@ const TwistCommentSection = ({ twistId }) => {
     <div className="mt-6">
 
       {/* --- New Reply Form --- */}
-      <h3 className="text-lg font-bold text-white mb-4">Replies ({comments.length})</h3>
+      <h3 className="text-lg font-bold text-text-primary mb-4">Replies ({comments.length})</h3>
 
       <div className="flex gap-3 mb-6">
         <Avatar src={user?.profile?.profile_picture} size="md" />
         <div className="flex-1">
           <form onSubmit={handleCommentSubmit} className="relative">
             <textarea
-              className="w-full bg-transparent border-b border-white/20 text-white placeholder-gray-500 outline-none focus:border-accent py-2 min-h-[50px] resize-none"
+              className="w-full bg-transparent border-b border-border text-text-primary placeholder-text-secondary outline-none focus:border-text-accent py-2 min-h-[50px] resize-none"
               placeholder="Post your reply"
               value={newCommentText}
               onChange={(e) => setNewCommentText(e.target.value)}
@@ -172,7 +172,7 @@ const TwistCommentSection = ({ twistId }) => {
       </div>
 
       {/* --- Comments List --- */}
-      <div className="space-y-0 border-t border-white/10">
+      <div className="space-y-0 border-t border-border">
         {loading ? (
           <div className="flex justify-center py-8"><Spinner size="md" /></div>
         ) : comments.length > 0 ? (
@@ -185,7 +185,7 @@ const TwistCommentSection = ({ twistId }) => {
           ))
         ) : (
           <div className="text-center py-10">
-            <p className="text-gray-500">No replies yet. Be the first to reply!</p>
+            <p className="text-text-secondary">No replies yet. Be the first to reply!</p>
           </div>
         )}
       </div>

@@ -148,7 +148,7 @@ const Post = ({ post, onUpdate }) => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full relative group bg-background-secondary border border-border rounded-2xl mb-6 overflow-hidden hover:border-text-secondary/20 transition-colors"
+        className="w-full relative group bg-background-secondary border border-border rounded-2xl mb-6 overflow-hidden hover:border-text-secondary/50 transition-all shadow-sm hover:shadow-md"
       >
 
         {/* --- 1. Post Header --- */}
@@ -245,7 +245,7 @@ const Post = ({ post, onUpdate }) => {
               />
             )
           ) : (
-            <div className="w-full h-64 bg-background-tertiary flex items-center justify-center text-text-secondary">
+            <div className="w-full h-64 bg-background-accent flex items-center justify-center text-text-secondary">
               No Media
             </div>
           )}
@@ -334,7 +334,7 @@ const Post = ({ post, onUpdate }) => {
 
           {/* Add a comment input simplified */}
           <div className="mt-3 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-background-tertiary overflow-hidden">
+            <div className="w-6 h-6 rounded-full bg-background-accent overflow-hidden">
               <Avatar src={currentUser?.profile?.profile_picture} size="xs" />
             </div>
             <Link to={`/post/${post.id}`} className="text-text-secondary text-sm flex-1 cursor-text">

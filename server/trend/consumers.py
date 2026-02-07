@@ -5,26 +5,40 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
-from .models import ChatRoom, ChatMessage, Profile
+from .models import ChatRoom, ChatMessage, Profile, ChatGroup
 from channels.db import database_sync_to_async
 
 class ChatConsumer(AsyncWebsocketConsumer):
     # --- 1. Connection Handlers ---
 
     async def connect(self):
-        # The 'user_id' is the ID of the person the current user is chatting with
-        self.other_user_id = self.scope['url_route']['kwargs']['user_id']
+        self.user_id_param = self.scope['url_route']['kwargs'].get('user_id')
+        self.group_id_param = self.scope['url_route']['kwargs'].get('group_id')
         self.current_user = self.scope['user']
 
-        # Reject connection if not authenticated or user is trying to chat with self
-        if not self.current_user.is_authenticated or str(self.current_user.id) == self.other_user_id:
+        if not self.current_user.is_authenticated:
             await self.close()
             return
-        
-        # Determine the user IDs for the room group name
-        user_ids = sorted([str(self.current_user.id), self.other_user_id])
-        self.room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
-        self.room_group_name = 'chat_%s' % self.room_name
+
+        if self.group_id_param:
+            # GROUP CHAT LOGIC
+            self.room_group_name = f'chat_group_{self.group_id_param}'
+            # Verify membership (optional but recommended)
+            is_member = await self.check_group_membership(self.group_id_param, self.current_user)
+            if not is_member:
+                await self.close()
+                return
+        elif self.user_id_param:
+            # 1-on-1 CHAT LOGIC
+            if str(self.current_user.id) == self.user_id_param:
+                await self.close()
+                return
+            user_ids = sorted([str(self.current_user.id), self.user_id_param])
+            self.room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
+            self.room_group_name = f'chat_{self.room_name}'
+        else:
+            await self.close()
+            return
 
         # Join room group
         await self.channel_layer.group_add(
@@ -34,27 +48,80 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Notify room that user is online
         await self.update_user_status(True)
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'user_status',
-                'username': self.current_user.username,
-                'is_online': True,
-                'last_seen': timezone.now().isoformat()
-            }
-        )
+        # Only broadcast status updates in 1-on-1 chats for now to reduce noise in large groups
+        if self.user_id_param:
+             await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_status',
+                    'username': self.current_user.username,
+                    'is_online': True,
+                    'last_seen': timezone.now().isoformat()
+                }
+            )
 
         await self.accept()
 
-        # Fetch and send the OTHER user's status to the current user
-        other_user_status = await self.get_user_profile_status(self.other_user_id)
-        if other_user_status:
-            await self.send(text_data=json.dumps({
-                'type': 'user_status',
-                'username': other_user_status['username'],
-                'is_online': other_user_status['is_online'],
-                'last_seen': other_user_status['last_seen']
-            }))
+        # Fetch status only for 1-on-1
+        if self.user_id_param:
+            other_user_status = await self.get_user_profile_status(self.user_id_param)
+            if other_user_status:
+                await self.send(text_data=json.dumps({
+                    'type': 'user_status',
+                    'username': other_user_status['username'],
+                    'is_online': other_user_status['is_online'],
+                    'last_seen': other_user_status['last_seen']
+                }))
+
+    # ... (disconnect is fine, just relies on room_group_name) ...
+
+    # ... (receive methods are mostly fine, save_message needs update) ...
+
+    @database_sync_to_async
+    def check_group_membership(self, group_id, user):
+        try:
+            group = ChatGroup.objects.get(id=group_id)
+            return group.members.filter(id=user.id).exists()
+        except ChatGroup.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def save_message(self, content):
+        if self.group_id_param:
+             try:
+                group = ChatGroup.objects.get(id=self.group_id_param)
+                group.last_message_at = timezone.now()
+                group.save()
+                msg = ChatMessage.objects.create(
+                    group=group, 
+                    author=self.current_user, 
+                    content=content
+                )
+                return msg.id, msg.timestamp
+             except ChatGroup.DoesNotExist:
+                return None, None
+        else:
+            # Existing 1-on-1 Logic
+            user1 = self.current_user
+            user2 = User.objects.get(id=self.user_id_param)
+            
+            # Enforce consistent user1/user2 order for ChatRoom lookup
+            room, created = ChatRoom.objects.get_or_create(
+                user1=min(user1, user2, key=lambda u: u.id),
+                user2=max(user1, user2, key=lambda u: u.id),
+            )
+            
+            # Update last_message_at for sorting the inbox
+            room.last_message_at = timezone.now()
+            room.save()
+
+            # Create and save the message
+            msg = ChatMessage.objects.create(
+                room=room,
+                author=self.current_user,
+                content=content
+            )
+            return msg.id, msg.timestamp
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -158,7 +225,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'author': self.current_user.id,
                 'author_username': self.current_user.username,
                 'timestamp': timestamp.isoformat(),
-                'is_read': False 
+                'is_read': False,
+                'group_id': int(self.group_id_param) if self.group_id_param else None # Add group_id for client to know where to route
             }
         )
 
@@ -173,7 +241,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'author': event['author'],
             'author_username': event['author_username'],
             'timestamp': event['timestamp'],
-            'is_read': event['is_read']
+            'is_read': event['is_read'],
+            'group_id': event.get('group_id')
         }))
 
     async def user_status(self, event):
@@ -233,38 +302,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # --- 4. Database Helper (Synchronous operations must be run asynchronously) ---
 
-    from channels.db import database_sync_to_async
+    # from channels.db import database_sync_to_async (Removed Duplicate)
     
     @database_sync_to_async
-    def save_message(self, content):
-        # Find or create the chat room first
-        user1 = self.current_user
-        user2 = User.objects.get(id=self.other_user_id)
-        
-        # Enforce consistent user1/user2 order for ChatRoom lookup
-        room, created = ChatRoom.objects.get_or_create(
-            user1=min(user1, user2, key=lambda u: u.id),
-            user2=max(user1, user2, key=lambda u: u.id),
-        )
-        
-        # Update last_message_at for sorting the inbox
-        room.last_message_at = timezone.now()
-        room.save()
-
-        # Create and save the message
-        msg = ChatMessage.objects.create(
-            room=room,
-            author=self.current_user,
-            content=content
-        )
-        return msg.id, msg.timestamp
-
-    @database_sync_to_async
     def mark_messages_read(self):
+        if self.group_id_param: return # TODO: Group read receipts
+        
         # Mark all messages FROM the OTHER user as read
         user1 = self.current_user
         try:
-             user2 = User.objects.get(id=self.other_user_id)
+             user2 = User.objects.get(id=self.user_id_param)
              room = ChatRoom.objects.filter(
                 Q(user1=user1, user2=user2) | Q(user1=user2, user2=user1)
              ).first()

@@ -39,92 +39,98 @@ const CallInterface = ({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] flex flex-col bg-gray-900"
       >
-        <div className="relative w-full max-w-md md:max-w-4xl h-[80vh] bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+        {/* --- Main Video Area (Remote) --- */}
+        <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
 
-          {/* Main Video Area (Remote) */}
-          <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-            {callType === 'video' && remoteStream && callStatus === 'connected' ? (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              // Avatar placeholder for voice call or no video
-              <div className="flex flex-col items-center gap-4 animate-pulse">
-                <Avatar src={otherUser.profile?.profile_picture} size="2xl" className="w-32 h-32 md:w-48 md:h-48 border-4 border-accent" />
-                <h2 className="text-2xl md:text-3xl font-bold text-white">{otherUser.username}</h2>
-                <p className="text-gray-400 text-lg">
+          {/* Remote Video Stream - Full Screen */}
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className={`w-full h-full object-cover transition-opacity duration-500 ${callType === 'voice' || callStatus !== 'connected' || !remoteStream ? 'opacity-0 absolute inset-0' : 'opacity-100'}`}
+          />
+
+          {/* Avatar / Status Placeholder (Voice Call or Connecting) */}
+          {(callType === 'voice' || callStatus !== 'connected' || !remoteStream) && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 animate-pulse p-4">
+              <div className="relative">
+                <div className="absolute -inset-4 bg-accent/20 rounded-full blur-xl animate-pulse"></div>
+                <Avatar src={otherUser.profile?.profile_picture} size="2xl" className="w-32 h-32 md:w-48 md:h-48 border-4 border-accent relative z-10" />
+              </div>
+              <div className="text-center">
+                <h2 className="text-3xl md:text-5xl font-bold text-white mb-2">{otherUser.username}</h2>
+                <p className="text-gray-400 text-xl font-medium tracking-wide">
                   {callStatus === 'calling' ? 'Calling...' :
                     callStatus === 'connecting' ? 'Connecting...' :
                       callStatus === 'incoming' ? 'Incoming Call...' :
-                        'Connected'}
+                        callStatus === 'connected' ? 'Connected' : ''}
                 </p>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Local Video (Picture-in-Picture) */}
-            {callType === 'video' && localStream && (callStatus === 'connected' || callStatus === 'connecting') && (
-              <div className="absolute top-4 right-4 w-28 h-40 md:w-48 md:h-64 bg-gray-800 rounded-xl overflow-hidden border-2 border-white/20 shadow-lg cursor-move z-10">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted // Always mute local video to prevent echo
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
-          </div>
+          {/* Local Video (Picture-in-Picture) - Mirrored */}
+          {callType === 'video' && localStream && (callStatus === 'connected' || callStatus === 'connecting') && (
+            <div className="absolute top-4 right-4 w-32 h-44 md:w-56 md:h-72 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-20">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover transform scale-x-[-1]"
+              />
+              {/* Camera Off Indicator for Local User */}
+              {isVideoOff && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800/80 backdrop-blur-sm">
+                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                    <IoVideocamOffOutline className="text-white/50 text-2xl" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-          {/* Controls Footer */}
-          <div className="h-24 bg-gray-900/90 backdrop-blur border-t border-white/10 flex items-center justify-center gap-6 md:gap-8">
-
+        {/* --- Controls Footer (Transparent Overlay) --- */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 pt-24 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex justify-center z-30">
+          <div className="flex items-center gap-6 md:gap-10">
             {callStatus === 'incoming' ? (
               <>
-                {/* Reject Button */}
                 <button onClick={onReject} className="flex flex-col items-center gap-2 group">
-                  <div className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center text-white text-2xl group-hover:bg-red-600 transition-transform group-hover:scale-110 shadow-lg shadow-red-500/30">
+                  <div className="w-16 h-16 rounded-full bg-red-500/90 backdrop-blur-sm flex items-center justify-center text-white text-3xl group-hover:bg-red-600 transition-transform group-hover:scale-110 shadow-lg shadow-red-500/30">
                     <IoClose />
                   </div>
-                  <span className="text-xs text-gray-300">Decline</span>
+                  <span className="text-sm font-medium text-white/80">Decline</span>
                 </button>
-
-                {/* Accept Button */}
                 <button onClick={onAccept} className="flex flex-col items-center gap-2 group">
-                  <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-white text-2xl group-hover:bg-green-600 transition-transform group-hover:scale-110 shadow-lg shadow-green-500/30 animate-bounce">
+                  <div className="w-16 h-16 rounded-full bg-green-500/90 backdrop-blur-sm flex items-center justify-center text-white text-3xl group-hover:bg-green-600 transition-transform group-hover:scale-110 shadow-lg shadow-green-500/30 animate-pulse">
                     <IoCall />
                   </div>
-                  <span className="text-xs text-gray-300">Accept</span>
+                  <span className="text-sm font-medium text-white/80">Accept</span>
                 </button>
               </>
             ) : (
               <>
-                {/* Mute Toggle */}
-                <button onClick={onToggleMic} className={`p-4 rounded-full transition-colors ${isMicMuted ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                  {isMicMuted ? <IoMicOffOutline size={24} /> : <IoMicOutline size={24} />}
+                <button onClick={onToggleMic} className={`p-4 md:p-5 rounded-full backdrop-blur-md transition-all ${isMicMuted ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+                  {isMicMuted ? <IoMicOffOutline size={28} /> : <IoMicOutline size={28} />}
                 </button>
 
-                {/* End Call Button */}
-                <button onClick={onEnd} className="p-4 rounded-full bg-red-600 text-white hover:bg-red-700 transition-transform hover:scale-110 shadow-lg">
-                  <IoCall size={32} className="transform rotate-[135deg]" />
+                <button onClick={onEnd} className="p-5 md:p-6 rounded-full bg-red-600 text-white hover:bg-red-700 transition-transform hover:scale-110 shadow-xl shadow-red-600/20 mx-2">
+                  <IoCall size={36} className="transform rotate-[135deg]" />
                 </button>
 
-                {/* Video Toggle */}
                 {callType === 'video' && (
-                  <button onClick={onToggleVideo} className={`p-4 rounded-full transition-colors ${isVideoOff ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                    {isVideoOff ? <IoVideocamOffOutline size={24} /> : <IoVideocamOutline size={24} />}
+                  <button onClick={onToggleVideo} className={`p-4 md:p-5 rounded-full backdrop-blur-md transition-all ${isVideoOff ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+                    {isVideoOff ? <IoVideocamOffOutline size={28} /> : <IoVideocamOutline size={28} />}
                   </button>
                 )}
               </>
             )}
-
           </div>
         </div>
       </motion.div>

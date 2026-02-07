@@ -4,6 +4,13 @@
   --color-bg-primary: hsl(var(--bg-primary));
   --color-bg-secondary: hsl(var(--bg-secondary));
   --color-bg-accent: hsl(var(--bg-accent));
+  
+  /* Aliases for components using 'background-' prefix */
+  --color-background-primary: hsl(var(--bg-primary));
+  --color-background-secondary: hsl(var(--bg-secondary));
+  --color-background-accent: hsl(var(--bg-accent));
+  --color-background-tertiary: hsl(var(--bg-secondary)); /* Fallback for tertiary usage */
+
   --color-text-primary: hsl(var(--text-primary));
   --color-text-secondary: hsl(var(--text-secondary));
   --color-text-accent: hsl(var(--text-accent));

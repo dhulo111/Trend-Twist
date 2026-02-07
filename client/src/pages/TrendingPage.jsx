@@ -45,8 +45,8 @@ const TrendingPage = () => {
             <IoPlanetOutline size={32} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Global Feed</h1>
-            <p className="text-gray-400 text-sm">See what the world is twisting about right now.</p>
+            <h1 className="text-3xl font-bold text-text-primary tracking-tight">Global Feed</h1>
+            <p className="text-text-secondary text-sm">See what the world is twisting about right now.</p>
           </div>
         </div>
 
@@ -59,14 +59,14 @@ const TrendingPage = () => {
             <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
           ) : twists.length > 0 ? (
             twists.map(twist => (
-              <div key={twist.id} className="bg-[#1A1A1A] border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-colors">
+              <div key={twist.id} className="bg-background-secondary border border-border rounded-2xl overflow-hidden hover:border-text-secondary/30 transition-colors shadow-sm">
                 <TwistCard post={twist} onUpdate={handleRefresh} />
               </div>
             ))
           ) : (
-            <div className="text-center py-20 bg-[#1A1A1A] rounded-2xl border border-white/5">
-              <p className="text-gray-500 text-lg">No twists yet.</p>
-              <p className="text-gray-600 text-sm mt-1">Be the first to start the conversation!</p>
+            <div className="text-center py-20 bg-background-secondary rounded-2xl border border-border">
+              <p className="text-text-secondary text-lg">No twists yet.</p>
+              <p className="text-text-secondary text-sm mt-1">Be the first to start the conversation!</p>
             </div>
           )}
         </div>

@@ -61,7 +61,7 @@ const CreateTwistInput = ({ selectedHashTag, onPostCreated }) => {
   };
 
   return (
-    <div className="card p-4 mb-6 border border-white/10 bg-[#1A1A1A] shadow-xl">
+    <div className="card p-4 mb-6 border border-border bg-background-secondary shadow-sm">
       <div className="flex gap-4">
         <div className="flex-shrink-0 pt-1">
           <Avatar src={user?.profile?.profile_picture} alt={user?.username} size="md" />
@@ -69,7 +69,7 @@ const CreateTwistInput = ({ selectedHashTag, onPostCreated }) => {
         <div className="flex-1">
           <form onSubmit={handleSubmit}>
             <textarea
-              className="w-full bg-transparent border-none focus:ring-0 outline-none text-white text-lg resize-none placeholder-gray-500 min-h-[60px]"
+              className="w-full bg-transparent border-none focus:ring-0 outline-none text-text-primary text-lg resize-none placeholder-text-secondary min-h-[60px]"
               placeholder={selectedHashTag ? `Twist about #${selectedHashTag}...` : "What's happening?"}
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -95,7 +95,7 @@ const CreateTwistInput = ({ selectedHashTag, onPostCreated }) => {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center justify-between border-t border-white/10 pt-3 mt-2">
+            <div className="flex items-center justify-between border-t border-border pt-3 mt-2">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -117,7 +117,7 @@ const CreateTwistInput = ({ selectedHashTag, onPostCreated }) => {
               <button
                 type="submit"
                 disabled={(!content.trim() && !mediaFile) || isSubmitting}
-                className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-full font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-accent/20"
+                className="bg-accent hover:bg-accent/90 text-dark px-6 py-2 rounded-full font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-accent/20"
               >
                 {isSubmitting ? 'Twisting...' : 'Twist'}
                 <IoSend size={16} />

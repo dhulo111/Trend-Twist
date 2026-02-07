@@ -61,26 +61,26 @@ const SharePostModal = ({ isOpen, onClose, postId }) => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-gray-900 w-full max-w-md rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
+        className="bg-background-secondary w-full max-w-md rounded-2xl border border-border overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
       >
         {/* Header */}
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
-          <h3 className="text-white font-bold text-lg">Share Post</h3>
-          <button onClick={onClose} className="text-white/70 hover:text-white">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h3 className="text-text-primary font-bold text-lg">Share Post</h3>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
             <IoClose size={24} />
           </button>
         </div>
 
         {/* Search */}
-        <div className="p-4 border-b border-white/10">
+        <div className="p-4 border-b border-border">
           <div className="relative">
-            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
+            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
             <input
               type="text"
               placeholder="Search people..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white focus:outline-none focus:border-text-accent"
+              className="w-full bg-background-primary border border-border rounded-xl py-2 pl-10 pr-4 text-text-primary focus:outline-none focus:border-text-accent"
             />
           </div>
         </div>
@@ -88,7 +88,7 @@ const SharePostModal = ({ isOpen, onClose, postId }) => {
         {/* Results List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
           {query.length < 3 && results.length === 0 && (
-            <div className="text-center text-white/40 py-10">Type name to search...</div>
+            <div className="text-center text-text-secondary py-10">Type name to search...</div>
           )}
 
           {results.map(user => {
@@ -97,16 +97,16 @@ const SharePostModal = ({ isOpen, onClose, postId }) => {
               <div
                 key={user.id}
                 onClick={() => toggleSelect(user)}
-                className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-text-accent/20 border border-text-accent/50' : 'hover:bg-white/5 border border-transparent'}`}
+                className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-text-accent/20 border border-text-accent/50' : 'hover:bg-background-accent/5 border border-transparent'}`}
               >
                 <div className="flex items-center gap-3">
                   <Avatar src={user.profile?.profile_picture} size="sm" />
                   <div>
-                    <p className="text-white font-medium text-sm">{user.username}</p>
-                    <p className="text-white/50 text-xs">{user.first_name} {user.last_name}</p>
+                    <p className="text-text-primary font-medium text-sm">{user.username}</p>
+                    <p className="text-text-secondary text-xs">{user.first_name} {user.last_name}</p>
                   </div>
                 </div>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-text-accent border-text-accent' : 'border-white/30'}`}>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-text-accent border-text-accent' : 'border-border'}`}>
                   {isSelected && <IoPaperPlane className="text-white text-xs" />}
                 </div>
               </div>
@@ -115,7 +115,7 @@ const SharePostModal = ({ isOpen, onClose, postId }) => {
         </div>
 
         {/* Footer Send Button */}
-        <div className="p-4 border-t border-white/10">
+        <div className="p-4 border-t border-border bg-background-secondary">
           <button
             onClick={handleSend}
             disabled={selectedUsers.length === 0 || sending}
