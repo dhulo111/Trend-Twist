@@ -27,7 +27,25 @@ axiosInstance.interceptors.request.use(
   }
 );
 
-// Note: We can add a response interceptor here later
-// to automatically handle token refreshing.
+// Response Interceptor: Catch globally 403 Forbidden for Blocked Users
+axiosInstance.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    if (error.response && error.response.status === 403) {
+        const errorData = error.response.data;
+        if (errorData?.error && errorData.error.toLowerCase().includes('blocked') && errorData?.contact) {
+            // It's a blocked user response
+            window.location.href = `/blocked?reason=${encodeURIComponent(errorData.reason || '')}&until=${encodeURIComponent(errorData.blocked_until || '')}`;
+            // optionally clear auth tokens
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+        }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default axiosInstance;

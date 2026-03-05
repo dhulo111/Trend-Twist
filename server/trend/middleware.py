@@ -1,36 +1,61 @@
-from channels.db import database_sync_to_async
+from django.http import JsonResponse
+from django.utils import timezone
+
+class BlockedUserMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            try:
+                profile = request.user.profile
+                if profile.blocked_until and profile.blocked_until > timezone.now():
+                    return JsonResponse({
+                        'error': 'Your account has been blocked.',
+                        'reason': profile.block_reason,
+                        'blocked_until': profile.blocked_until.isoformat(),
+                        'contact': 'admin@trendtwist.com'
+                    }, status=403)
+            except Exception:
+                pass
+                
+        response = self.get_response(request)
+        return response
+
+# --- RESTORED JwtAuthMiddleware ---
+from urllib.parse import parse_qs
+from channels.middleware import BaseMiddleware
+from django.db import close_old_connections
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.tokens import AccessToken
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from urllib.parse import parse_qs
+from channels.db import database_sync_to_async
+from rest_framework_simplejwt.tokens import AccessToken, TokenError
+import jwt
 
 User = get_user_model()
 
 @database_sync_to_async
-def get_user(token_key):
+def get_user(user_id):
     try:
-        token = AccessToken(token_key)
-        user_id = token['user_id']
         return User.objects.get(id=user_id)
-    except (InvalidToken, TokenError, User.DoesNotExist):
+    except User.DoesNotExist:
         return AnonymousUser()
 
-class JwtAuthMiddleware:
-    def __init__(self, app):
-        self.app = app
-
+class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        # Parse query string for token
-        query_string = scope.get('query_string', b'').decode()
-        query_params = parse_qs(query_string)
-        token = query_params.get('token')
+        close_old_connections()
         
-        if token:
-            scope['user'] = await get_user(token[0])
-        else:
-            # If no token, leave as AnonymousUser (or rely on inner middlewares if any)
-            if 'user' not in scope:
+        try:
+            query_string = parse_qs(scope['query_string'].decode())
+            token = query_string.get('token', [None])[0]
+            
+            if token:
+                # Verify token using SimpleJWT
+                access_token = AccessToken(token)
+                scope['user'] = await get_user(access_token['user_id'])
+            else:
                 scope['user'] = AnonymousUser()
+        except (TokenError, jwt.DecodeError, Exception) as e:
+            scope['user'] = AnonymousUser()
 
-        return await self.app(scope, receive, send)
+        return await super().__call__(scope, receive, send)

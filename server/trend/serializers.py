@@ -435,3 +435,20 @@ class NotificationSerializer(serializers.ModelSerializer):
                   'notification_type', 'post', 'reel', 'follow_request_ref', 
                   'post_image', 'reel_thumbnail', 'is_read', 'created_at']
         read_only_fields = ['recipient', 'sender', 'created_at'] 
+
+# --- 10. Report Serializer ---
+from .models import Report
+
+class ReportSerializer(serializers.ModelSerializer):
+    reporter_username = serializers.ReadOnlyField(source='reporter.username')
+    reporter_profile_picture = serializers.ImageField(source='reporter.profile.profile_picture', read_only=True)
+    reported_username = serializers.ReadOnlyField(source='reported_user.username')
+    reported_profile_picture = serializers.ImageField(source='reported_user.profile.profile_picture', read_only=True)
+
+    class Meta:
+        model = Report
+        fields = ['id', 'reporter', 'reporter_username', 'reporter_profile_picture',
+                  'reported_user', 'reported_username', 'reported_profile_picture',
+                  'post', 'reel', 'twist', 'reason', 'status', 'created_at']
+        read_only_fields = ['reporter', 'status']
+

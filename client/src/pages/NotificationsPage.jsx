@@ -5,11 +5,12 @@ import { SocketContext } from '../context/SocketContext';
 import Spinner from '../components/common/Spinner';
 import Avatar from '../components/common/Avatar';
 import { IoHeart, IoPersonAdd, IoChatbubble, IoCheckmark, IoClose } from 'react-icons/io5';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
 const NotificationsPage = () => {
   const { user } = useContext(AuthContext);
-  const { notifications, fetchNotifications, markAsRead, removeNotification } = useContext(SocketContext);
+  const { notifications, fetchNotifications, markAsRead, removeNotification, updateNotification } = useContext(SocketContext);
   const navigate = useNavigate();
 
   // Initial fetch is handled by SocketProvider, but we can ensure it's fresh
@@ -18,20 +19,20 @@ const NotificationsPage = () => {
   }, []);
 
   const handleAction = async (id, action) => {
+    // Optimistic Update
+    const newType = action === 'accept_follow' ? 'req_approved' : 'req_rejected';
+
+    // Immediately update local state to show "Approved" or "Rejected"
+    updateNotification(id, {
+      notification_type: newType,
+      is_read: true
+    });
+
     try {
       await api.post(`/notifications/${id}/${action}/`);
-
-      // Don't remove, let it update via socket or manually mark 'is_read' if we want immediate feedback
-      // Actually, since backend sends socket update, we might rely on that.
-      // But for snappiness, we can optimistically update local state.
-      // Note: The backend update will come down and overwrite/confirm this.
-
-      // However, to show state change (Accepted/Rejected), the item needs to persist.
-      // If we rely on socket update, it will arrive shortly.
-
     } catch (e) {
       console.error(`Failed to ${action}`, e);
-      // Handle already gone
+      // If error (e.g. 404), maybe remove it or revert?
       if (e.response && e.response.status === 404) {
         removeNotification(id);
       }
@@ -77,6 +78,8 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
       link = `/reels`; // Ideally deeper link if reel detail page exists
       break;
     case 'follow_request':
+    case 'req_approved':
+    case 'req_rejected':
       icon = <IoPersonAdd className="text-blue-500" />;
       text = "wants to follow you.";
       break;
@@ -94,6 +97,9 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
       icon = <IoPersonAdd />;
       text = "interacted with you.";
   }
+
+  // Helper to determine if it's a follow-related notification
+  const isFollowType = ['follow_request', 'req_approved', 'req_rejected'].includes(notification.notification_type);
 
   return (
     <div className={`flex items-center p-4 rounded-xl glass border border-white/5 transition-all hover:bg-white/5 ${!notification.is_read ? 'bg-white/5 border-l-4 border-l-text-accent' : ''}`}>
@@ -120,32 +126,35 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
 
       {/* Actions or Preview */}
       <div className="ml-4 flex items-center">
-        {notification.notification_type === 'follow_request' ? (
-          // Check if it's already handled (is_read is a proxy for handled in this flow, or we check if follow_request_ref is missing)
-          // Actually, the serializer sends 'follow_request_ref' which is an object or ID.
-          // If backend deleted the request, the serializer might return null for that field?
-          // Let's assume if it is read, it is handled.
-          notification.is_read ? (
+        {isFollowType ? (
+          notification.notification_type === 'req_approved' ? (
+            <span className="text-green-500 font-bold text-sm">Approved</span>
+          ) : notification.notification_type === 'req_rejected' ? (
+            <span className="text-red-500 font-bold text-sm">Rejected</span>
+          ) : notification.is_read ? (
             <span className="text-sm text-text-secondary font-medium">
-              {/* We don't know if accepted or rejected easily without more data, but 'Handled' is safe, or we check if we follow them? 
-                           For now, "Request Handled" or just hide buttons.
-                       */}
               Request Handled
             </span>
           ) : (
-            <div className="flex gap-2">
-              <button
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => onAction(notification.id, 'accept_follow')}
-                className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full"
+                className="bg-green-500 text-white p-2 rounded-full shadow-lg hover:shadow-green-500/50 transition-shadow"
+                title="Accept Request"
               >
-                <IoCheckmark size={16} />
-              </button>
-              <button
+                <IoCheckmark size={20} />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => onAction(notification.id, 'reject_follow')}
-                className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full"
+                className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:shadow-red-500/50 transition-shadow"
+                title="Reject Request"
               >
-                <IoClose size={16} />
-              </button>
+                <IoClose size={20} />
+              </motion.button>
             </div>
           )
         ) : (

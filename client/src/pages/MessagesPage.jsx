@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import Inbox from '../components/features/chat/Inbox';
 import ChatWindow from '../components/features/chat/ChatWindow';
 import { IoChatbubbleEllipsesOutline } from 'react-icons/io5';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom'; // Import useNavigate
 import { useEffect } from 'react';
+import { getUserProfile } from '../api/userApi'; // Import getUserProfile
 
 const MessagesPage = () => {
   const location = useLocation();
@@ -13,15 +14,39 @@ const MessagesPage = () => {
   const [activeUser, setActiveUser] = useState(null);
   const [isGroupChat, setIsGroupChat] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [targetGroupId, setTargetGroupId] = useState(null); // To auto-select group in Inbox
+  const navigate = useNavigate();
 
-  // Check for navigation state (from Profile Page)
+  // Check for navigation state (from Profile Page or Toast)
   useEffect(() => {
-    if (location.state?.startChatUser) {
-      const targetUser = location.state.startChatUser;
-      setActiveUser(targetUser);
-      setActiveRoom({ id: 'temp_' + targetUser.id });
-      setIsGroupChat(false);
-    }
+    const handleNavigation = async () => {
+      if (location.state?.startChatUser) {
+        const targetUser = location.state.startChatUser;
+        setActiveUser(targetUser);
+        setActiveRoom({ id: 'temp_' + targetUser.id });
+        setIsGroupChat(false);
+        // Clear state to prevent re-trigger on refresh/navigation back
+        navigate({ ...location, state: {} }, { replace: true });
+      } else if (location.state?.openUser) {
+        // From Toast: Username
+        try {
+          const username = location.state.openUser;
+          const userProfile = await getUserProfile(username); // Fetch full user object
+          setActiveUser(userProfile);
+          setActiveRoom({ id: 'temp_' + userProfile.id });
+          setIsGroupChat(false);
+          navigate({ ...location, state: {} }, { replace: true });
+        } catch (e) {
+          console.error("Failed to open chat with user:", e);
+        }
+      } else if (location.state?.openGroup) {
+        // From Toast: Group ID
+        setTargetGroupId(location.state.openGroup);
+        setIsGroupChat(true); // Hint
+        navigate({ ...location, state: {} }, { replace: true });
+      }
+    };
+    handleNavigation();
   }, [location.state]);
 
   const handleSelectChat = (room, otherUser, isGroup = false) => {
@@ -42,6 +67,8 @@ const MessagesPage = () => {
           onSelectChat={handleSelectChat}
           activeChat={activeRoom}
           refreshTrigger={refreshKey}
+          autoSelectGroupId={targetGroupId} // Pass target group ID
+          onAutoSelectHandled={() => setTargetGroupId(null)}
         />
       </div>
 

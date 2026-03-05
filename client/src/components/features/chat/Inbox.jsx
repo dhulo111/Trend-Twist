@@ -13,7 +13,7 @@ import { IoChatbubbleEllipsesOutline, IoAdd, IoPeople } from 'react-icons/io5';
  * @param {function} props.onSelectChat - Function to switch to a specific chat window.
  * @param {object} props.activeChat - The currently selected chat room object.
  */
-const Inbox = ({ onSelectChat, activeChat, refreshTrigger }) => {
+const Inbox = ({ onSelectChat, activeChat, refreshTrigger, autoSelectGroupId, onAutoSelectHandled }) => {
   const [inbox, setInbox] = useState([]);
   const [groups, setGroups] = useState([]); // State for groups
   const [loading, setLoading] = useState(true);
@@ -40,6 +40,18 @@ const Inbox = ({ onSelectChat, activeChat, refreshTrigger }) => {
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [refreshTrigger]);
+
+  // Handle Auto-Selection for Groups (from Toast)
+  useEffect(() => {
+    if (autoSelectGroupId && groups.length > 0) {
+      // Need to parse ID to int/string matching
+      const target = groups.find(g => g.id == autoSelectGroupId);
+      if (target) {
+        onSelectChat(target, null, true); // group, otherUser=null, isGroup=true
+        if (onAutoSelectHandled) onAutoSelectHandled();
+      }
+    }
+  }, [groups, autoSelectGroupId]);
 
   const handleGroupCreated = () => {
     fetchData();

@@ -17,6 +17,7 @@ import { toggleLike, deletePost } from '../../../api/postApi';
 import { AuthContext } from '../../../context/AuthContext';
 import SharePostModal from './SharePostModal';
 import CreateTwistModal from './CreateTwistModal';
+import ReportModal from '../../common/ReportModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
@@ -31,6 +32,7 @@ const Post = ({ post, onUpdate }) => {
   const [isSaved, setIsSaved] = useState(false); // Mock state for Save/Bookmark
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isTwistModalOpen, setIsTwistModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Double tap like state
   const [showBigHeart, setShowBigHeart] = useState(false);
@@ -211,6 +213,7 @@ const Post = ({ post, onUpdate }) => {
                     </>
                   ) : (
                     <button
+                      onClick={() => { setIsMenuOpen(false); setIsReportModalOpen(true); }}
                       className="flex items-center space-x-2 w-full px-4 py-3 text-left text-sm text-text-primary hover:bg-text-secondary/10 transition-colors"
                     >
                       <span>Report Post</span>
@@ -366,6 +369,13 @@ const Post = ({ post, onUpdate }) => {
           />
         )}
       </AnimatePresence>
+
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        reportedUserId={post?.author}
+        contextData={{ post: post?.id }}
+      />
     </>
   );
 };

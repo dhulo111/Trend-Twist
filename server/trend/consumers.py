@@ -405,6 +405,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'type': event['type'], # 'notification'
             'data': event['data']  # The serializer data
         }))
+        
+    async def chat_alert(self, event):
+        # Broadcast chat alert (Toast)
+        await self.send(text_data=json.dumps({
+            'type': 'chat_alert',
+            'data': event['data']
+        }))
 
     @database_sync_to_async
     def update_user_status(self, is_online):

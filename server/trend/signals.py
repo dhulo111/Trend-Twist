@@ -58,27 +58,27 @@ def notify_post_like(sender, instance, created, **kwargs):
         )
         send_notification_socket(notif)
 
-@receiver(post_save, sender=ReelLike)
-def notify_reel_like(sender, instance, created, **kwargs):
-    if created and instance.user != instance.reel.author:
-        notif = Notification.objects.create(
-            recipient=instance.reel.author,
-            sender=instance.user,
-            notification_type='like_reel',
-            reel=instance.reel
-        )
-        send_notification_socket(notif)
+# @receiver(post_save, sender=ReelLike)
+# def notify_reel_like(sender, instance, created, **kwargs):
+#     if created and instance.user != instance.reel.author:
+#         notif = Notification.objects.create(
+#             recipient=instance.reel.author,
+#             sender=instance.user,
+#             notification_type='like_reel',
+#             reel=instance.reel
+#         )
+#         send_notification_socket(notif)
 
-@receiver(post_save, sender=FollowRequest)
-def notify_follow_request(sender, instance, created, **kwargs):
-    if created:
-        notif = Notification.objects.create(
-            recipient=instance.receiver,
-            sender=instance.sender,
-            notification_type='follow_request',
-            follow_request_ref=instance
-        )
-        send_notification_socket(notif)
+# @receiver(post_save, sender=FollowRequest)
+# def notify_follow_request(sender, instance, created, **kwargs):
+#     if created:
+#         notif = Notification.objects.create(
+#             recipient=instance.receiver,
+#             sender=instance.sender,
+#             notification_type='follow_request',
+#             follow_request_ref=instance
+#         )
+#         send_notification_socket(notif)
 
 @receiver(post_save, sender=Comment)
 def notify_post_comment(sender, instance, created, **kwargs):
@@ -91,16 +91,16 @@ def notify_post_comment(sender, instance, created, **kwargs):
         )
         send_notification_socket(notif)
 
-@receiver(post_save, sender=ReelComment)
-def notify_reel_comment(sender, instance, created, **kwargs):
-    if created and instance.author != instance.reel.author:
-        notif = Notification.objects.create(
-            recipient=instance.reel.author,
-            sender=instance.author,
-            notification_type='comment_reel',
-            reel=instance.reel
-        )
-        send_notification_socket(notif)
+# @receiver(post_save, sender=ReelComment)
+# def notify_reel_comment(sender, instance, created, **kwargs):
+#     if created and instance.author != instance.reel.author:
+#         notif = Notification.objects.create(
+#             recipient=instance.reel.author,
+#             sender=instance.author,
+#             notification_type='comment_reel',
+#             reel=instance.reel
+#         )
+#         send_notification_socket(notif)
 
 from django.db.models.signals import post_delete
 

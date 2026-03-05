@@ -32,8 +32,11 @@ import NotFoundPage from '../pages/NotFoundPage';
 // --- Import Route Protection ---
 import ProtectedRoute from './ProtectedRoute';
 
-
 import NotificationsPage from '../pages/NotificationsPage';
+
+// --- Import Admin Panel Layout ---
+import AdminPanelLayout from '../pages/admin/AdminPanelLayout';
+import AdminLogin from '../pages/admin/AdminLogin';
 
 const AppRoutes = () => {
   return (
@@ -91,10 +94,18 @@ const AppRoutes = () => {
         }
       />
 
+      {/* --- Admin Route (Protected, with nested routes) --- */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/*" element={<AdminPanelLayout />} />
+
+      {/* --- Blocked User Route --- */}
+      <Route path="/blocked" element={<BlockedPage />} />
+
       {/* 3. Catch-all Route for 404 */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 };
 
+import BlockedPage from '../pages/BlockedPage';
 export default AppRoutes;

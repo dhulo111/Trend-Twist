@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { ThemeContext } from '../../context/ThemeContext';
+import { SocketContext } from '../../context/SocketContext';
 import Avatar from '../common/Avatar';
 import Tooltip from '../common/Tooltip';
 import Button from '../common/Button';
@@ -27,6 +28,7 @@ import { FaUserCircle } from 'react-icons/fa';
 
 const Navbar = () => {
   const { user, logoutUser } = useContext(AuthContext);
+  const { unreadCount } = useContext(SocketContext);
   const { theme, ThemeToggle } = useContext(ThemeContext);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const location = useLocation();
@@ -134,8 +136,13 @@ const Navbar = () => {
                         : 'text-text-secondary hover:bg-white/10 hover:text-text-primary hover:shadow-sm'}
                     `}
                   >
-                    <span className={`text-2xl transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}>
+                    <span className={`text-2xl transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-105'} relative`}>
                       {isActive ? <item.activeIcon /> : <item.icon />}
+                      {item.label === 'Notifications' && unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white ring-2 ring-glass-bg">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
                     </span>
                     <span className="text-base font-medium tracking-wide">{item.label}</span>
                   </div>
@@ -203,8 +210,13 @@ const Navbar = () => {
             <IoSearchOutline className="text-text-primary text-2xl" />
           </Link>
           <ThemeToggle />
-          <Link to="/notifications">
+          <Link to="/notifications" className="relative">
             <IoHeartOutline className="text-text-primary text-2xl" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white ring-2 ring-glass-bg">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </Link>
           <Link to="/messages">
             <IoChatbubbleEllipsesOutline className="text-text-primary text-2xl" />

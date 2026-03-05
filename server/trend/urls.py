@@ -1,14 +1,16 @@
 # backend/api/urls.py
 
 from django.urls import path, include # Added 'include' for the API grouping
-from rest_framework_simplejwt.views import TokenRefreshView # Re-added for session refresh
+from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView # Re-added for session refresh
 from . import views
+from . import admin_views
 
 urlpatterns = [
     # ----------------------------------------------------------------------
     # 1. AUTHENTICATION & SESSIONS
     # ----------------------------------------------------------------------
-    
+    # JWT Obtain (For Admin Login)
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     # JWT Refresh (Re-added for session persistence)
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'), 
     
@@ -116,8 +118,25 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('reels/<int:pk>/view/', views.RegisterReelViewView.as_view(), name='register_reel_view'),
 
     # ----------------------------------------------------------------------
-    # 6. NOTIFICATIONS
+    # 6. NOTIFICATIONS & REPORTS
     # ----------------------------------------------------------------------
     path('notifications/', views.NotificationListView.as_view(), name='notification_list'),
     path('notifications/<int:pk>/<str:action>/', views.NotificationActionView.as_view(), name='notification_action'),
+    path('reports/', views.ReportCreateView.as_view(), name='report_create'),
+
+    # ----------------------------------------------------------------------
+    # 7. ADMIN ENDPOINTS
+    # ----------------------------------------------------------------------
+    path('admin/dashboard/', admin_views.AdminDashboardStatsView.as_view(), name='admin_dashboard'),
+    path('admin/users/', admin_views.AdminUserListView.as_view(), name='admin_users'),
+    path('admin/users/<int:user_id>/', admin_views.AdminUserActionView.as_view(), name='admin_user_action'),
+    path('admin/posts/', admin_views.AdminPostListView.as_view(), name='admin_posts'),
+    path('admin/posts/<int:post_id>/', admin_views.AdminPostActionView.as_view(), name='admin_post_action'),
+    path('admin/reels/', admin_views.AdminReelListView.as_view(), name='admin_reels'),
+    path('admin/reels/<int:reel_id>/', admin_views.AdminReelActionView.as_view(), name='admin_reel_action'),
+    path('admin/twists/', admin_views.AdminTwistListView.as_view(), name='admin_twists'),
+    path('admin/twists/<int:twist_id>/', admin_views.AdminTwistActionView.as_view(), name='admin_twist_action'),
+    path('admin/reports/', admin_views.AdminReportListView.as_view(), name='admin_reports'),
+    path('admin/reports/<int:report_id>/', admin_views.AdminReportActionView.as_view(), name='admin_report_action'),
+    path('admin/users/<int:user_id>/block/', admin_views.AdminUserBlockView.as_view(), name='admin_user_block'),
 ]

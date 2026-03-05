@@ -33,6 +33,10 @@ class Profile(models.Model):
     # NEW: Online Status
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(null=True, blank=True)
+    
+    # NEW: Blocking System
+    blocked_until = models.DateTimeField(null=True, blank=True)
+    block_reason = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.user.username
@@ -338,3 +342,26 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.sender} -> {self.recipient}: {self.notification_type}"
+
+# --- 9. Report Model ---
+
+class Report(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('resolved', 'Resolved'),
+        ('dismissed', 'Dismissed'),
+    )
+
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_filed')
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_received')
+    
+    post = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
+    reel = models.ForeignKey('Reel', on_delete=models.SET_NULL, null=True, blank=True)
+    twist = models.ForeignKey('Twist', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report against {self.reported_user.username} by {self.reporter.username}"

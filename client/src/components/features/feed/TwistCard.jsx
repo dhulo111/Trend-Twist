@@ -16,6 +16,7 @@ import { toggleTwistLike, deleteTwist } from '../../../api/postApi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ShareTwistModal from './ShareTwistModal';
+import ReportModal from '../../common/ReportModal';
 
 const TwistCard = ({ post, onUpdate }) => {
   const { user: currentUser } = useContext(AuthContext);
@@ -26,6 +27,7 @@ const TwistCard = ({ post, onUpdate }) => {
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
@@ -101,14 +103,23 @@ const TwistCard = ({ post, onUpdate }) => {
               >
                 <IoEllipsisHorizontal size={18} />
               </button>
-              {isMenuOpen && isAuthor && (
+              {isMenuOpen && (
                 <div className="absolute right-0 top-8 w-32 bg-background-secondary border border-border shadow-xl rounded-xl z-20 py-1 overflow-hidden">
-                  <button
-                    onClick={handleDelete}
-                    className="w-full text-left px-4 py-2.5 text-red-500 hover:bg-white/5 text-sm font-semibold transition-colors"
-                  >
-                    Delete
-                  </button>
+                  {isAuthor ? (
+                    <button
+                      onClick={handleDelete}
+                      className="w-full text-left px-4 py-2.5 text-red-500 hover:bg-white/5 text-sm font-semibold transition-colors"
+                    >
+                      Delete
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setIsMenuOpen(false); setIsReportModalOpen(true); }}
+                      className="w-full text-left px-4 py-2.5 text-text-primary hover:bg-white/5 text-sm font-semibold transition-colors"
+                    >
+                      Report Twist
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -209,6 +220,13 @@ const TwistCard = ({ post, onUpdate }) => {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         twistId={post.id}
+      />
+
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        reportedUserId={post?.author}
+        contextData={{ twist: post?.id }}
       />
     </>
   );

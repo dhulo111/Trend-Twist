@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReelCommentDrawer from './ReelCommentDrawer';
 import ShareReelModal from './ShareReelModal';
 import ReelOverlay from './ReelOverlay';
+import ReportModal from '../../common/ReportModal';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 
@@ -20,6 +21,7 @@ const ReelCard = ({ reel, onReelDeleted }) => {
   const [showHeartOverlay, setShowHeartOverlay] = useState(false);
   const [isCommentOpen, setIsCommentOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false); // NEW STATE
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   // ... (rest of state items like isFollowing, videoRef, etc... keep them!)
   const [isFollowing, setIsFollowing] = useState(false);
@@ -311,31 +313,40 @@ const ReelCard = ({ reel, onReelDeleted }) => {
           </button>
         </div>
 
-        {/* Options (Only for owner) */}
-        {isOwner && (
+        {/* Options */}
+        <div className="flex flex-col items-center space-y-1">
           <button
             onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
             className="p-2 mt-2"
           >
             <IoEllipsisVertical className="text-2xl md:text-3xl text-white drop-shadow-lg" />
           </button>
-        )}
+        </div>
 
-        {/* Delete Option Dropdown */}
+        {/* Options Dropdown */}
         <AnimatePresence>
-          {isOwner && showOptions && (
+          {showOptions && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-16 right-0 bg-black/80 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden w-32"
+              className="absolute bottom-32 right-12 bg-black/80 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden w-36 z-50"
             >
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                className="w-full px-4 py-3 text-left text-red-400 font-medium text-xs hover:bg-white/10"
-              >
-                <FaTrash className="inline mr-2" /> Delete
-              </button>
+              {isOwner ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(); setShowOptions(false); }}
+                  className="w-full px-4 py-3 text-left text-red-400 font-medium text-xs hover:bg-white/10"
+                >
+                  <FaTrash className="inline mr-2" /> Delete
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowOptions(false); setIsReportOpen(true); }}
+                  className="w-full px-4 py-3 text-left text-white font-medium text-xs hover:bg-white/10"
+                >
+                  Report Reel
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -417,11 +428,18 @@ const ReelCard = ({ reel, onReelDeleted }) => {
         onClose={() => setIsCommentOpen(false)}
       />
 
-      {/* Share Modal */}
       <ShareReelModal
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
         reelId={reel.id}
+      />
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
+        reportedUserId={reel.author}
+        contextData={{ reel: reel.id }}
       />
     </div>
   );

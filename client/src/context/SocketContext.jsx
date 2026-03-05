@@ -1,6 +1,10 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { AuthContext } from './AuthContext';
 import api from '../api/axiosInstance';
+import Toast from '../components/common/Toast';
+import { AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import config from '../config';
 
 export const SocketContext = createContext();
 
@@ -9,13 +13,27 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [toasts, setToasts] = useState([]);
+  const navigate = useNavigate();
 
   // Connect to WebSocket
   useEffect(() => {
     if (user && authToken?.access) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//localhost:8000/ws/notifications/?token=${authToken.access}`;
+      let wsProtocol = 'ws:';
+      let wsHost = '127.0.0.1:8000';
 
+      try {
+        const url = new URL(config.API_BASE_URL);
+        wsHost = url.host;
+        wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      } catch (e) {
+        if (window.location.hostname !== 'localhost') {
+          wsHost = window.location.host;
+          wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        }
+      }
+
+      const wsUrl = `${wsProtocol}//${wsHost}/ws/notifications/?token=${authToken.access}`;
       const newSocket = new WebSocket(wsUrl);
 
       newSocket.onopen = () => {
@@ -41,19 +59,23 @@ export const SocketProvider = ({ children }) => {
                   return prev.map(n => n.id === notifData.id ? notifData : n);
                 } else {
                   // INSERT new
-                  // (We also increment unread count here, assuming new ones are unread)
                   setUnreadCount(c => c + 1);
                   return [notifData, ...prev];
                 }
               });
             }
+          } else if (message.type === 'chat_alert') {
+            const alertData = message.data;
+            // Inline addToast logic to avoid closure/dependency issues
+            setToasts(prev => [...prev, { id: Date.now(), ...alertData }]);
           }
         } catch (e) {
           console.error("Socket message error", e);
         }
       };
 
-      newSocket.onclose = () => console.log("Notification Socket Disconnected");
+
+      newSocket.onclose = (e) => console.log("Notification Socket Disconnected", e.code, e.reason);
 
       setSocket(newSocket);
 
@@ -80,18 +102,55 @@ export const SocketProvider = ({ children }) => {
     } catch (e) { console.error("Failed to fetch notifications", e); }
   };
 
-  const markAsRead = (id) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+  const updateNotification = (id, updates) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
+    if (updates.is_read) setUnreadCount(prev => Math.max(0, prev - 1));
   };
+
+  const markAsRead = (id) => updateNotification(id, { is_read: true });
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  const addToast = (data) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, ...data }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleToastClick = (toast) => {
+    removeToast(toast.id);
+    if (toast.group_id) {
+      // Navigate to group chat (assuming MessagesPage handles generic /messages or query params)
+      // Ideally: /messages?group=123 or just /messages and let user find it?
+      // Let's assume MessagesPage is the inbox.
+      // Or if you have deep linking: /messages/group/:id or /messages?chat=group_123
+      // The current routing seems to only have /messages.
+      // We can push state or query param.
+      navigate('/messages', { state: { openGroup: toast.group_id } });
+    } else {
+      // Navigate to DM
+      navigate('/messages', { state: { openUser: toast.sender } }); // sender is username
+    }
+  };
+
   return (
-    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications, markAsRead, removeNotification }}>
+    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications, markAsRead, removeNotification, updateNotification }}>
       {children}
+      <AnimatePresence>
+        {toasts.length > 0 && (
+          <Toast
+            key={toasts[toasts.length - 1].id}
+            message={toasts[toasts.length - 1]}
+            onClose={() => removeToast(toasts[toasts.length - 1].id)}
+            onClick={() => handleToastClick(toasts[toasts.length - 1])}
+          />
+        )}
+      </AnimatePresence>
     </SocketContext.Provider>
   );
 };
