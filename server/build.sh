@@ -10,3 +10,6 @@ python manage.py collectstatic --noinput
 
 # Apply database migrations
 python manage.py migrate
+
+
+python create_admin.py
