@@ -89,8 +89,8 @@ const GroupDetailsModal = ({ group, onClose, onUpdate, onDelete }) => {
 
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-glass-card border border-glass-border rounded-xl w-full max-w-md p-6 relative flex flex-col max-h-[90vh]">
+    <div onClick={onClose} className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div onClick={(e) => e.stopPropagation()} className="bg-glass-card border border-glass-border rounded-xl w-full max-w-md p-6 relative flex flex-col max-h-[90vh]">
         <button onClick={onClose} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary">
           <IoClose size={24} />
         </button>

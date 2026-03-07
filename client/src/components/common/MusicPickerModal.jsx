@@ -39,8 +39,8 @@ const MusicPickerModal = ({ isOpen, onClose, onSelect }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-gray-900 w-full md:w-96 rounded-t-2xl md:rounded-2xl h-[70vh] flex flex-col shadow-2xl overflow-hidden border border-gray-800">
+    <div onClick={handleClose} className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div onClick={(e) => e.stopPropagation()} className="bg-gray-900 w-full md:w-96 rounded-t-2xl md:rounded-2xl h-[70vh] flex flex-col shadow-2xl overflow-hidden border border-gray-800">
         <div className="p-4 border-b border-gray-800 flex justify-between items-center">
           <h3 className="text-white font-bold text-lg">Select Music</h3>
           <button onClick={handleClose} className="text-white hover:bg-white/10 p-2 rounded-full">

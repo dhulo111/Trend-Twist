@@ -139,4 +139,6 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('admin/reports/', admin_views.AdminReportListView.as_view(), name='admin_reports'),
     path('admin/reports/<int:report_id>/', admin_views.AdminReportActionView.as_view(), name='admin_report_action'),
     path('admin/users/<int:user_id>/block/', admin_views.AdminUserBlockView.as_view(), name='admin_user_block'),
+    path('admin/blocks/', admin_views.AdminBlockedUserListView.as_view(), name='admin_blocked_users'),
+    path('admin/users/<int:user_id>/unblock/', admin_views.AdminUserUnblockView.as_view(), name='admin_user_unblock'),
 ]

@@ -38,7 +38,10 @@ class AdminUserListView(views.APIView):
         users = User.objects.select_related('profile').all().order_by('-date_joined')
         search = request.query_params.get('search', '')
         if search:
-            users = users.filter(Q(username__icontains=search) | Q(email__icontains=search))
+            q_objects = Q(username__icontains=search) | Q(email__icontains=search)
+            if search.isdigit():
+                q_objects |= Q(id=int(search))
+            users = users.filter(q_objects)
             
         paginator = AdminPagination()
         paginated_users = paginator.paginate_queryset(users, request, view=self)
@@ -103,7 +106,10 @@ class AdminPostListView(views.APIView):
         posts = Post.objects.select_related('author').prefetch_related('hashtags').all().order_by('-created_at')
         search = request.query_params.get('search', '')
         if search:
-            posts = posts.filter(Q(content__icontains=search) | Q(author__username__icontains=search))
+            q_objects = Q(content__icontains=search) | Q(author__username__icontains=search)
+            if search.isdigit():
+                q_objects |= Q(id=int(search))
+            posts = posts.filter(q_objects)
             
         paginator = AdminPagination()
         paginated_posts = paginator.paginate_queryset(posts, request, view=self)
@@ -138,7 +144,10 @@ class AdminReelListView(views.APIView):
         reels = Reel.objects.select_related('author').all().order_by('-created_at')
         search = request.query_params.get('search', '')
         if search:
-            reels = reels.filter(Q(caption__icontains=search) | Q(author__username__icontains=search))
+            q_objects = Q(caption__icontains=search) | Q(author__username__icontains=search)
+            if search.isdigit():
+                q_objects |= Q(id=int(search))
+            reels = reels.filter(q_objects)
             
         paginator = AdminPagination()
         paginated_reels = paginator.paginate_queryset(reels, request, view=self)
@@ -172,7 +181,10 @@ class AdminTwistListView(views.APIView):
         twists = Twist.objects.select_related('author').all().order_by('-created_at')
         search = request.query_params.get('search', '')
         if search:
-            twists = twists.filter(Q(content__icontains=search) | Q(author__username__icontains=search))
+            q_objects = Q(content__icontains=search) | Q(author__username__icontains=search)
+            if search.isdigit():
+                q_objects |= Q(id=int(search))
+            twists = twists.filter(q_objects)
             
         paginator = AdminPagination()
         paginated_twists = paginator.paginate_queryset(twists, request, view=self)
@@ -275,3 +287,51 @@ class AdminUserBlockView(views.APIView):
         except User.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+class AdminBlockedUserListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.select_related('profile').filter(profile__blocked_until__gt=timezone.now()).order_by('-profile__blocked_until')
+        search = request.query_params.get('search', '')
+        if search:
+            q_objects = Q(username__icontains=search) | Q(email__icontains=search)
+            if search.isdigit():
+                q_objects |= Q(id=int(search))
+            users = users.filter(q_objects)
+            
+        paginator = AdminPagination()
+        paginated_users = paginator.paginate_queryset(users, request, view=self)
+
+        data = []
+        for user in paginated_users:
+            profile = user.profile
+            duration_str = profile.blocked_until.strftime("%B %d, %Y at %I:%M %p") if profile.blocked_until else None
+            data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_staff': user.is_staff,
+                'is_active': user.is_active,
+                'blocked_until': duration_str,
+                'block_reason': profile.block_reason,
+                'profile': {
+                    'is_trendsetter': profile.is_trendsetter if profile else False,
+                    'is_private': profile.is_private if profile else False,
+                }
+            })
+        return paginator.get_paginated_response(data)
+
+class AdminUserUnblockView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            profile = user.profile
+            profile.blocked_until = None
+            profile.block_reason = ''
+            profile.save()
+            
+            return Response({'status': 'user unblocked'})
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)

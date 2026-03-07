@@ -201,6 +201,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={onClose}
             onMouseDown={() => setIsPaused(true)}
             onMouseUp={() => setIsPaused(false)}
             onTouchStart={() => setIsPaused(true)}
@@ -209,7 +210,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
 
 
             {/* --- Story Content Area --- */}
-            <div className="relative w-full max-w-lg h-full md:h-[90vh] md:max-h-[900px] overflow-hidden rounded-lg shadow-2xl bg-black">
+            <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-lg h-full md:h-[90vh] md:max-h-[900px] overflow-hidden rounded-lg shadow-2xl bg-black">
 
               {/* --- Progress Bars (Timeline) --- */}
               <div className="absolute top-0 left-0 right-0 z-40 flex space-x-1 p-2">

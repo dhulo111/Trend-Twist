@@ -37,8 +37,8 @@ const ReportModal = ({ isOpen, onClose, reportedUserId, contextData }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+    <div onClick={onClose} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
         <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
           <h3 className="text-lg font-bold flex items-center gap-2 text-gray-900 dark:text-gray-100">
             <AlertTriangle size={20} className="text-amber-500" />
@@ -78,7 +78,7 @@ const ReportModal = ({ isOpen, onClose, reportedUserId, contextData }) => {
                 <select
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-800 transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-gray-800 transition-all"
                   required
                 >
                   <option value="" disabled>Select a reason...</option>

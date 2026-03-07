@@ -56,7 +56,6 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 #                             AUTHENTICATION
 # ----------------------------------------------------------------------
 
-
 class GoogleLoginView(APIView):
     """Handles Google ID token verification and user login/creation."""
     permission_classes = [AllowAny]
@@ -113,6 +112,16 @@ class GoogleLoginView(APIView):
                 }
             )
             
+            if hasattr(user, 'profile') and user.profile.blocked_until and user.profile.blocked_until > timezone.now():
+                duration_str = user.profile.blocked_until.strftime("%B %d, %Y at %I:%M %p")
+                return Response({
+                    "error": "Account Blocked", 
+                    "block_reason": user.profile.block_reason,
+                    "blocked_until": duration_str,
+                    "contact_email": "support@trendtwist.com"
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            
             # 3. Generate Tokens
             refresh = RefreshToken.for_user(user)
             user_serializer = UserSerializer(user, context={'request': request})
@@ -139,7 +148,15 @@ class RequestLoginOTPView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         email = serializer.validated_data['email']
         try:
-            User.objects.get(email=email)
+            user = User.objects.get(email=email)
+            if hasattr(user, 'profile') and user.profile.blocked_until and user.profile.blocked_until > timezone.now():
+                duration_str = user.profile.blocked_until.strftime("%B %d, %Y at %I:%M %p")
+                return Response({
+                    "error": "Account Blocked", 
+                    "block_reason": user.profile.block_reason,
+                    "blocked_until": duration_str,
+                    "contact_email": "support@trendtwist.com"
+                }, status=status.HTTP_403_FORBIDDEN)
         except User.DoesNotExist:
             return Response({"error": "Account not found. Please register first."}, status=status.HTTP_404_NOT_FOUND)
         
@@ -198,6 +215,15 @@ class VerifyLoginOTPView(APIView):
         otp_request.is_verified = True
         otp_request.save()
         user = User.objects.get(email=otp_request.email)
+
+        if hasattr(user, 'profile') and user.profile.blocked_until and user.profile.blocked_until > timezone.now():
+            duration_str = user.profile.blocked_until.strftime("%B %d, %Y at %I:%M %p")
+            return Response({
+                "error": "Account Blocked", 
+                "block_reason": user.profile.block_reason,
+                "blocked_until": duration_str,
+                "contact_email": "support@trendtwist.com"
+            }, status=status.HTTP_403_FORBIDDEN)
 
         refresh = RefreshToken.for_user(user)
         user_serializer = UserSerializer(user, context={'request': request})
@@ -338,7 +364,8 @@ class ProfileUpdateView(generics.UpdateAPIView):
 
 class UserProfileDetailView(generics.RetrieveAPIView):
     """Retrieves a user profile, respecting privacy settings."""
-    queryset = User.objects.all()
+    def get_queryset(self):
+        return User.objects.exclude(profile__blocked_until__gt=timezone.now())
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
     lookup_field = 'username'
@@ -376,7 +403,7 @@ class UserSearchView(generics.ListAPIView):
                 Q(username__icontains=query) |
                 Q(first_name__icontains=query) |
                 Q(last_name__icontains=query)
-            ).exclude(id=self.request.user.id).order_by('username')
+            ).exclude(id=self.request.user.id).exclude(profile__blocked_until__gt=timezone.now()).order_by('username')
         return User.objects.none()
         
     def get_serializer_context(self): return {'request': self.request}
@@ -394,7 +421,7 @@ class UserPostListView(generics.ListAPIView):
         user_id = self.kwargs['user_id']
         
         # We fetch all posts made by the specified user
-        return Post.objects.filter(author_id=user_id).order_by('-created_at')
+        return Post.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -800,7 +827,7 @@ class PostListCreateView(generics.ListCreateAPIView):
         following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
         following_users = list(following_users) + [user.id]
 
-        queryset = Post.objects.filter(author_id__in=following_users)
+        queryset = Post.objects.filter(author_id__in=following_users).exclude(author__profile__blocked_until__gt=timezone.now())
 
         # Basic text search support for main feed
         if search_query:
@@ -823,7 +850,7 @@ class PublicPostListView(generics.ListAPIView):
     
     def get_queryset(self):
         tag = self.request.query_params.get('tag', None)
-        queryset = Post.objects.filter(author__profile__is_private=False).order_by('-created_at')
+        queryset = Post.objects.filter(author__profile__is_private=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
         
         if tag:
             # Filter by hashtag (naive text search for now, ideally use Hashtag model relations)
@@ -938,7 +965,7 @@ class TwistListCreateView(generics.ListCreateAPIView):
         following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
         following_users = list(following_users) + [user.id]
 
-        return Twist.objects.filter(author_id__in=following_users).order_by('-created_at')
+        return Twist.objects.filter(author_id__in=following_users).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
     def perform_create(self, serializer): serializer.save(author=self.request.user)
     def get_serializer_context(self): return {'request': self.request}
@@ -951,7 +978,7 @@ class PostTwistListView(generics.ListAPIView):
     
     def get_queryset(self):
         post_id = self.kwargs['post_id']
-        return Twist.objects.filter(original_post_id=post_id).order_by('-created_at')
+        return Twist.objects.filter(original_post_id=post_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
     def get_serializer_context(self): return {'request': self.request}
 
@@ -1000,7 +1027,7 @@ class PublicTwistListView(generics.ListAPIView):
         # All public twists (no check for private profile logic yet since Twist model doesn't have it explicitly, 
         # but we can assume author.profile.is_private. Let's add that check.)
         
-        queryset = Twist.objects.filter(author__profile__is_private=False).order_by('-created_at')
+        queryset = Twist.objects.filter(author__profile__is_private=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
         
         if tag:
             queryset = queryset.filter(content__icontains=f"#{tag}")
@@ -1017,7 +1044,7 @@ class UserTwistListView(generics.ListAPIView):
     def get_queryset(self):
         user_id = self.kwargs['user_id']
         # Add basic privacy check hook here later if needed
-        return Twist.objects.filter(author_id=user_id).order_by('-created_at')
+        return Twist.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
     
     
     def get_serializer_context(self): return {'request': self.request}
@@ -1066,7 +1093,7 @@ class StoryListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         following_ids = list(Follow.objects.filter(follower=user).values_list('following_id', flat=True))
         following_ids.append(user.id)
-        return Story.objects.filter(author_id__in=following_ids, expires_at__gt=timezone.now()).order_by('-created_at')
+        return Story.objects.filter(author_id__in=following_ids, expires_at__gt=timezone.now()).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
     def perform_create(self, serializer): serializer.save(author=self.request.user)
     def get_serializer_context(self): return {'request': self.request}
@@ -1206,7 +1233,7 @@ class UserStoryListView(generics.ListAPIView):
              return Story.objects.none()
 
         # 3. If authorized, return all active stories from this user
-        return Story.objects.filter(author_id=user_id, expires_at__gt=timezone.now()).order_by('-created_at')
+        return Story.objects.filter(author_id=user_id, expires_at__gt=timezone.now()).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -1217,7 +1244,7 @@ class FollowerListView(generics.ListAPIView):
     def get_queryset(self):
         username = self.kwargs['username']
         user = User.objects.get(username=username)
-        return Follow.objects.filter(following=user)
+        return Follow.objects.filter(following=user).exclude(follower__profile__blocked_until__gt=timezone.now())
 
 class FollowingListView(generics.ListAPIView):
     serializer_class = FollowingSerializer
@@ -1225,7 +1252,7 @@ class FollowingListView(generics.ListAPIView):
     def get_queryset(self):
         username = self.kwargs['username']
         user = User.objects.get(username=username)
-        return Follow.objects.filter(follower=user)
+        return Follow.objects.filter(follower=user).exclude(following__profile__blocked_until__gt=timezone.now())
 
 class TrendingHashtagsView(generics.ListAPIView):
     serializer_class = HashtagSerializer
@@ -1255,7 +1282,7 @@ class ReelListCreateView(generics.ListCreateAPIView):
         followed_reels = Reel.objects.filter(author_id__in=following_ids)
         my_reels = Reel.objects.filter(author=user)
         
-        return (public_reels | followed_reels | my_reels).filter(is_draft=False).distinct().order_by('?')
+        return (public_reels | followed_reels | my_reels).filter(is_draft=False).exclude(author__profile__blocked_until__gt=timezone.now()).distinct().order_by('?')
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -1276,7 +1303,7 @@ class UserReelListView(generics.ListAPIView):
     
     def get_queryset(self):
         user_id = self.kwargs['user_id']
-        return Reel.objects.filter(author_id=user_id).order_by('-created_at')
+        return Reel.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
         
     def get_serializer_context(self): return {'request': self.request}
 

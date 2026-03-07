@@ -182,3 +182,16 @@ To get the server running locally to test your app:
    python manage.py runserver
    ```
    *The server is now live at `http://localhost:8000/`*
+
+---
+
+## 🛡️ Admin Access
+
+A default superuser is configured and can be created or reset by running `python create_admin.py` inside the server directory.
+
+**Default Admin Credentials:**
+- **Username:** `admin`
+- **Email:** `admin@example.com`
+- **Password:** `Admin123`
+
+You can use these credentials to access the Django admin panel at `http://localhost:8000/admin/` or log in on the client app as an admin.

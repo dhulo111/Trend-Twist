@@ -19,6 +19,7 @@ import SharePostModal from './SharePostModal';
 import CreateTwistModal from './CreateTwistModal';
 import ReportModal from '../../common/ReportModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import useOnClickOutside from '../../../hooks/useOnClickOutside';
 
 /**
  * Renders a single post card in the feed, with enhanced Instagram-like functionality.
@@ -33,6 +34,9 @@ const Post = ({ post, onUpdate }) => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isTwistModalOpen, setIsTwistModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  const menuRef = useRef(null);
+  useOnClickOutside(menuRef, () => setIsMenuOpen(false));
 
   // Double tap like state
   const [showBigHeart, setShowBigHeart] = useState(false);
@@ -179,7 +183,7 @@ const Post = ({ post, onUpdate }) => {
           </div>
 
           {/* More Options */}
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="text-text-secondary hover:text-text-primary p-2 rounded-full hover:bg-text-secondary/10 transition-colors"

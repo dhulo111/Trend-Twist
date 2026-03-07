@@ -57,9 +57,10 @@ const Modal = ({ isOpen, onClose, children, title, className = '' }) => {
           />
 
           {/* --- 2. Modal Container --- */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4">
             {/* --- 3. Modal Panel --- */}
             <motion.div
+              onClick={(e) => e.stopPropagation()}
               className={`
                 relative w-full max-w-md overflow-hidden 
                 rounded-2xl bg-background-secondary 

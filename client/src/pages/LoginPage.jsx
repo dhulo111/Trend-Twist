@@ -29,6 +29,7 @@ const LoginPage = () => {
   const [otpRequestId, setOtpRequestId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [blockInfo, setBlockInfo] = useState(null);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'); // <-- Added theme state
   const { requestLoginOTP, verifyLoginOTP, googleLogin } = useContext(AuthContext);
 
@@ -53,14 +54,19 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setBlockInfo(null);
     try {
       const response = await requestLoginOTP(email);
       setOtpRequestId(response.id);
       setStep(2);
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.error || 'Failed to send OTP. Please check the email.';
-      setError(errorMsg);
+      if (err.response?.status === 403 && err.response?.data?.error === 'Account Blocked') {
+        setBlockInfo(err.response.data);
+      } else {
+        const errorMsg =
+          err.response?.data?.error || 'Failed to send OTP. Please check the email.';
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -104,12 +110,18 @@ const LoginPage = () => {
 
     setLoading(true);
     setError(null);
+    setBlockInfo(null);
     try {
       // Send the token to our backend
       await googleLogin(googleToken);
       // AuthContext will handle navigation
     } catch (err) {
-      setError('Google Login Failed. Please try again.');
+      if (err.response?.status === 403 && err.response?.data?.error === 'Account Blocked') {
+        setBlockInfo(err.response.data);
+      } else {
+        setError('Google Login Failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
     }
   };
@@ -171,10 +183,36 @@ const LoginPage = () => {
           </div>
 
           {/* --- Error Display --- */}
-          {error && (
+          {error && !blockInfo && (
             <p className="mt-4 rounded-md bg-red-500/10 p-3 text-center text-sm font-medium text-red-500">
               {error}
             </p>
+          )}
+
+          {/* --- Block Info Display --- */}
+          {blockInfo && (
+            <div className="mt-4 rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-center">
+              <h3 className="text-lg font-bold text-red-500 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">Account Blocked</h3>
+              <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                Your account has been temporarily restricted for violating our community guidelines.
+              </p>
+              <div className="flex flex-col gap-2 p-3 bg-red-500/5 dark:bg-black/20 rounded-lg text-sm font-medium text-text-primary mb-4 text-left">
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-wider text-red-500/70 mb-0.5">Reason</span>
+                  <span>{blockInfo.block_reason || 'Administrative action'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-wider text-red-500/70 mb-0.5">Blocked Until</span>
+                  <span>{blockInfo.blocked_until}</span>
+                </div>
+              </div>
+              <p className="text-xs text-text-secondary">
+                If you believe this is a mistake, contact us at:{' '}
+                <a href={`mailto:${blockInfo.contact_email}`} className="text-text-accent font-bold hover:underline block mt-1 break-all">
+                  {blockInfo.contact_email}
+                </a>
+              </p>
+            </div>
           )}
 
           {/* --- Animated Form Container --- */}

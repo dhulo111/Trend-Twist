@@ -1,5 +1,5 @@
 
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import Avatar from '../../common/Avatar';
@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import ShareTwistModal from './ShareTwistModal';
 import ReportModal from '../../common/ReportModal';
+import useOnClickOutside from '../../../hooks/useOnClickOutside';
 
 const TwistCard = ({ post, onUpdate }) => {
   const { user: currentUser } = useContext(AuthContext);
@@ -28,6 +29,9 @@ const TwistCard = ({ post, onUpdate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  const menuRef = useRef(null);
+  useOnClickOutside(menuRef, () => setIsMenuOpen(false));
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
@@ -96,7 +100,7 @@ const TwistCard = ({ post, onUpdate }) => {
               <span className="text-text-secondary hover:underline text-sm">{formatTime(post.created_at)}</span>
             </div>
 
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
                 onClick={(e) => { e.stopPropagation(); setIsMenuOpen(!isMenuOpen); }}
                 className="p-2 text-text-secondary hover:text-text-accent hover:bg-text-accent/10 rounded-full transition-colors"

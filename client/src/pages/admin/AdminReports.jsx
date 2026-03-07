@@ -112,7 +112,7 @@ const AdminReports = () => {
           <select
             value={statusFilter}
             onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
-            className="py-2 pl-3 pr-8 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500"
+            className="py-2 pl-3 pr-8 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-purple-500"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -254,7 +254,7 @@ const AdminReports = () => {
                 <select
                   value={blockDuration}
                   onChange={(e) => setBlockDuration(e.target.value)}
-                  className="w-full text-sm block px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500"
+                  className="w-full text-sm block px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-red-500"
                 >
                   <option value="1">1 Day</option>
                   <option value="5">5 Days</option>
