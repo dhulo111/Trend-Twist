@@ -7,6 +7,7 @@ import CommentSection from '../components/features/feed/CommentSection';
 import TwistCard from '../components/features/feed/TwistCard';
 import { IoArrowBackOutline } from 'react-icons/io5';
 import Button from '../components/common/Button';
+import useSEO from '../hooks/useSEO';
 
 const PostDetailPage = () => {
   const { postId } = useParams();
@@ -16,6 +17,11 @@ const PostDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('comments'); // 'comments' or 'twists'
+
+  useSEO(
+    post ? `Post by @${post.author_username}` : 'Post', 
+    post ? post.content : 'View this post on Trend Twist.'
+  );
 
   const fetchPost = async () => {
     try {

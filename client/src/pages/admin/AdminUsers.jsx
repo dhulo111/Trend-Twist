@@ -29,10 +29,12 @@ const AdminUsers = () => {
         id: u.id,
         username: u.username,
         email: u.email,
+        profileImage: u.profile?.profile_picture,
         isTrendsetter: u.profile?.is_trendsetter || false,
         isPrivate: u.profile?.is_private || false,
+        isBlocked: u.profile?.is_blocked || false,
         joinDate: u.date_joined,
-        status: !u.is_active ? 'Suspended' : (u.is_staff ? 'Admin' : 'Active'),
+        status: !u.is_active ? 'Suspended' : (u.profile?.is_blocked ? 'Blocked' : (u.is_staff ? 'Admin' : 'Active')),
         isStaff: u.is_staff
       }));
 
@@ -121,6 +123,7 @@ const AdminUsers = () => {
                 <th className="p-4 font-medium">Email</th>
                 <th className="p-4 font-medium">Role / Status</th>
                 <th className="p-4 font-medium">Privacy</th>
+                <th className="p-4 font-medium">Blocked</th>
                 <th className="p-4 font-medium">Joined</th>
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
@@ -128,7 +131,7 @@ const AdminUsers = () => {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-gray-500">
+                  <td colSpan="7" className="p-16 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin inline-block w-8 h-8 border-[3px] border-current border-t-transparent text-purple-600 rounded-full" />
                       <p className="mt-4 font-medium">Loading users...</p>
@@ -140,9 +143,23 @@ const AdminUsers = () => {
                   <tr key={user.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 text-white flex items-center justify-center font-bold shadow-sm">
-                          {user.username.charAt(0).toUpperCase()}
-                        </div>
+                        {user.profileImage && !user.profileImage.includes('default_avatar') ? (
+                          <div className="w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                            <img 
+                              src={user.profileImage.startsWith('http') ? user.profileImage : `http://localhost:8000${user.profileImage}`} 
+                              alt={user.username} 
+                              className="w-full h-full object-cover" 
+                              onError={(e) => {
+                                e.target.onerror = null; 
+                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>';
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          </div>
+                        )}
                         <span className="font-semibold">{user.username}</span>
                       </div>
                     </td>
@@ -153,7 +170,7 @@ const AdminUsers = () => {
                           Trendsetter
                         </span>
                         <span className={`text-xs ${user.status === 'Active' ? 'text-green-500' :
-                          user.status === 'Suspended' ? 'text-red-500' : 'text-yellow-500'
+                          (user.status === 'Suspended' || user.status === 'Blocked') ? 'text-red-500' : 'text-yellow-500'
                           }`}>
                           • {user.status}
                         </span>
@@ -163,6 +180,12 @@ const AdminUsers = () => {
                       {user.isPrivate ?
                         <span className="flex items-center gap-1"><XCircle size={14} className="text-red-400" /> Private</span> :
                         <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-400" /> Public</span>
+                      }
+                    </td>
+                    <td className="p-4 text-sm font-medium">
+                      {user.isBlocked ? 
+                         <span className="text-red-500">Yes</span> : 
+                         <span className="text-gray-400">No</span>
                       }
                     </td>
                     <td className="p-4 text-sm text-gray-500">{new Date(user.joinDate).toLocaleDateString()}</td>
@@ -179,7 +202,7 @@ const AdminUsers = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-gray-500">
+                  <td colSpan="7" className="p-16 text-center text-gray-500">
                     No users found matching "{searchTerm}"
                   </td>
                 </tr>

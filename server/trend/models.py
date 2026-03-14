@@ -100,7 +100,7 @@ class Post(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField()
     media_file = models.FileField(upload_to='posts/', blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     def __str__(self):
         return f"Post by {self.author.username} at {self.created_at.strftime('%Y-%m-%d')}"
@@ -138,7 +138,7 @@ class Twist(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='twists', null=True)
     content = models.TextField(blank=True, null=True)
     media_file = models.FileField(upload_to='twists/', blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     
     # Retwist logic (Simple reference to another twist)
     original_twist = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='retwists')
@@ -176,7 +176,7 @@ class Story(models.Model):
     editor_json = models.JSONField(blank=True, null=True)
     duration = models.IntegerField(default=15)
     is_draft = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     expires_at = models.DateTimeField(default=get_story_expiry_time)
 
     def __str__(self):
@@ -247,7 +247,7 @@ class ChatMessage(models.Model):
     group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     is_read = models.BooleanField(default=False)
     
     # Optional: Attach a reel to the message
@@ -281,7 +281,7 @@ class Reel(models.Model):
     editor_json = models.JSONField(blank=True, null=True)
     duration = models.IntegerField(default=15)
     is_draft = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     views_count = models.IntegerField(default=0)
 
     def __str__(self):
@@ -335,7 +335,7 @@ class Notification(models.Model):
     follow_request_ref = models.ForeignKey(FollowRequest, on_delete=models.SET_NULL, null=True, blank=True)
 
     is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -361,7 +361,7 @@ class Report(models.Model):
     
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     def __str__(self):
         return f"Report against {self.reported_user.username} by {self.reporter.username}"

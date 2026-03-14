@@ -148,14 +148,6 @@ const AdminPanelLayout = () => {
           </h1>
 
           <div className="flex items-center gap-4">
-            <div className="relative relative-group hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Quick search..."
-                className="pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-700 border-none rounded-full text-sm focus:ring-2 focus:ring-purple-500 w-64 transition-all"
-              />
-            </div>
 
             <div className="flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-gray-700">
               <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">

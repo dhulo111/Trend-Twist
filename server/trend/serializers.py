@@ -402,10 +402,11 @@ class ReelSerializer(serializers.ModelSerializer):
     likes_count = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = Reel
-        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'video_file', 'caption', 'music_name', 'music_file', 'editor_json', 'duration', 'is_draft', 'created_at', 'views_count', 'likes_count', 'comments_count', 'is_liked']
+        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'video_file', 'caption', 'music_name', 'music_file', 'editor_json', 'duration', 'is_draft', 'created_at', 'views_count', 'likes_count', 'comments_count', 'is_liked', 'is_following']
         read_only_fields = ['author', 'views_count']
 
     def get_likes_count(self, obj):
@@ -419,6 +420,15 @@ class ReelSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.likes.filter(user=request.user).exists()
         return False 
+
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            if request.user == obj.author:
+                return False
+            # Follow is imported at the top of serializers.py
+            return Follow.objects.filter(follower=request.user, following=obj.author).exists()
+        return False
 
 # --- 9. Notification Serializer ---
 from .models import Notification

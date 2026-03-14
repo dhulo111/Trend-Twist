@@ -10,8 +10,9 @@ import ReelOverlay from './ReelOverlay';
 import ReportModal from '../../common/ReportModal';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
+import Avatar from '../../common/Avatar';
 
-const ReelCard = ({ reel, onReelDeleted }) => {
+const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   const { user: currentUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -24,7 +25,7 @@ const ReelCard = ({ reel, onReelDeleted }) => {
   const [isReportOpen, setIsReportOpen] = useState(false);
 
   // ... (rest of state items like isFollowing, videoRef, etc... keep them!)
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(reel.is_following || false);
   const [isOwner, setIsOwner] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const videoRef = useRef(null);
@@ -43,6 +44,10 @@ const ReelCard = ({ reel, onReelDeleted }) => {
 
   // ... (keep all useEffects exactly as they are)
   useEffect(() => {
+    setIsFollowing(reel.is_following || false);
+  }, [reel.is_following]);
+
+  useEffect(() => {
     // Reset ref if component is reused for different reel (conceptually)
     // although `key={reel.id}` in parent usually prevents this.
     hasViewedRef.current = false;
@@ -51,6 +56,8 @@ const ReelCard = ({ reel, onReelDeleted }) => {
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
         if (entry.isIntersecting) {
+          if (onVisible) onVisible(reel.id); // Notify parent this reel is in view
+          
           videoRef.current?.play().catch(() => { });
           setIsPlaying(true);
 
@@ -355,10 +362,11 @@ const ReelCard = ({ reel, onReelDeleted }) => {
         <div className="mt-2 md:mt-4">
           <div className="relative">
             <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-white shadow-lg animate-spin-slow">
-              <img
-                src={reel.author_profile_picture || '/default-avatar.png'}
+              <Avatar
+                src={reel.author_profile_picture}
                 alt="Artist"
-                className="w-full h-full object-cover"
+                size="md"
+                className="w-full h-full"
               />
             </div>
             <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-pink-500 to-purple-600 p-0.5 rounded-full">
@@ -374,10 +382,11 @@ const ReelCard = ({ reel, onReelDeleted }) => {
           {/* User Info */}
           <div className="flex items-center mb-3">
             <button onClick={navigateToProfile} className="flex items-center space-x-2">
-              <img
-                src={reel.author_profile_picture || '/default-avatar.png'}
+              <Avatar
+                src={reel.author_profile_picture}
                 alt={reel.author_username}
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-white object-cover"
+                size="sm"
+                className="border border-white"
               />
               <div>
                 <p className="text-white font-bold text-sm md:text-base drop-shadow-lg">
@@ -389,9 +398,10 @@ const ReelCard = ({ reel, onReelDeleted }) => {
             {!isOwner && (
               <button
                 onClick={handleFollow}
-                className={`ml-3 px-3 py-1 rounded-full text-xs md:text-sm font-bold transition-all ${isFollowing
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white text-black'
+                className={`ml-3 px-4 py-1 rounded-full text-xs md:text-sm font-bold transition-all duration-300 shadow hover:shadow-lg active:scale-95 ${
+                  isFollowing
+                    ? 'bg-transparent border border-white/40 text-white hover:bg-white/10'
+                    : 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border border-transparent hover:scale-105'
                   }`}
               >
                 {isFollowing ? 'Following' : 'Follow'}

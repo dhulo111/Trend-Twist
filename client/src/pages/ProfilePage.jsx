@@ -11,6 +11,7 @@ import { IoGridOutline, IoLockClosed, IoTimeOutline, IoHeartOutline, IoFilmOutli
 import { AuthContext } from '../context/AuthContext';
 import StoryViewerModal from '../components/features/feed/StoryViewerModal';
 import TwistCard from '../components/features/feed/TwistCard';
+import useSEO from '../hooks/useSEO';
 
 // --- Grid Items ---
 const PostGridItem = ({ post }) => {
@@ -76,6 +77,8 @@ const ProfilePage = () => {
   const { username } = useParams();
   const navigate = useNavigate(); // Add this hook
   const { user: currentUser } = useContext(AuthContext);
+
+  useSEO(`${username}'s Profile`, `View ${username}'s profile, posts, reels, and twists on Trend Twist.`);
 
   const [profileData, setProfileData] = useState(null);
   const [userPosts, setUserPosts] = useState([]);

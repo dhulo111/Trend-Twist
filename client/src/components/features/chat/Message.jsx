@@ -2,9 +2,11 @@
 
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { IoPencil, IoTrash, IoCheckmark, IoClose } from 'react-icons/io5';
+import { useNavigate } from 'react-router-dom';
 
 const Message = ({ message, currentUsername, onEdit, onDelete }) => {
   const isMine = currentUsername === message.author_username;
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
 
@@ -77,8 +79,8 @@ const Message = ({ message, currentUsername, onEdit, onDelete }) => {
           <>
             {message.shared_reel_data ? (
               <div
-                onClick={() => { window.location.href = `/reels` }}
-                className="mb-2 rounded-lg overflow-hidden cursor-pointer border border-white/20 bg-black min-w-[150px]"
+                onClick={() => navigate(`/reels/${message.shared_reel_data.id}`)}
+                className="mb-2 rounded-lg overflow-hidden cursor-pointer border border-white/20 bg-black min-w-[150px] transition-transform hover:scale-[1.02]"
               >
                 <div className="relative w-full aspect-[9/16] max-h-[250px] flex items-center justify-center bg-gray-900">
                   <video
@@ -87,12 +89,33 @@ const Message = ({ message, currentUsername, onEdit, onDelete }) => {
                     muted
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <div className="p-2 bg-black/50 rounded-full text-white">▶</div>
+                    <div className="p-2 bg-black/50 rounded-full text-white pointer-events-none">▶</div>
                   </div>
                 </div>
                 <div className="p-2 text-xs bg-black/50 backdrop-blur-md">
                   <p className="font-bold truncate text-white">@{message.shared_reel_data.author_username}</p>
                   <p className="truncate opacity-70 text-white/80">{message.shared_reel_data.caption}</p>
+                </div>
+              </div>
+            ) : null}
+
+            {message.shared_post_data ? (
+              <div
+                onClick={() => navigate(`/post/${message.shared_post_data.id}`)}
+                className="mb-2 rounded-lg overflow-hidden cursor-pointer border border-border bg-background-secondary min-w-[150px] transition-transform hover:scale-[1.02] shadow-sm"
+              >
+                {message.shared_post_data.thumbnail && (
+                  <div className="relative w-full aspect-square max-h-[200px] flex items-center justify-center bg-background-primary overflow-hidden">
+                    <img
+                      src={message.shared_post_data.thumbnail}
+                      alt="Shared post"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-2 text-xs border-t border-border">
+                  <p className="font-bold truncate text-text-primary">@{message.shared_post_data.author_username}</p>
+                  <p className="truncate text-text-secondary">{message.shared_post_data.content}</p>
                 </div>
               </div>
             ) : null}

@@ -127,7 +127,11 @@ const AdminPosts = () => {
                       {post.media_url ? (
                         <a href={post.media_url.startsWith('http') ? post.media_url : `http://localhost:8000${post.media_url}`} target="_blank" rel="noopener noreferrer">
                           <div className="h-12 w-12 rounded-lg bg-gray-100 dark:bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-700 relative hover:opacity-80 transition cursor-pointer">
-                            <img src={post.media_url.startsWith('http') ? post.media_url : `http://localhost:8000${post.media_url}`} alt="Post Media" className="w-full h-full object-cover" />
+                            {post.media_url.match(/\.(mp4|webm|ogg|mov)$/i) ? (
+                              <video src={post.media_url.startsWith('http') ? post.media_url : `http://localhost:8000${post.media_url}`} className="w-full h-full object-cover" controls={false} muted />
+                            ) : (
+                              <img src={post.media_url.startsWith('http') ? post.media_url : `http://localhost:8000${post.media_url}`} alt="Post Media" className="w-full h-full object-cover" />
+                            )}
                           </div>
                         </a>
                       ) : (

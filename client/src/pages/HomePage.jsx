@@ -16,9 +16,11 @@ import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import { IoCloudOfflineOutline } from 'react-icons/io5';
 import { useNavigate } from 'react-router-dom';
+import useSEO from '../hooks/useSEO';
 
 
 const HomePage = () => {
+  useSEO('Home', 'Welcome to Trend Twist, your ultimate destination for following friends and discovering new trends.');
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [allStoryGroups, setAllStoryGroups] = useState([]);

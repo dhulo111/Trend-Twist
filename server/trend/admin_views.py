@@ -53,6 +53,7 @@ class AdminUserListView(views.APIView):
             except Profile.DoesNotExist:
                 profile = None
 
+            from django.utils import timezone
             data.append({
                 'id': user.id,
                 'username': user.username,
@@ -63,6 +64,8 @@ class AdminUserListView(views.APIView):
                 'profile': {
                     'is_trendsetter': profile.is_trendsetter if profile else False,
                     'is_private': profile.is_private if profile else False,
+                    'profile_picture': profile.profile_picture.url if profile and profile.profile_picture else None,
+                    'is_blocked': bool(profile and profile.blocked_until and profile.blocked_until > timezone.now()),
                 }
             })
         return paginator.get_paginated_response(data)
@@ -229,10 +232,17 @@ class AdminReportListView(views.APIView):
 
         data = []
         for report in paginated_reports:
+            reported_profile = getattr(report.reported_user, 'profile', None)
+            is_blocked = bool(reported_profile and reported_profile.blocked_until and reported_profile.blocked_until > timezone.now())
+            
             data.append({
                 'id': report.id,
                 'reporter': {'id': report.reporter.id, 'username': report.reporter.username},
-                'reported_user': {'id': report.reported_user.id, 'username': report.reported_user.username},
+                'reported_user': {
+                    'id': report.reported_user.id, 
+                    'username': report.reported_user.username,
+                    'is_blocked': is_blocked
+                },
                 'post_id': report.post_id,
                 'reel_id': report.reel_id,
                 'twist_id': report.twist_id,

@@ -98,6 +98,19 @@ const AdminReports = () => {
     }
   };
 
+  const handleUnblockUser = async (user) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/admin/users/${user.id}/unblock/`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchReports(page, statusFilter);
+      alert(`User @${user.username} has been unblocked.`);
+    } catch (err) {
+      alert("Failed to unblock user.");
+    }
+  };
+
   const totalPages = Math.ceil(totalReports / PAGE_SIZE) || 1;
 
   return (
@@ -189,11 +202,19 @@ const AdminReports = () => {
                             </button>
                           </>
                         )}
-                        <button
-                          onClick={() => handleOpenBlockModal(report.reported_user)}
-                          className="inline-flex items-center gap-1 p-1.5 ml-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition font-medium text-xs shadow-sm" title="Block User">
-                          <Ban size={14} /> Block user
-                        </button>
+                        {report.reported_user.is_blocked ? (
+                          <button
+                            onClick={() => handleUnblockUser(report.reported_user)}
+                            className="inline-flex items-center gap-1 p-1.5 ml-2 text-white bg-green-600 hover:bg-green-700 rounded-md transition font-medium text-xs shadow-sm" title="Unblock User">
+                            <CheckCircle size={14} /> Unblock
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenBlockModal(report.reported_user)}
+                            className="inline-flex items-center gap-1 p-1.5 ml-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition font-medium text-xs shadow-sm" title="Block User">
+                            <Ban size={14} /> Block user
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

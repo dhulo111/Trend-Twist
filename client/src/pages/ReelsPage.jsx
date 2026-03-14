@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchReels } from '../api/reelApi';
 import ReelCard from '../components/features/feed/ReelCard';
 import { FaArrowLeft, FaCamera } from 'react-icons/fa';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import useSEO from '../hooks/useSEO';
 
 const ReelsPage = () => {
+  useSEO('Reels', 'Discover and watch the most engaging short-form videos on Trend Twist.');
   const [reels, setReels] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { reelId } = useParams();
   const containerRef = useRef(null);
   const { initialReelId } = location.state || {};
 
@@ -31,7 +34,19 @@ const ReelsPage = () => {
   const loadReels = async () => {
     try {
       const data = await fetchReels();
-      setReels(shuffleArray([...data])); // Randomize reels on load
+      let shuffled = shuffleArray([...data]); // Randomize reels on load
+      
+      // If we have a specific reel ID requested via URL or state, move it to the front
+      const targetId = reelId || initialReelId;
+      if (targetId) {
+        const index = shuffled.findIndex(r => r.id.toString() === targetId.toString());
+        if (index !== -1) {
+          const selectedReel = shuffled.splice(index, 1)[0];
+          shuffled.unshift(selectedReel);
+        }
+      }
+
+      setReels(shuffled);
     } catch (error) {
       console.error(error);
     } finally {
@@ -39,21 +54,17 @@ const ReelsPage = () => {
     }
   };
 
-  // Scroll to specific reel
-  useEffect(() => {
-    if (!loading && initialReelId && reels.length > 0) {
-      const index = reels.findIndex(r => r.id === initialReelId);
-      if (index !== -1 && containerRef.current) {
-        setTimeout(() => {
-          const child = containerRef.current.children[index];
-          if (child) child.scrollIntoView({ behavior: 'auto' });
-        }, 100);
-      }
-    }
-  }, [loading, reels, initialReelId]);
+  // We don't need scrollIntoView anymore because the requested reel is placed at the top (index 0)
 
   const handleReelDeleted = (deletedId) => {
     setReels(prev => prev.filter(r => r.id !== deletedId));
+  };
+
+  const handleReelVisible = (id) => {
+    // Update the URL to match the currently viewed reel (Instagram style)
+    if (window.history.replaceState) {
+      window.history.replaceState(null, '', `/reels/${id}`);
+    }
   };
 
   return (
@@ -84,6 +95,7 @@ const ReelsPage = () => {
                 <ReelCard
                   reel={reel}
                   onReelDeleted={handleReelDeleted}
+                  onVisible={handleReelVisible}
                 />
               </div>
             ))

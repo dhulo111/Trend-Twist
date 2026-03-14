@@ -127,7 +127,11 @@ const AdminTwists = () => {
                       {twist.media_url ? (
                         <a href={twist.media_url.startsWith('http') ? twist.media_url : `http://localhost:8000${twist.media_url}`} target="_blank" rel="noopener noreferrer">
                           <div className="h-12 w-12 rounded-lg bg-gray-100 dark:bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-700 relative hover:opacity-80 transition cursor-pointer">
-                            <img src={twist.media_url.startsWith('http') ? twist.media_url : `http://localhost:8000${twist.media_url}`} alt="Twist Media" className="w-full h-full object-cover" />
+                            {twist.media_url.match(/\.(mp4|webm|ogg|mov)$/i) ? (
+                              <video src={twist.media_url.startsWith('http') ? twist.media_url : `http://localhost:8000${twist.media_url}`} className="w-full h-full object-cover" controls={false} muted />
+                            ) : (
+                              <img src={twist.media_url.startsWith('http') ? twist.media_url : `http://localhost:8000${twist.media_url}`} alt="Twist Media" className="w-full h-full object-cover" />
+                            )}
                           </div>
                         </a>
                       ) : (

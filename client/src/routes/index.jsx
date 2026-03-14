@@ -73,6 +73,7 @@ const AppRoutes = () => {
 
         {/* --- Reels (Now inside Layout) --- */}
         <Route path="reels" element={<ReelsPage />} />
+        <Route path="reels/:reelId" element={<ReelsPage />} />
 
         {/* ------------------------------------------- */}
         {/* --- Full-Screen Creation/Search Pages (Previously Modals) --- */}
