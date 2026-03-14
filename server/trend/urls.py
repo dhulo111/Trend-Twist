@@ -141,4 +141,9 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('admin/users/<int:user_id>/block/', admin_views.AdminUserBlockView.as_view(), name='admin_user_block'),
     path('admin/blocks/', admin_views.AdminBlockedUserListView.as_view(), name='admin_blocked_users'),
     path('admin/users/<int:user_id>/unblock/', admin_views.AdminUserUnblockView.as_view(), name='admin_user_unblock'),
+
+    # ------------------------------------------------------------------
+    # 8. KEEP-ALIVE (prevents Render free-tier cold starts)
+    # ------------------------------------------------------------------
+    path('ping/', views.PingView.as_view(), name='ping'),
 ]

@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
-import AppRoutes from './routes/index'; // Importing the main router from routes/index.jsx
-import { AuthProvider } from './context/AuthContext';// Importing the Auth provider
+import AppRoutes from './routes/index';
+import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import useKeepAlive from './hooks/useKeepAlive';
 
 function App() {
+  useKeepAlive(); // Keeps the Render free-tier server warm — pings /api/ping/ every 14 min
   return (
     // Wrap the entire application in the AuthProvider
     // This makes user data available everywhere

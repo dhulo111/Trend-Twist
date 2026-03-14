@@ -1815,3 +1815,17 @@ class ReportCreateView(APIView):
             serializer.save(reporter=request.user, reported_user=reported_user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ----------------------------------------------------------------------
+# KEEP-ALIVE ENDPOINT (Prevents Render free-tier cold starts)
+# GET /api/ping/  — No auth required, responds immediately with 200.
+# The frontend pings this every 14 minutes to keep the server warm.
+# ----------------------------------------------------------------------
+
+class PingView(APIView):
+    """Lightweight health-check / keep-alive endpoint. No auth required."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
