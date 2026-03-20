@@ -12,6 +12,7 @@ google-auth
 requests
 boto3
 django-storages
+stripe
 
 dj-database-url
 psycopg2-binary
