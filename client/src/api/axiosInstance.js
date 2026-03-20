@@ -13,12 +13,25 @@ const axiosInstance = axios.create({
 // Request Interceptor: Add the auth token to every request
 axiosInstance.interceptors.request.use(
   (config) => {
-    const authToken = localStorage.getItem("authToken")
-      ? JSON.parse(localStorage.getItem("authToken"))
-      : null;
+    const authTokenRaw = localStorage.getItem("authToken");
+    let access = null;
 
-    if (authToken) {
-      config.headers["Authorization"] = `Bearer ${authToken.access}`;
+    if (authTokenRaw) {
+      try {
+        const parsed = JSON.parse(authTokenRaw);
+        access = parsed.access;
+      } catch (e) {
+        console.error("Failed to parse authToken", e);
+      }
+    }
+
+    // Fallback to direct 'access_token' (used by Admin login)
+    if (!access) {
+      access = localStorage.getItem("access_token");
+    }
+
+    if (access) {
+      config.headers["Authorization"] = `Bearer ${access}`;
     }
     return config;
   },

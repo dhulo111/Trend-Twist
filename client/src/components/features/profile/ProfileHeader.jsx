@@ -7,7 +7,7 @@ import Avatar from '../../common/Avatar';
 import Button from '../../common/Button';
 // Modal import removed as it was only used for Edit Profile
 import Spinner from '../../common/Spinner';
-import { IoSettingsOutline, IoLink, IoLockClosed, IoPersonAddOutline } from 'react-icons/io5';
+import { IoSettingsOutline, IoLink, IoLockClosed, IoPersonAddOutline, IoSparklesOutline, IoHeartOutline } from 'react-icons/io5';
 import { Link, useNavigate } from 'react-router-dom';
 import FollowListModal from './FollowListModal';
 import StoryCircle from '../feed/StoryCircle';
@@ -30,6 +30,7 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
   const postsCount = profileData.posts_count || 0;
   const followersCount = profileData.followers_count || 0;
   const followingCount = profileData.following_count || 0;
+  const subscribersCount = profileData.subscribers_count || 0;
 
   // Story Logic Check
   const hasStories = userStories?.stories.length > 0;
@@ -70,11 +71,11 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
     if (isOwner) {
       return (
         <div className="flex space-x-3">
-          <Button variant="secondary" size="sm" onClick={() => navigate('/edit')}>
+          <Button variant="secondary" onClick={() => navigate('/edit')}>
             Edit Profile
           </Button>
           <Link to="/settings">
-            <Button variant="secondary" size="sm" leftIcon={<IoSettingsOutline />}>
+            <Button variant="secondary" leftIcon={<IoSettingsOutline />}>
               Settings
             </Button>
           </Link>
@@ -84,7 +85,7 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
 
     if (isFollowing) {
       return (
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           <Button variant="secondary" onClick={handleFollowToggle}>Unfollow</Button>
           <Button
             variant="primary"
@@ -92,6 +93,17 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
           >
             Message
           </Button>
+          
+          {profileData.has_active_plans && (
+            <Button
+              variant={profileData.is_subscribed ? "secondary" : "primary"}
+              className={profileData.is_subscribed ? "border-purple-500 text-purple-600" : "bg-gradient-to-r from-purple-600 to-pink-600 border-none shadow-purple-500/20"}
+              onClick={() => navigate(`/profile/${profileData.username}/subscribe`)}
+              leftIcon={profileData.is_subscribed ? <IoSparklesOutline className="text-purple-500" /> : <IoSparklesOutline />}
+            >
+              {profileData.is_subscribed ? 'Subscribed' : 'Subscribe'}
+            </Button>
+          )}
         </div>
       );
     }
@@ -105,7 +117,7 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
     const buttonIcon = isPrivate ? <IoLockClosed /> : <IoPersonAddOutline />;
 
     return (
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <Button
           variant="primary"
           onClick={handleFollowToggle}
@@ -120,6 +132,17 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
             onClick={() => navigate('/messages', { state: { startChatUser: profileData } })}
           >
             Message
+          </Button>
+        )}
+        
+        {profileData.has_active_plans && (
+          <Button
+            variant={profileData.is_subscribed ? "secondary" : "primary"}
+            className={profileData.is_subscribed ? "border-purple-500 text-purple-600" : "bg-gradient-to-r from-purple-600 to-pink-600 border-none shadow-purple-500/20"}
+            onClick={() => navigate(`/profile/${profileData.username}/subscribe`)}
+            leftIcon={profileData.is_subscribed ? <IoSparklesOutline className="text-purple-500" /> : <IoSparklesOutline />}
+          >
+            {profileData.is_subscribed ? 'Subscribed' : 'Subscribe'}
           </Button>
         )}
       </div>
@@ -218,6 +241,19 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
               </span>
               <span className="text-xs md:text-sm text-text-secondary">Following</span>
             </div>
+
+            {/* NEW: Subscribers Stat (Only show if user has active plans or is already a creator) */}
+            {(profileData.has_active_plans || subscribersCount > 0) && (
+              <div className="text-center rounded-md p-1 min-w-[70px] border border-purple-500/10 bg-purple-500/5 transition-all">
+                <div className="flex items-center justify-center gap-1">
+                  <span className="block text-lg font-bold text-purple-500">
+                    {subscribersCount}
+                  </span>
+                  <IoSparklesOutline className="text-purple-400 text-[10px]" />
+                </div>
+                <span className="text-xs md:text-sm text-purple-600/70 font-semibold tracking-tight">Subscribers</span>
+              </div>
+            )}
           </div>
 
           {/* Bio and Website */}

@@ -1,9 +1,10 @@
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.contrib.auth.models import User
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Post, Twist, Reel, Comment, Hashtag, Profile
+from .models import Post, Twist, Reel, Comment, Hashtag, Profile, CreatorEarning
+from decimal import Decimal
 
 class IsAdminUser(permissions.BasePermission):
     """
@@ -21,6 +22,9 @@ class AdminDashboardStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
 
     def get(self, request):
+        total_revenue = CreatorEarning.objects.aggregate(Sum('gross_amount'))['gross_amount__sum'] or Decimal('0.00')
+        total_fees = CreatorEarning.objects.aggregate(Sum('platform_fee'))['platform_fee__sum'] or Decimal('0.00')
+        
         stats = {
             'users': User.objects.count(),
             'posts': Post.objects.count(),
@@ -28,6 +32,8 @@ class AdminDashboardStatsView(views.APIView):
             'reels': Reel.objects.count(),
             'comments': Comment.objects.count(),
             'hashtags': Hashtag.objects.count(),
+            'total_revenue': float(total_revenue),
+            'total_fees': float(total_fees),
         }
         return Response(stats)
 
@@ -340,8 +346,34 @@ class AdminUserUnblockView(views.APIView):
             profile = user.profile
             profile.blocked_until = None
             profile.block_reason = ''
-            profile.save()
-            
-            return Response({'status': 'user unblocked'})
         except User.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+from .models import UserSubscription
+
+class AdminSubscriptionListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        subs = UserSubscription.objects.select_related('subscriber', 'creator').all().order_by('-start_date')
+        
+        search = request.query_params.get('search', '')
+        if search:
+            q_objects = Q(subscriber__username__icontains=search) | Q(creator__username__icontains=search)
+            subs = subs.filter(q_objects)
+
+        paginator = AdminPagination()
+        paginated_subs = paginator.paginate_queryset(subs, request, view=self)
+
+        data = []
+        for sub in paginated_subs:
+            data.append({
+                'id': sub.id,
+                'subscriber': sub.subscriber.username,
+                'creator': sub.creator.username,
+                'tier': sub.tier,
+                'status': sub.status,
+                'start_date': sub.start_date,
+                'expiry_date': sub.expiry_date,
+            })
+        return paginator.get_paginated_response(data)

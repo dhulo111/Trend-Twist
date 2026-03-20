@@ -5,12 +5,15 @@ import Button from '../../common/Button';
 import Avatar from '../../common/Avatar';
 import Spinner from '../../common/Spinner';
 import { IoCloseOutline, IoImageOutline } from 'react-icons/io5';
+import { FaLock } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const CreateTwistModal = ({ isOpen, onClose, originalPost, onSuccess }) => {
   const { user } = useContext(AuthContext);
   const [content, setContent] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
+  const [isExclusive, setIsExclusive] = useState(false);
+  const [requiredTier, setRequiredTier] = useState('basic');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -35,6 +38,10 @@ const CreateTwistModal = ({ isOpen, onClose, originalPost, onSuccess }) => {
       }
       if (originalPost) {
         formData.append('original_post', originalPost.id);
+      }
+      formData.append('is_exclusive', isExclusive);
+      if (isExclusive) {
+        formData.append('required_tier', requiredTier);
       }
 
       await createTwist(formData);
@@ -141,38 +148,61 @@ const CreateTwistModal = ({ isOpen, onClose, originalPost, onSuccess }) => {
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-background-secondary">
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2 -ml-2 text-text-accent hover:bg-text-accent/10 rounded-full transition-colors"
-              title="Add Media"
-            >
-              <IoImageOutline size={24} />
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*,video/*"
-              className="hidden"
-            />
-          </div>
+        <div className="px-6 py-4 border-t border-border flex flex-col gap-4 bg-background-secondary">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 -ml-2 text-text-accent hover:bg-text-accent/10 rounded-full transition-colors"
+                title="Add Media"
+              >
+                <IoImageOutline size={24} />
+              </button>
+              
+              <div className="h-6 w-[1px] bg-border mx-2" />
+              
+              {/* Exclusive Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsExclusive(!isExclusive)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                  isExclusive 
+                    ? 'bg-purple-500/10 border-purple-500/50 text-purple-400' 
+                    : 'border-border text-text-secondary hover:border-text-primary'
+                }`}
+              >
+                <FaLock size={12} className={isExclusive ? 'text-purple-400' : 'text-text-secondary'} />
+                <span>Premium Twist</span>
+              </button>
 
-          <div className="flex items-center gap-4">
-            {content.length > 0 && (
-              <span className={`text-sm ${content.length > 280 ? 'text-red-500' : 'text-text-secondary'}`}>
-                {280 - content.length}
-              </span>
-            )}
-            <Button
-              onClick={handleSubmit}
-              disabled={loading || (!content.trim() && !mediaFile)}
-              className="px-6 rounded-full bg-gradient-to-r from-text-accent/90 to-text-accent hover:shadow-lg hover:shadow-text-accent/20 transition-all text-white font-bold"
-            >
-              {loading ? <Spinner size="sm" color="text-white" /> : 'Twist'}
-            </Button>
+              {isExclusive && (
+                <select
+                  value={requiredTier}
+                  onChange={(e) => setRequiredTier(e.target.value)}
+                  className="bg-transparent text-xs text-purple-300 font-bold border-none outline-none focus:ring-0 cursor-pointer"
+                >
+                  <option value="basic" className="bg-background-secondary">Basic+</option>
+                  <option value="pro" className="bg-background-secondary">Pro+</option>
+                  <option value="elite" className="bg-background-secondary">Elite</option>
+                </select>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4">
+              {content.length > 0 && (
+                <span className={`text-xs ${content.length > 280 ? 'text-red-500 font-bold' : 'text-text-secondary font-medium'}`}>
+                  {280 - content.length}
+                </span>
+              )}
+              <Button
+                onClick={handleSubmit}
+                disabled={loading || (!content.trim() && !mediaFile)}
+                className="px-6 rounded-full bg-gradient-to-r from-text-accent/90 to-text-accent hover:shadow-lg hover:shadow-text-accent/20 transition-all text-white font-bold"
+              >
+                {loading ? <Spinner size="sm" color="text-white" /> : 'Twist'}
+              </Button>
+            </div>
           </div>
         </div>
       </motion.div>

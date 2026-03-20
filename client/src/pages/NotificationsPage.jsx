@@ -10,12 +10,16 @@ import { useNavigate } from 'react-router-dom';
 
 const NotificationsPage = () => {
   const { user } = useContext(AuthContext);
-  const { notifications, fetchNotifications, markAsRead, removeNotification, updateNotification } = useContext(SocketContext);
+  const { notifications, fetchNotifications, markAsRead, markAllAsRead, removeNotification, updateNotification, unreadCount } = useContext(SocketContext);
   const navigate = useNavigate();
 
   // Initial fetch is handled by SocketProvider, but we can ensure it's fresh
   useEffect(() => {
     fetchNotifications();
+    // When viewing this page, mark all as read
+    if (unreadCount > 0) {
+      markAllAsRead();
+    }
   }, []);
 
   const handleAction = async (id, action) => {
@@ -41,7 +45,17 @@ const NotificationsPage = () => {
 
   return (
     <div className="max-w-2xl mx-auto pt-4 px-4 pb-20">
-      <h1 className="text-2xl font-bold mb-6 text-text-primary">Notifications</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-text-primary">Notifications</h1>
+        {unreadCount > 0 && (
+          <button 
+            onClick={markAllAsRead}
+            className="text-sm font-medium text-text-accent hover:underline"
+          >
+            Mark all as read
+          </button>
+        )}
+      </div>
 
       {notifications.length === 0 ? (
         <p className="text-text-secondary text-center py-10">No notifications yet.</p>

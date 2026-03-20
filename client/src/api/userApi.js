@@ -104,3 +104,25 @@ export const searchUsers = async (query) => {
     const response = await axiosInstance.get(`/users/search/?q=${query}`);
     return response.data;
 };
+
+// --- Save/Bookmark Logic ---
+
+export const toggleSave = async (type, id) => {
+  try {
+    const response = await axiosInstance.post('/save/', { type, id });
+    return response.data;
+  } catch (error) {
+    console.error('Error toggling save:', error);
+    throw error;
+  }
+};
+
+export const getSavedItems = async (type) => {
+  try {
+    const response = await axiosInstance.get(`/saved/?type=${type}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching saved items:', error);
+    throw error;
+  }
+};

@@ -9,6 +9,46 @@ from .models import (
     Reel, ReelLike, ReelComment, ChatGroup # NEW MODEL
 )
 from django.db.models import Q # Used for efficient chat room lookup
+from django.utils import timezone
+from .models import UserSubscription, SubscriptionPlan
+
+def has_subscription_access(user, creator, required_tier=None):
+    if user == creator or user.is_staff:
+        return True
+    
+    sub = UserSubscription.objects.filter(subscriber=user, creator=creator, status='active').first()
+    if not sub:
+        return False
+        
+    if sub.expiry_date and sub.expiry_date < timezone.now():
+        return False
+        
+    if required_tier:
+        tiers = ['basic', 'pro', 'elite']
+        try:
+            user_tier_idx = tiers.index(sub.tier)
+            req_tier_idx = tiers.index(required_tier)
+            return user_tier_idx >= req_tier_idx
+        except ValueError:
+            return False
+            
+    return True
+
+# --- Subscriptions Serializers ---
+class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionPlan
+        fields = '__all__'
+
+class UserSubscriptionSerializer(serializers.ModelSerializer):
+    plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
+    creator_username = serializers.ReadOnlyField(source='creator.username')
+    creator_profile_picture = serializers.ImageField(source='creator.profile.profile_picture', read_only=True)
+
+    class Meta:
+        model = UserSubscription
+        fields = '__all__'
+        read_only_fields = ['subscriber', 'start_date']
 
 # --- 1. User & Profile Serializers (UPDATED for Privacy) ---
 
@@ -45,54 +85,57 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
-    
-    # NEW: Status fields for the ProfilePage context
     is_following = serializers.SerializerMethodField()
     has_pending_request = serializers.SerializerMethodField()
+    is_subscribed = serializers.SerializerMethodField()
+    has_active_plans = serializers.SerializerMethodField() # NEW
+    posts_count = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+    subscribers_count = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 
-                  'is_following', 'has_pending_request']
+                  'is_following', 'has_pending_request', 'is_subscribed', 'has_active_plans',
+                  'posts_count', 'followers_count', 'following_count', 'subscribers_count']
+
+    def get_has_active_plans(self, obj):
+        # We check if this user has any active subscription plans
+        return SubscriptionPlan.objects.filter(is_active=True).exists()
+        # Wait, SubscriptionPlans are GLOBAL in this current model? 
+        # Let's check models.py again.
+
+    def get_is_subscribed(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.id != obj.id:
+            return has_subscription_access(request.user, obj)
+        return False
 
     def get_is_following(self, obj):
-        # Checks if the requesting user is FOLLOWING the displayed user (obj)
         request = self.context.get('request')
         if request and request.user.is_authenticated and request.user.id != obj.id:
             return Follow.objects.filter(follower=request.user, following=obj).exists()
         return False
     
     def get_has_pending_request(self, obj):
-        # Checks if the requesting user has a PENDING FollowRequest to the displayed user (obj)
         request = self.context.get('request')
         if request and request.user.is_authenticated and request.user.id != obj.id:
-            # We check if request is sent from current user (sender) to displayed user (receiver)
             return FollowRequest.objects.filter(sender=request.user, receiver=obj).exists()
         return False
-    
-    posts_count = serializers.SerializerMethodField()
-    followers_count = serializers.SerializerMethodField()
-    following_count = serializers.SerializerMethodField()
-    
-    # ... (Meta class) ...
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 
-                  'is_following', 'has_pending_request', 
-                  'posts_count', 'followers_count', 'following_count']
 
-    # ADDED: Methods to calculate counts
     def get_posts_count(self, obj):
-        # Counts posts linked via related_name='posts'
         return obj.posts.count() 
 
     def get_followers_count(self, obj):
-        # Counts followers linked via related_name='followers'
         return obj.followers.count()
 
     def get_following_count(self, obj):
-        # Counts following linked via related_name='following'
         return obj.following.count()
+
+    def get_subscribers_count(self, obj):
+        # We only count active subscriptions
+        return obj.subscribers.filter(status='active').count()
 
 # --- 2. Authentication & Security (No major change) ---
 
@@ -141,25 +184,50 @@ class PostSerializer(serializers.ModelSerializer):
     author_profile_picture = serializers.ImageField(source='author.profile.profile_picture', read_only=True)
     likes_count = serializers.SerializerMethodField()
     twists_count = serializers.SerializerMethodField()
-    is_liked = serializers.SerializerMethodField()
-    
-    # NEW: To show comment count on the feed
-    comments_count = serializers.ReadOnlyField(source='comments.count')
+    comments_count = serializers.SerializerMethodField()
+    is_saved = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
             'id', 'author', 'author_username', 'author_profile_picture', 
             'content', 'media_file', 'created_at', 
-            'likes_count', 'is_liked', 'hashtags', 'comments_count', 'twists_count'
+            'likes_count', 'is_liked', 'is_saved', 'hashtags', 'comments_count', 'twists_count',
+            'is_exclusive', 'required_tier', 'has_access'
         ]
         read_only_fields = ['author']
+
+    def get_has_access(self, obj):
+        if not obj.is_exclusive:
+            return True
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return has_subscription_access(request.user, obj.author, obj.required_tier)
+
+    def to_representation(self, instance):
+        repr_data = super().to_representation(instance)
+        # Obscure content if no access
+        if not repr_data.get('has_access', True):
+            repr_data['content'] = "*** Subscribe to unlock this premium content ***"
+            repr_data['media_file'] = None
+        return repr_data
+
+    def get_is_saved(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.saved_records.filter(user=request.user).exists()
+        return False
 
     def get_likes_count(self, obj):
         return obj.likes.count()
 
     def get_twists_count(self, obj):
         return obj.twists.count()
+
+    def get_comments_count(self, obj):
+        return obj.comments.count()
 
     is_liked = serializers.SerializerMethodField()
 
@@ -180,7 +248,7 @@ class StorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Story
-        fields = ['id', 'author', 'author_username', 'media_file', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration', 'likes_count', 'is_liked']
+        fields = ['id', 'author', 'author_username', 'media_file', 'media_type', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration', 'likes_count', 'is_liked', 'is_exclusive', 'required_tier']
         read_only_fields = ['author']
         
     def get_is_viewed(self, obj):
@@ -205,11 +273,26 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     shared_reel_data = serializers.SerializerMethodField()
     shared_post_data = serializers.SerializerMethodField()
     shared_twist_data = serializers.SerializerMethodField()
+    story_reply_data = serializers.SerializerMethodField()
     
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'group', 'author', 'author_username', 'content', 'timestamp', 'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data', 'shared_twist', 'shared_twist_data']
+        fields = [
+            'id', 'room', 'group', 'author', 'author_username', 'content', 'timestamp', 
+            'is_read', 'shared_reel', 'shared_reel_data', 'shared_post', 'shared_post_data', 
+            'shared_twist', 'shared_twist_data', 'story_reply', 'story_reply_data'
+        ]
         read_only_fields = ['author', 'room', 'group']
+
+    def get_story_reply_data(self, obj):
+        if obj.story_reply:
+            return {
+                'id': obj.story_reply.id,
+                'media_file': obj.story_reply.media_file.url if obj.story_reply.media_file else None,
+                'media_type': getattr(obj.story_reply, 'media_type', 'image'),
+                'author_username': obj.story_reply.author.username
+            }
+        return None
 
     def get_shared_reel_data(self, obj):
         if obj.shared_reel:
@@ -330,13 +413,41 @@ class TwistSerializer(serializers.ModelSerializer):
     comments_count = serializers.SerializerMethodField()
     retwists_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    is_saved = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     original_post_data = serializers.SerializerMethodField()
 
     class Meta:
         model = Twist
-        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'content', 'media_file', 'created_at', 'likes_count', 'comments_count', 'retwists_count', 'is_liked', 'original_twist', 'original_post', 'original_post_data']
+        fields = [
+            'id', 'author', 'author_username', 'author_profile_picture', 'content', 'media_file', 
+            'created_at', 'likes_count', 'comments_count', 'retwists_count', 'is_liked', 'is_saved', 
+            'original_twist', 'original_post', 'original_post_data',
+            'is_exclusive', 'required_tier', 'has_access'
+        ]
         read_only_fields = ['author']
+
+    def get_has_access(self, obj):
+        if not obj.is_exclusive:
+            return True
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return has_subscription_access(request.user, obj.author, obj.required_tier)
+
+    def to_representation(self, instance):
+        repr_data = super().to_representation(instance)
+        if not repr_data.get('has_access', True):
+            repr_data['content'] = "*** Subscribe to unlock this premium Twist ***"
+            repr_data['media_file'] = None
+        return repr_data
+
+    def get_is_saved(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.saved_records.filter(user=request.user).exists()
+        return False
 
     def get_original_post_data(self, obj):
         if obj.original_post:
@@ -402,12 +513,41 @@ class ReelSerializer(serializers.ModelSerializer):
     likes_count = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    is_saved = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Reel
-        fields = ['id', 'author', 'author_username', 'author_profile_picture', 'video_file', 'caption', 'music_name', 'music_file', 'editor_json', 'duration', 'is_draft', 'created_at', 'views_count', 'likes_count', 'comments_count', 'is_liked', 'is_following']
+        fields = [
+            'id', 'author', 'author_username', 'author_profile_picture', 'video_file', 'caption', 
+            'music_name', 'music_file', 'editor_json', 'duration', 'is_draft', 'created_at', 
+            'views_count', 'likes_count', 'comments_count', 'is_liked', 'is_saved', 'is_following',
+            'is_exclusive', 'required_tier', 'has_access'
+        ]
         read_only_fields = ['author', 'views_count']
+
+    def get_has_access(self, obj):
+        if not obj.is_exclusive:
+            return True
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return has_subscription_access(request.user, obj.author, obj.required_tier)
+
+    def to_representation(self, instance):
+        repr_data = super().to_representation(instance)
+        if not repr_data.get('has_access', True):
+            repr_data['caption'] = "*** Subscribe to unlock this premium Reel ***"
+            repr_data['video_file'] = None
+            repr_data['music_file'] = None
+        return repr_data
+
+    def get_is_saved(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.saved_records.filter(user=request.user).exists()
+        return False
 
     def get_likes_count(self, obj):
         return obj.likes.count()
@@ -447,7 +587,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = ['recipient', 'sender', 'created_at'] 
 
 # --- 10. Report Serializer ---
-from .models import Report
+from .models import Report, SavedItem
 
 class ReportSerializer(serializers.ModelSerializer):
     reporter_username = serializers.ReadOnlyField(source='reporter.username')
@@ -461,4 +601,16 @@ class ReportSerializer(serializers.ModelSerializer):
                   'reported_user', 'reported_username', 'reported_profile_picture',
                   'post', 'reel', 'twist', 'reason', 'status', 'created_at']
         read_only_fields = ['reporter', 'status']
+
+# --- 11. Saved Item Serializer ---
+
+class SavedItemSerializer(serializers.ModelSerializer):
+    post_details = PostSerializer(source='post', read_only=True)
+    reel_details = ReelSerializer(source='reel', read_only=True)
+    twist_details = TwistSerializer(source='twist', read_only=True)
+
+    class Meta:
+        model = SavedItem
+        fields = ['id', 'user', 'post', 'reel', 'twist', 'post_details', 'reel_details', 'twist_details', 'created_at']
+        read_only_fields = ['user']
 

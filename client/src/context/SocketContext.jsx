@@ -109,6 +109,16 @@ export const SocketProvider = ({ children }) => {
 
   const markAsRead = (id) => updateNotification(id, { is_read: true });
 
+  const markAllAsRead = async () => {
+    try {
+      await api.post('/notifications/read-all/');
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error("Failed to mark all notifications as read", e);
+    }
+  };
+
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
@@ -139,7 +149,7 @@ export const SocketProvider = ({ children }) => {
   };
 
   return (
-    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications, markAsRead, removeNotification, updateNotification }}>
+    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead, removeNotification, updateNotification }}>
       {children}
       <AnimatePresence>
         {toasts.length > 0 && (

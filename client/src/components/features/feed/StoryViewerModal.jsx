@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoCloseOutline, IoChevronBack, IoChevronForward, IoEyeOutline, IoTrashOutline, IoAddCircleOutline, IoMusicalNotes, IoHeart, IoHeartOutline, IoPaperPlaneOutline } from 'react-icons/io5';
+import { IoCloseOutline, IoChevronBack, IoChevronForward, IoEyeOutline, IoTrashOutline, IoAddCircleOutline, IoMusicalNotes, IoHeart, IoHeartOutline, IoPaperPlaneOutline, IoCheckmark } from 'react-icons/io5';
 import { registerView, deleteStory, likeStory } from '../../../api/storyApi';
 import { sendMessage } from '../../../api/chatApi';
 import { AuthContext } from '../../../context/AuthContext';
@@ -15,11 +15,11 @@ import Button from '../../common/Button';
 /**
  * Full-screen modal component to view stories in sequence (Instagram Style).
  */
-const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onStoriesViewed, onOpenCreatorModal }) => {
+const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, initialStoryIndex = 0, onStoriesViewed, onOpenCreatorModal }) => {
   const { user: currentUser } = useContext(AuthContext);
   const navigate = useNavigate();
   const [currentGroupIndex, setCurrentGroupIndex] = useState(initialGroupIndex);
-  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(initialStoryIndex);
   const [isPaused, setIsPaused] = useState(false);
   const [isMediaLoaded, setIsMediaLoaded] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -27,6 +27,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
   const [isLiked, setIsLiked] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [showSentFeedback, setShowSentFeedback] = useState(false);
 
   const currentGroup = storyGroups[currentGroupIndex];
   const currentStory = currentGroup?.stories[currentStoryIndex];
@@ -35,11 +36,22 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
 
   const isOwner = currentUser?.username === currentGroup?.username;
 
-  // Constants & Refs
   const STORY_DURATION_MS = 5000;
   const progressBarRefs = useRef([]);
   const timerRef = useRef(null);
-  const audioRef = useRef(null); // Reference for audio element
+  const audioRef = useRef(null);
+  const videoRef = useRef(null);
+
+  // Helper to determine if a story is a video
+  const isVideoStory = (story) => {
+    if (!story) return false;
+    // Prefer API media_type field (most reliable)
+    if (story.media_type === 'video') return true;
+    if (story.media_type === 'image') return false;
+    // Fallback: check URL extension
+    const url = story.media_file || '';
+    return /\.(mp4|mov|avi|webm|mkv|m4v|3gp)(\?|$)/i.test(url);
+  };
 
   // --- Reset on Open ---
   useEffect(() => {
@@ -101,12 +113,22 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
         audioRef.current.pause();
       }
 
+      // Pause Video if playing
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+
       return;
     }
 
     // Resume/Start Audio
     if (audioRef.current) {
       audioRef.current.play().catch(e => console.log("Audio play prevented", e));
+    }
+
+    // Resume/Start Video
+    if (videoRef.current) {
+      videoRef.current.play().catch(e => console.log("Video play prevented", e));
     }
 
     if (progressBarRefs.current[currentStoryIndex]) {
@@ -132,7 +154,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
     }
     if (index === currentStoryIndex) {
       return {
-        width: '100%',
+        width: isMediaLoaded ? '100%' : '0%',
         transition: isMediaLoaded ? `width ${(currentStory.duration || 5) * 1000}ms linear` : 'none',
         animationPlayState: isPaused ? 'paused' : 'running',
       };
@@ -179,14 +201,13 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
     try {
       await sendMessage(currentGroup.username, messageText, currentStory.id);
       setMessageText('');
-      // Optional: Show a toast or feedback
-      alert("Reply sent!");
+      setShowSentFeedback(true);
+      setTimeout(() => setShowSentFeedback(false), 2000);
     } catch (error) {
       console.error("Failed to send reply", error);
-      alert("Failed to send message.");
     } finally {
       setIsSending(false);
-      setIsPaused(false); // Resume story
+      // We don't resume here automatically so the user can see the feedback
     }
   };
 
@@ -292,7 +313,7 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
                   <div className='absolute'><Spinner size="lg" className='text-white' /></div>
                 )}
 
-                {/* Audio Element */}
+                {/* Audio Element (for music tracks) */}
                 {currentStory.music_file && (
                   <audio
                     ref={audioRef}
@@ -311,16 +332,17 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
                   transition={{ duration: 0.2 }}
                   className="w-full h-full flex items-center justify-center"
                 >
-                  {currentStory.media_file?.endsWith('.mp4') || currentStory.media_file?.endsWith('.mov') ? (
+                  {isVideoStory(currentStory) ? (
                     <video
+                      ref={videoRef}
                       src={currentStory.media_file}
-                      className={`max-w-full max-h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
+                      className={`w-full h-full object-contain ${isMediaLoaded ? '' : 'hidden'}`}
                       autoPlay
-                      muted={!!currentStory.music_file} // Mute video if external music is playing
+                      muted={!!currentStory.music_file}
                       playsInline
+                      loop
                       onLoadedData={() => setIsMediaLoaded(true)}
                       onError={() => setIsMediaLoaded(true)}
-                      loop
                     />
                   ) : (
                     <img
@@ -374,17 +396,23 @@ const StoryViewerModal = ({ isOpen, onClose, storyGroups, initialGroupIndex, onS
                         }}
                         type="text"
                         placeholder="Send Message"
-                        className="w-full rounded-full bg-white/20 px-4 py-3 pr-10 text-white placeholder-white/80 focus:outline-none backdrop-blur-sm border border-white/30 focus:bg-white/30 transition-all"
-                        disabled={isPaused}
+                        className="w-full rounded-full bg-white/10 px-4 py-3 pr-12 text-white placeholder-white/60 focus:outline-none backdrop-blur-md border border-white/20 focus:bg-white/20 focus:border-white/40 transition-all font-medium text-sm"
                         onFocus={() => setIsPaused(true)}
                         onBlur={() => setIsPaused(false)}
                       />
                       <button
                         onClick={handleSendMessage}
-                        disabled={!messageText.trim() || isSending}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 text-white p-2 rounded-full hover:bg-white/20 transition-colors ${!messageText.trim() && 'opacity-50 cursor-not-allowed'}`}
+                        disabled={(!messageText.trim() && !showSentFeedback) || isSending}
+                        className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-all flex items-center justify-center
+                          ${showSentFeedback ? 'bg-green-500 text-white' : 'text-white hover:bg-white/10'}`}
                       >
-                        {isSending ? <Spinner size="sm" className="text-white" /> : <IoPaperPlaneOutline size={20} />}
+                        {isSending ? (
+                          <Spinner size="xs" className="text-white" />
+                        ) : showSentFeedback ? (
+                          <IoCheckmark size={18} className="animate-in zoom-in duration-300" />
+                        ) : (
+                          <IoPaperPlaneOutline size={18} className={messageText.trim() ? 'text-indigo-400' : 'text-white/40'} />
+                        )}
                       </button>
                     </div>
                   </div>

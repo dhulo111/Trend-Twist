@@ -4,6 +4,7 @@ from django.urls import path, include # Added 'include' for the API grouping
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView # Re-added for session refresh
 from . import views
 from . import admin_views
+from . import views_subscription
 
 urlpatterns = [
     # ----------------------------------------------------------------------
@@ -100,6 +101,7 @@ urlpatterns = [
     path('stories/', views.StoryListCreateView.as_view(), name='story_list_create'),
     path('stories/<int:story_id>/view/', views.RegisterStoryView.as_view(), name='register_story_view'),
     path('stories/<int:pk>/', views.StoryDetailDeleteView.as_view(), name='story_delete'),
+    path('stories/archive/', views.StoryArchiveView.as_view(), name='story_archive'),
     path('stories/user/<int:user_id>/', views.UserStoryListView.as_view(), name='user_story_list'),
     path('stories/<int:pk>/like/', views.StoryLikeToggleView.as_view(), name='story_like_toggle'),
     path('messages/send/', views.SendMessageView.as_view(), name='send_message'),
@@ -121,8 +123,11 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     # 6. NOTIFICATIONS & REPORTS
     # ----------------------------------------------------------------------
     path('notifications/', views.NotificationListView.as_view(), name='notification_list'),
+    path('notifications/read-all/', views.MarkAllNotificationsReadView.as_view(), name='mark_all_unread'),
     path('notifications/<int:pk>/<str:action>/', views.NotificationActionView.as_view(), name='notification_action'),
     path('reports/', views.ReportCreateView.as_view(), name='report_create'),
+    path('save/', views.SaveToggleView.as_view(), name='save_toggle'),
+    path('saved/', views.SavedItemsListView.as_view(), name='saved_list'),
 
     # ----------------------------------------------------------------------
     # 7. ADMIN ENDPOINTS
@@ -141,6 +146,25 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('admin/users/<int:user_id>/block/', admin_views.AdminUserBlockView.as_view(), name='admin_user_block'),
     path('admin/blocks/', admin_views.AdminBlockedUserListView.as_view(), name='admin_blocked_users'),
     path('admin/users/<int:user_id>/unblock/', admin_views.AdminUserUnblockView.as_view(), name='admin_user_unblock'),
+    path('admin/subscriptions/', admin_views.AdminSubscriptionListView.as_view(), name='admin_subscriptions'),
+
+    # ------------------------------------------------------------------
+    # Subscriptions & Monetization
+    # ------------------------------------------------------------------
+    path('creators/me/earnings/', views_subscription.MyCreatorEarningsView.as_view(), name='my_creator_earnings'),
+    path('subscriptions/verify/', views_subscription.VerifySubscriptionView.as_view(), name='verify_subscription'),
+    path('subscriptions/checkout/', views_subscription.CreateCheckoutSessionView.as_view(), name='create_checkout_session'),
+    path('subscriptions/webhook/', views_subscription.StripeWebhookView.as_view(), name='stripe_webhook'),
+    path('subscriptions/me/', views_subscription.MySubscriptionsView.as_view(), name='my_subscriptions'),
+    path('subscriptions/portal/', views_subscription.CreateBillingPortalSessionView.as_view(), name='subscription_portal'),
+    path('subscriptions/global-plans/', views_subscription.GlobalPlansView.as_view(), name='global_plans'),
+    # Admin Revenue & Payouts & Plans
+    path('admin/global-plans/', views_subscription.AdminGlobalPlansView.as_view(), name='admin_global_plans'),
+    # Admin Revenue & Payouts
+    path('admin/earnings/', views_subscription.AdminEarningsView.as_view(), name='admin_earnings'),
+    path('subscriptions/debug-stats/', views_subscription.DebugStatsView.as_view(), name='debug_stats'),
+    path('subscriptions/peek/', views_subscription.PeekSessionView.as_view(), name='peek_session'),
+    path('admin/creators/<int:creator_id>/payout/', views_subscription.AdminCreatorPayoutView.as_view(), name='admin_creator_payout'),
 
     # ------------------------------------------------------------------
     # 8. KEEP-ALIVE (prevents Render free-tier cold starts)

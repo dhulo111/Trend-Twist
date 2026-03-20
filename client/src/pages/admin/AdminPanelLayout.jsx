@@ -15,7 +15,9 @@ import {
   CheckCircle,
   AlertCircle,
   ShieldAlert,
-  Ban
+  Ban,
+  Award,
+  IndianRupee
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import AdminUsers from './AdminUsers';
@@ -24,6 +26,8 @@ import AdminReels from './AdminReels';
 import AdminTwists from './AdminTwists';
 import AdminReports from './AdminReports';
 import AdminBlockedUsers from './AdminBlockedUsers';
+import AdminSubscriptions from './AdminSubscriptions';
+import AdminEarnings from './AdminEarnings';
 
 // Simulated API base (adjust as needed to match your Django config)
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -75,6 +79,8 @@ const AdminPanelLayout = () => {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
     { name: 'Reports & Blocks', icon: ShieldAlert, path: '/admin/reports' },
     { name: 'Blocked Users', icon: Ban, path: '/admin/blocks' },
+    { name: 'Subscriptions', icon: Award, path: '/admin/subscriptions' },
+    { name: 'Revenue & Payouts', icon: IndianRupee, path: '/admin/earnings' },
     { name: 'Users & Profiles', icon: Users, path: '/admin/users' },
     { name: 'Posts & Media', icon: ImageIcon, path: '/admin/posts' },
     { name: 'Twists', icon: MessageSquare, path: '/admin/twists' },
@@ -171,6 +177,8 @@ const AdminPanelLayout = () => {
             <Route path="reels" element={<AdminReels />} />
             <Route path="twists" element={<AdminTwists />} />
             <Route path="blocks" element={<AdminBlockedUsers />} />
+            <Route path="subscriptions" element={<AdminSubscriptions />} />
+            <Route path="earnings" element={<AdminEarnings />} />
             {/* Add more routes here */}
           </Routes>
         </div>

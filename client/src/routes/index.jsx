@@ -14,6 +14,7 @@ import PostDetailPage from '../pages/PostDetailPage';
 import TwistDetailPage from '../pages/TwistDetailPage';
 import SettingsPage from '../pages/SettingsPage';
 import EditProfilePage from '../pages/EditProfilePage';
+import SubscriptionPage from '../pages/SubscriptionPage';
 
 import MessagesPage from '../pages/MessagesPage'; // For Live Chat Inbox
 
@@ -23,6 +24,7 @@ import StoryCreatePage from '../pages/StoryCreatePage'; // Full page for story c
 import SearchPage from '../pages/SearchPage'; // Full page for User Search
 import ReelsPage from '../pages/ReelsPage';
 import ReelCreatePage from '../pages/ReelCreatePage';
+import PaymentSuccessPage from '../pages/PaymentSuccessPage';
 
 // --- Import Unprotected Pages ---
 import LoginPage from '../pages/LoginPage';
@@ -64,6 +66,8 @@ const AppRoutes = () => {
 
         {/* --- User/Profile Pages --- */}
         <Route path="profile/:username" element={<ProfilePage />} />
+        <Route path="profile/:username/subscribe" element={<SubscriptionPage />} />
+        <Route path="success" element={<PaymentSuccessPage />} />
         <Route path="requests" element={<RequestsPage />} />
 
         {/* --- Content Details --- */}

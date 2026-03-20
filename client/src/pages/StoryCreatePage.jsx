@@ -6,7 +6,7 @@ import { createStory } from '../api/storyApi';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import FabricStoryEditor from '../components/features/feed/StoryEditorPanel';
-import { IoArrowBackOutline, IoCameraOutline, IoCloseOutline } from 'react-icons/io5';
+import { IoArrowBackOutline, IoCameraOutline, IoCloseOutline, IoVideocamOutline, IoImageOutline } from 'react-icons/io5';
 
 // Mock Data for Music System
 const MOCK_MUSIC_TRACKS = [
@@ -32,11 +32,16 @@ const StoryCreatePage = () => {
     setError(null);
   };
 
+  const isVideo = mediaFile?.type?.startsWith('video/');
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 50 * 1024 * 1024) {
-        setError('File is too large (max 50MB).');
+      const isVideoFile = file.type.startsWith('video/');
+      const maxSize = isVideoFile ? 200 * 1024 * 1024 : 50 * 1024 * 1024;
+      const maxLabel = isVideoFile ? '200MB' : '50MB';
+      if (file.size > maxSize) {
+        setError(`File is too large (max ${maxLabel} for ${isVideoFile ? 'videos' : 'images'}).`);
         return;
       }
       setMediaFile(file);
@@ -44,9 +49,9 @@ const StoryCreatePage = () => {
     }
   };
 
-  const handlePublish = async (editedFile, editorJson, storyDuration) => {
-    // If we have an edited file from the editor (which we should), use it. 
-    // Otherwise fallback to original (safe-guard).
+  const handlePublish = async (editedFile, editorJson, storyDuration, isVideo = false) => {
+    // For video stories: use original video file
+    // For image stories: use the canvas-exported PNG
     const fileToUpload = editedFile || mediaFile;
 
     if (!fileToUpload || loading) return;
@@ -58,21 +63,22 @@ const StoryCreatePage = () => {
       const formData = new FormData();
       formData.append('media_file', fileToUpload);
 
+      // Append media_type so backend knows what kind of media this is
+      formData.append('media_type', isVideo ? 'video' : 'image');
+
       let finalCaption = 'Shared a new moment!';
       if (selectedMusic) {
         finalCaption += ` [Music: ${selectedMusic.title}]`;
       }
       formData.append('caption', finalCaption);
 
-      // --- Append New Features ---
+      // --- Append Music ---
       if (selectedMusic) {
         formData.append('music_title', selectedMusic.title);
-        // If we have a preview URL, try to fetch it and append as file
         if (selectedMusic.previewUrl) {
           try {
             const musicRes = await fetch(selectedMusic.previewUrl);
             const musicBlob = await musicRes.blob();
-            // Create a file from blob
             const musicFile = new File([musicBlob], `music_${Date.now()}.m4a`, { type: 'audio/mp4' });
             formData.append('music_file', musicFile);
           } catch (e) {
@@ -85,7 +91,6 @@ const StoryCreatePage = () => {
         formData.append('editor_json', JSON.stringify(editorJson));
       }
 
-      // Add duration if present
       if (storyDuration) {
         formData.append('duration', storyDuration);
       }
@@ -160,12 +165,24 @@ const StoryCreatePage = () => {
 
         {/* Step 1: Media Selection */}
         {step === 1 && (
-          <div className="w-full max-w-md flex flex-col items-center p-12 space-y-5 rounded-3xl border-2 border-dashed border-border/70 bg-background-secondary/50 my-12 hover:bg-background-secondary transition-colors">
-            <div className="h-24 w-24 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-500 mb-4">
-              <IoCameraOutline className="h-12 w-12" />
+          <div className="w-full max-w-md flex flex-col items-center p-10 space-y-6 rounded-3xl border-2 border-dashed border-border/70 bg-background-secondary/50 my-12 hover:bg-background-secondary transition-colors">
+            {/* Media type icons */}
+            <div className="flex gap-4 mb-2">
+              <div className="h-20 w-20 bg-indigo-500/10 rounded-2xl flex flex-col items-center justify-center text-indigo-400 border border-indigo-500/20">
+                <IoImageOutline className="h-8 w-8" />
+                <span className="text-xs font-bold mt-1 uppercase tracking-wider">Photo</span>
+              </div>
+              <div className="h-20 w-20 bg-purple-500/10 rounded-2xl flex flex-col items-center justify-center text-purple-400 border border-purple-500/20">
+                <IoVideocamOutline className="h-8 w-8" />
+                <span className="text-xs font-bold mt-1 uppercase tracking-wider">Video</span>
+              </div>
             </div>
             <h2 className='text-2xl font-bold text-text-primary'>Create a Story</h2>
-            <p className='text-text-secondary text-center max-w-xs'>Share your moments with friends. Photos and videos are supported.</p>
+            <p className='text-text-secondary text-center max-w-xs text-sm leading-relaxed'>
+              Share your moments with friends.<br />
+              <span className="text-indigo-400 font-semibold">Photos</span> (up to 50MB) and{' '}
+              <span className="text-purple-400 font-semibold">Videos</span> (up to 200MB) are supported.
+            </p>
             <Button
               onClick={() => fileInputRef.current.click()}
               disabled={loading}
@@ -176,13 +193,13 @@ const StoryCreatePage = () => {
           </div>
         )}
 
-        {/* Step 2: Editing */}
         {step === 2 && (
           <FabricStoryEditor
             mediaFile={mediaFile}
             selectedMusic={selectedMusic}
             setSelectedMusic={setSelectedMusic}
             onPublish={handlePublish}
+            isPublishing={loading}
           />
         )}
       </div>

@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 
 # Import JWT tokens
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -24,7 +25,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
-    Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike, ChatGroup
+    Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike, ChatGroup,
+    SavedItem
 )
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -35,7 +37,7 @@ from .serializers import (
     OTPRequestSerializer, OTPVerifySerializer, CompleteRegistrationSerializer,
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
     ReelSerializer, ReelCommentSerializer, TwistCommentSerializer, ChatGroupSerializer,
-    NotificationSerializer # NEW
+    NotificationSerializer, SavedItemSerializer, has_subscription_access
 )
 from channels.db import database_sync_to_async
 # --- Permissions ---
@@ -419,9 +421,22 @@ class UserPostListView(generics.ListAPIView):
     
     def get_queryset(self):
         user_id = self.kwargs['user_id']
+        requesting_user = self.request.user
         
-        # We fetch all posts made by the specified user
-        return Post.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        # Base queryset
+        queryset = Post.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now())
+        
+        # Check if the requesting user has access to exclusive content
+        try:
+            target_author = User.objects.get(id=user_id)
+            can_see_exclusive = has_subscription_access(requesting_user, target_author)
+        except User.DoesNotExist:
+            can_see_exclusive = False
+            
+        if not can_see_exclusive:
+            queryset = queryset.filter(is_exclusive=False)
+            
+        return queryset.order_by('-created_at')
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -708,18 +723,12 @@ class SendMessageView(APIView):
                 channel_layer = get_channel_layer()
                 room_group_name = f'chat_group_{group.id}'
 
+                msg_data = ChatMessageSerializer(msg, context={'request': request}).data
                 async_to_sync(channel_layer.group_send)(
                     room_group_name,
                     {
                         'type': 'chat_message',
-                        'id': msg.id,
-                        'content': msg.content,
-                        'author': request.user.id,
-                        'author_username': request.user.username,
-                        'timestamp': msg.timestamp.isoformat(),
-                        'is_read': False,
-                        # Pass group_id so client knows where to put it
-                        'group_id': group.id
+                        **msg_data
                     }
                 )
 
@@ -773,16 +782,12 @@ class SendMessageView(APIView):
             room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
             room_group_name = f'chat_{room_name}'
 
+            msg_data = ChatMessageSerializer(msg, context={'request': request}).data
             async_to_sync(channel_layer.group_send)(
                 room_group_name,
                 {
                     'type': 'chat_message',
-                    'id': msg.id,
-                    'content': msg.content,
-                    'author': request.user.id,
-                    'author_username': request.user.username,
-                    'timestamp': msg.timestamp.isoformat(),
-                    'is_read': False
+                    **msg_data
                 }
             )
 
@@ -827,7 +832,20 @@ class PostListCreateView(generics.ListCreateAPIView):
         following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
         following_users = list(following_users) + [user.id]
 
-        queryset = Post.objects.filter(author_id__in=following_users).exclude(author__profile__blocked_until__gt=timezone.now())
+        # EXCLUDE exclusive posts from the main feed UNLESS the user is the author or a subscriber
+        # Get users I am subscribed to
+        from .models import UserSubscription
+        subscribed_to_ids = UserSubscription.objects.filter(
+            subscriber=user, status='active'
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gt=timezone.now())
+        ).values_list('creator_id', flat=True)
+
+        queryset = Post.objects.filter(author_id__in=following_users).exclude(
+            author__profile__blocked_until__gt=timezone.now()
+        ).filter(
+            Q(is_exclusive=False) | Q(author=user) | Q(author_id__in=subscribed_to_ids)
+        )
 
         # Basic text search support for main feed
         if search_query:
@@ -850,7 +868,8 @@ class PublicPostListView(generics.ListAPIView):
     
     def get_queryset(self):
         tag = self.request.query_params.get('tag', None)
-        queryset = Post.objects.filter(author__profile__is_private=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        # Exclude exclusive posts from public feed
+        queryset = Post.objects.filter(author__profile__is_private=False, is_exclusive=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
         
         if tag:
             # Filter by hashtag (naive text search for now, ideally use Hashtag model relations)
@@ -960,12 +979,23 @@ class TwistListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        # Similar feed logic to Posts: Following + Self
         user = self.request.user
-        following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
-        following_users = list(following_users) + [user.id]
+        following_users = list(Follow.objects.filter(follower=user).values_list('following_id', flat=True))
+        following_users.append(user.id) # Include self in the twist feed
 
-        return Twist.objects.filter(author_id__in=following_users).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        # Exclude exclusive twists from the main twist feed UNLESS the user is the author or a subscriber
+        from .models import UserSubscription
+        subscribed_to_ids = UserSubscription.objects.filter(
+            subscriber=user, status='active'
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gt=timezone.now())
+        ).values_list('creator_id', flat=True)
+
+        return Twist.objects.filter(author_id__in=following_users).exclude(
+            author__profile__blocked_until__gt=timezone.now()
+        ).filter(
+            Q(is_exclusive=False) | Q(author=user) | Q(author_id__in=subscribed_to_ids)
+        ).order_by('-created_at')
 
     def perform_create(self, serializer): serializer.save(author=self.request.user)
     def get_serializer_context(self): return {'request': self.request}
@@ -1027,7 +1057,8 @@ class PublicTwistListView(generics.ListAPIView):
         # All public twists (no check for private profile logic yet since Twist model doesn't have it explicitly, 
         # but we can assume author.profile.is_private. Let's add that check.)
         
-        queryset = Twist.objects.filter(author__profile__is_private=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        # Exclude exclusive twists from public feed
+        queryset = Twist.objects.filter(author__profile__is_private=False, is_exclusive=False).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
         
         if tag:
             queryset = queryset.filter(content__icontains=f"#{tag}")
@@ -1043,8 +1074,22 @@ class UserTwistListView(generics.ListAPIView):
     
     def get_queryset(self):
         user_id = self.kwargs['user_id']
-        # Add basic privacy check hook here later if needed
-        return Twist.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        requesting_user = self.request.user
+        
+        # Base queryset
+        queryset = Twist.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now())
+        
+        # Check if the requesting user has access to exclusive content
+        try:
+            target_author = User.objects.get(id=user_id)
+            can_see_exclusive = has_subscription_access(requesting_user, target_author)
+        except User.DoesNotExist:
+            can_see_exclusive = False
+            
+        if not can_see_exclusive:
+            queryset = queryset.filter(is_exclusive=False)
+            
+        return queryset.order_by('-created_at')
     
     
     def get_serializer_context(self): return {'request': self.request}
@@ -1095,7 +1140,37 @@ class StoryListCreateView(generics.ListCreateAPIView):
         following_ids.append(user.id)
         return Story.objects.filter(author_id__in=following_ids, expires_at__gt=timezone.now()).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
 
-    def perform_create(self, serializer): serializer.save(author=self.request.user)
+    def perform_create(self, serializer):
+        # Use frontend-provided media_type if valid, otherwise auto-detect from file MIME type
+        provided_type = self.request.data.get('media_type', '').strip().lower()
+        media_file = self.request.FILES.get('media_file')
+        
+        if provided_type in ('image', 'video'):
+            # Trust the frontend but verify with MIME type as final authority
+            media_type = provided_type
+        else:
+            # Auto-detect from MIME type
+            media_type = 'image'
+            if media_file:
+                content_type = getattr(media_file, 'content_type', '') or ''
+                if content_type.startswith('video/'):
+                    media_type = 'video'
+                elif media_file.name:
+                    video_exts = ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp')
+                    if media_file.name.lower().endswith(video_exts):
+                        media_type = 'video'
+        
+        # Final MIME-type override (security: ensure claimed type matches actual file)
+        if media_file:
+            content_type = getattr(media_file, 'content_type', '') or ''
+            if content_type.startswith('video/'):
+                media_type = 'video'
+            elif content_type.startswith('image/'):
+                media_type = 'image'
+        
+        serializer.save(author=self.request.user, media_type=media_type)
+
+
     def get_serializer_context(self): return {'request': self.request}
 
 
@@ -1147,6 +1222,21 @@ class StoryLikeToggleView(APIView):
         return Response({"status": "liked"}, status=status.HTTP_201_CREATED)
 
     
+class StoryArchiveView(generics.ListAPIView):
+    """
+    GET /api/stories/archive/
+    Returns all stories created by the current user, including expired ones.
+    Used for story history/archive.
+    """
+    serializer_class = StorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Story.objects.filter(author=self.request.user).order_by('-created_at')
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
 class StoryAnalyticsView(generics.ListAPIView):
     """
     GET /api/stories/<story_id>/analytics/
@@ -1180,9 +1270,9 @@ class StoryAnalyticsView(generics.ListAPIView):
         # and create a dedicated ViewerSerializer later if needed.
         # For now, let's return the VIEWERS (User objects) directly from the view records.
         
-        # HACK: We will use a standard method to get the list of viewer User objects
-        viewer_ids = view_records.values_list('user_id', flat=True)
-        return User.objects.filter(id__in=viewer_ids).order_by('-storyview__viewed_at')
+        # 2. Return User objects who have viewed this story, ordered by view time
+        # We filter by the specific story to ensure the join only brings in the relevant view time
+        return User.objects.filter(storyview__story=story).distinct().order_by('-storyview__viewed_at')
         
     # We override the serializer_class just to list the users, 
     # but we'll return the raw User data which is simple.
@@ -1275,14 +1365,27 @@ class ReelListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        # Filter out reels from private accounts unless following
         user = self.request.user
-        public_reels = Reel.objects.filter(author__profile__is_private=False)
-        following_ids = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
-        followed_reels = Reel.objects.filter(author_id__in=following_ids)
-        my_reels = Reel.objects.filter(author=user)
+        following_ids = list(Follow.objects.filter(follower=user).values_list('following_id', flat=True))
         
-        return (public_reels | followed_reels | my_reels).filter(is_draft=False).exclude(author__profile__blocked_until__gt=timezone.now()).distinct().order_by('?')
+        # Exclusive check logic: I see my own, or I see if subscribed, or I see if PUBLIC and NOT EXCLUSIVE
+        from .models import UserSubscription
+        subscribed_to_ids = UserSubscription.objects.filter(
+            subscriber=user, status='active'
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gt=timezone.now())
+        ).values_list('creator_id', flat=True)
+
+        # Base filters
+        is_mine = Q(author=user)
+        is_not_exclusive = Q(is_exclusive=False)
+        is_subscribed = Q(author_id__in=subscribed_to_ids)
+
+        return Reel.objects.filter(
+            (is_not_exclusive & (Q(author__profile__is_private=False) | Q(author_id__in=following_ids))) | 
+            is_mine | 
+            is_subscribed
+        ).filter(is_draft=False).exclude(author__profile__blocked_until__gt=timezone.now()).distinct().order_by('?')
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -1303,7 +1406,22 @@ class UserReelListView(generics.ListAPIView):
     
     def get_queryset(self):
         user_id = self.kwargs['user_id']
-        return Reel.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        requesting_user = self.request.user
+        
+        # Base queryset
+        queryset = Reel.objects.filter(author_id=user_id).exclude(author__profile__blocked_until__gt=timezone.now())
+        
+        # Check if the requesting user has access to exclusive content
+        try:
+            target_author = User.objects.get(id=user_id)
+            can_see_exclusive = has_subscription_access(requesting_user, target_author)
+        except User.DoesNotExist:
+            can_see_exclusive = False
+            
+        if not can_see_exclusive:
+            queryset = queryset.filter(is_exclusive=False)
+            
+        return queryset.order_by('-created_at')
         
     def get_serializer_context(self): return {'request': self.request}
 
@@ -1481,19 +1599,15 @@ class NotificationActionView(APIView):
             notification.is_read = True
             notification.save()
             return Response({"status": "read"}, status=status.HTTP_200_OK)
-        
-        # Actions for Follow Requests
+                # Actions for Follow Requests
         elif action in ['accept_follow', 'reject_follow']:
-            # Handle case where FollowRequest is already deleted/processed
             follow_req = notification.follow_request_ref
             
             if not follow_req:
-                # If Request is missing, check if they are already following
                 is_following = Follow.objects.filter(follower=notification.sender, following=notification.recipient).exists()
                 
                 if action == 'accept_follow':
                     if is_following:
-                         # Already accepted
                          notification.is_read = True
                          notification.notification_type = 'req_approved'
                          notification.save()
@@ -1502,7 +1616,6 @@ class NotificationActionView(APIView):
                          return Response({"error": "Follow request no longer exists."}, status=status.HTTP_404_NOT_FOUND)
 
                 elif action == 'reject_follow':
-                    # If rejecting and it's gone, consider it done
                     notification.is_read = True
                     notification.notification_type = 'req_rejected'
                     notification.save()
@@ -1525,7 +1638,7 @@ class NotificationActionView(APIView):
                         notification_type='follow_accept'
                     )
                 except Exception:
-                    pass # Ignore if notification fails
+                    pass 
                 
                 # BROADCAST UPDATE
                 try:
@@ -1578,6 +1691,18 @@ class NotificationActionView(APIView):
                 return Response({"status": "follow_rejected"}, status=status.HTTP_200_OK)
 
         return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
+
+class MarkAllNotificationsReadView(APIView):
+    """POST /api/notifications/read-all/ - Mark all unread notifications as read."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Update all notifications for the user
+        unread_notifications = Notification.objects.filter(recipient=request.user, is_read=False)
+        count = unread_notifications.count()
+        unread_notifications.update(is_read=True)
+        return Response({"status": "all_read", "marked_count": count}, status=status.HTTP_200_OK)
+
 
 class ShareReelView(APIView):
     """
@@ -1816,6 +1941,64 @@ class ReportCreateView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# --- 11. SAVED ITEMS SYSTEM ---
+
+class SaveToggleView(APIView):
+    """
+    POST /api/save/
+    Body: { "type": "post"|"reel"|"twist", "id": 123 }
+    Toggles saving an item.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        item_type = request.data.get('type')
+        item_id = request.data.get('id')
+        
+        if not item_type or not item_id:
+            return Response({"error": "Type and item ID are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        filters = {'user': request.user}
+        if item_type == 'post':
+            filters['post_id'] = item_id
+        elif item_type == 'reel':
+            filters['reel_id'] = item_id
+        elif item_type == 'twist':
+            filters['twist_id'] = item_id
+        else:
+            return Response({"error": "Invalid item type."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        saved_item = SavedItem.objects.filter(**filters).first()
+        if saved_item:
+            saved_item.delete()
+            return Response({"status": "unsaved"}, status=status.HTTP_200_OK)
+        else:
+            SavedItem.objects.create(**filters)
+            return Response({"status": "saved"}, status=status.HTTP_201_CREATED)
+
+class SavedItemsListView(generics.ListAPIView):
+    """
+    GET /api/saved/?type=post
+    Lists all saved items for the current user, optionally filtered by type.
+    """
+    serializer_class = SavedItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        item_type = self.request.query_params.get('type')
+        queryset = SavedItem.objects.filter(user=self.request.user)
+        
+        if item_type == 'post':
+            queryset = queryset.filter(post__isnull=False)
+        elif item_type == 'reel':
+            queryset = queryset.filter(reel__isnull=False)
+        elif item_type == 'twist':
+            queryset = queryset.filter(twist__isnull=False)
+            
+        return queryset.order_by('-created_at')
+
+    def get_serializer_context(self):
+        return {'request': self.request}
 
 # ----------------------------------------------------------------------
 # KEEP-ALIVE ENDPOINT (Prevents Render free-tier cold starts)

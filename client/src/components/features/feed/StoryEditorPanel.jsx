@@ -22,7 +22,10 @@ import {
   IoFlash,
   IoLayers,
   IoGridOutline,
-  IoChevronDown
+  IoChevronDown,
+  IoVideocamOutline,
+  IoVolumeHighOutline,
+  IoVolumeMuteOutline,
 } from "react-icons/io5";
 
 // --- Constants & Assets ---
@@ -38,17 +41,17 @@ const EDITOR_FONTS = [
 const STICKERS = ["❤️", "🔥", "😂", "⭐", "✨", "💯", "😍", "👍", "🎉", "🍕", "🍔", "🎵", "📍", "👋", "🚀", "💡", "🌈", "🦋"];
 
 const COLORS = [
-  "#ffffff", // White
-  "#000000", // Black
-  "#ef4444", // Red
-  "#f97316", // Orange
-  "#eab308", // Yellow
-  "#22c55e", // Green
-  "#06b6d4", // Cyan
-  "#3b82f6", // Blue
-  "#8b5cf6", // Violet
-  "#d946ef", // Fuchsia
-  "#f43f5e", // Rose
+  "#ffffff",
+  "#000000",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#d946ef",
+  "#f43f5e",
 ];
 
 const GRADIENTS = [
@@ -91,17 +94,23 @@ const ToolbarContainer = ({ children, className }) => (
 
 // --- Main Component ---
 
-const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPublish }) => {
+const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPublish, isPublishing }) => {
   const wrapperRef = useRef(null);
   const canvasRef = useRef(null);
   const audioRef = useRef(new Audio());
+  const videoPreviewRef = useRef(null);
   const [ready, setReady] = useState(false);
+
+  // Detect if file is video
+  const isVideo = mediaFile?.type?.startsWith("video/");
 
   // Tools
   const [activeTool, setActiveTool] = useState("none");
   const [musicStep, setMusicStep] = useState("search");
   const [musicTheme, setMusicTheme] = useState("card");
   const [storyDuration, setStoryDuration] = useState(15);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(null);
 
   const [textOptions, setTextOptions] = useState({
     font: "Inter", color: "#ffffff", bgColor: "transparent", stroke: false, neon: false, align: "center",
@@ -121,6 +130,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   const overlayInputRef = useRef(null);
   const [mediaURL] = useState(mediaFile ? URL.createObjectURL(mediaFile) : null);
 
+  // Initialize Fabric Canvas
   useEffect(() => {
     if (!wrapperRef.current) return;
     const initW = 360;
@@ -128,7 +138,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     const c = new fabric.Canvas("fabric-canvas", {
       width: initW, height: initH,
       preserveObjectStacking: true,
-      backgroundColor: "#1a1a1a",
+      backgroundColor: isVideo ? "transparent" : "#1a1a1a",
       selectionColor: "rgba(255, 255, 255, 0.1)",
       selectionBorderColor: "rgba(255, 255, 255, 0.3)",
       selectionLineWidth: 1,
@@ -205,57 +215,43 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     };
   }, [ready, pushHistorySnapshot]);
 
+  // Load image background into fabric canvas (only for images)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c || !mediaFile) return;
-    c.setBackgroundImage(null, c.renderAll.bind(c));
-    c.getObjects().forEach(o => { if (o._isVideoBackground) c.remove(o); });
-    if (mediaFile.type.startsWith("image")) {
-      fabric.Image.fromURL(mediaURL, (img) => {
-        if (!img) return;
-        const scale = Math.max(c.getWidth() / img.width, c.getHeight() / img.height);
-        img.set({
-          originX: 'left', originY: 'top',
-          left: (c.getWidth() - img.width * scale) / 2,
-          top: (c.getHeight() - img.height * scale) / 2,
-          scaleX: scale, scaleY: scale,
-          selectable: false, evented: false,
-        });
-        c.setBackgroundImage(img, c.renderAll.bind(c));
-        pushHistorySnapshot(c);
-      }, { crossOrigin: 'anonymous' });
-    } else if (mediaFile.type.startsWith("video")) {
-      const videoEl = document.createElement("video");
-      videoEl.src = mediaURL;
-      videoEl.autoplay = true;
-      videoEl.loop = true;
-      videoEl.muted = true;
-      videoEl.playsInline = true;
-      videoEl.crossOrigin = "anonymous";
-      const onVideoLoad = () => {
-        const vObj = new fabric.Image(videoEl, { left: 0, top: 0, selectable: false, evented: false });
-        const scale = Math.max(c.getWidth() / videoEl.videoWidth, c.getHeight() / videoEl.videoHeight);
-        vObj.scale(scale);
-        vObj.set({
-          left: (c.getWidth() - vObj.width * scale) / 2,
-          top: (c.getHeight() - vObj.height * scale) / 2,
-        });
-        vObj._isVideoBackground = true;
-        c.add(vObj);
-        c.sendToBack(vObj);
-        const animate = () => {
-          if (canvasRef.current) {
-            c.renderAll();
-            fabric.util.requestAnimFrame(animate);
-          }
-        };
-        animate();
-        pushHistorySnapshot(c);
-      };
-      if (videoEl.readyState >= 2) onVideoLoad();
-      else videoEl.onloadeddata = onVideoLoad;
+
+    if (isVideo) {
+      // For video: make canvas transparent — video shows as HTML element underneath
+      c.setBackgroundImage(null, c.renderAll.bind(c));
+      c.setBackgroundColor("transparent", c.renderAll.bind(c));
+      return;
     }
-  }, [mediaFile, mediaURL, ready, pushHistorySnapshot]);
+
+    // For images: load into canvas as background
+    c.setBackgroundImage(null, c.renderAll.bind(c));
+    fabric.Image.fromURL(mediaURL, (img) => {
+      if (!img) return;
+      const scale = Math.max(c.getWidth() / img.width, c.getHeight() / img.height);
+      img.set({
+        originX: 'left', originY: 'top',
+        left: (c.getWidth() - img.width * scale) / 2,
+        top: (c.getHeight() - img.height * scale) / 2,
+        scaleX: scale, scaleY: scale,
+        selectable: false, evented: false,
+      });
+      c.setBackgroundImage(img, c.renderAll.bind(c));
+      pushHistorySnapshot(c);
+    }, { crossOrigin: 'anonymous' });
+  }, [mediaFile, mediaURL, ready, pushHistorySnapshot, isVideo]);
+
+  // When video loads, read its actual duration
+  const handleVideoLoaded = (e) => {
+    const duration = Math.ceil(e.target.duration);
+    if (duration && isFinite(duration)) {
+      setVideoDuration(duration);
+      setStoryDuration(Math.min(duration, 60)); // Cap at 60s
+    }
+  };
 
   const handleOverlayFile = (e) => {
     const file = e.target.files?.[0];
@@ -298,14 +294,11 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     audio.volume = 0.5;
     audio.loop = true;
     audio.play().catch(e => console.log("Autoplay prevented:", e));
-    // Removed addMusicStickerToCanvas(track); - Now added after confirmation
-    // setActiveTool('none'); - Wait for crop step
   };
 
   const addMusicStickerToCanvas = (track, theme) => {
     const c = canvasRef.current;
     if (!c || theme === 'hidden') {
-      // If hidden, remove existing if any
       c?.getObjects().forEach(o => { if (o.id === 'music-tag') c.remove(o); });
       return;
     }
@@ -454,7 +447,6 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     });
     c.add(text);
     c.setActiveObject(text);
-    // REMOVED setActiveTool("none"); to allow multiple stickers
     pushHistorySnapshot(c);
   };
 
@@ -484,6 +476,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   };
 
   const setGradientBackground = (gradient) => {
+    if (isVideo) return; // No gradient BG for video stories
     const c = canvasRef.current;
     if (!c) return;
     c.setBackgroundImage(null, c.renderAll.bind(c));
@@ -502,6 +495,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   };
 
   const applyFilter = (type) => {
+    if (isVideo) return; // Filters not supported for video in canvas
     const c = canvasRef.current;
     if (!c) return;
     const bg = c.backgroundImage;
@@ -568,14 +562,21 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     c.discardActiveObject();
     c.renderAll();
 
-    // Get JSON
+    // Get canvas JSON (for text/sticker overlays)
     const json = c.toJSON(["selectable", "evented", "_isBackground", "_isVideoBackground", "id", "stroke", "strokeWidth", "shadow"]);
 
-    const dataUrl = c.toDataURL({ format: 'png', quality: 0.85, multiplier: 2 });
-    fetch(dataUrl).then(res => res.blob()).then(blob => {
-      const file = new File([blob], "story-edited.png", { type: "image/png" });
-      if (onPublish) onPublish(file, json, storyDuration);
-    });
+    if (isVideo) {
+      // For video stories: send the original video file directly
+      // Canvas is only used for overlays (text, stickers) stored in editor_json
+      if (onPublish) onPublish(mediaFile, json, storyDuration, true /* isVideo */);
+    } else {
+      // For image stories: export canvas as PNG (includes background + overlays)
+      const dataUrl = c.toDataURL({ format: 'png', quality: 0.85, multiplier: 2 });
+      fetch(dataUrl).then(res => res.blob()).then(blob => {
+        const file = new File([blob], "story-edited.png", { type: "image/png" });
+        if (onPublish) onPublish(file, json, storyDuration, false /* isImage */);
+      });
+    }
   };
 
   const renderTextToolbar = () => (
@@ -673,28 +674,37 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   );
 
   const renderFilterToolbar = () => (
-    <div className="absolute bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-2 z-50">
-      {FILTER_TYPES.map(f => (
-        <button
-          key={f}
-          onClick={() => applyFilter(f)}
-          className={`flex-shrink-0 w-20 h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-xl' : 'border-white/20'}`}
-        >
-          <div className="w-full h-full bg-gray-800 flex items-center justify-center relative">
-            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${mediaURL})`, opacity: 0.8 }}></div>
-            <div className={`absolute inset-0 ${f === 'vintage' ? 'bg-amber-500/30 sepia contrast-125' :
-              f === 'bw' ? 'grayscale contrast-125' :
-                f === 'warm' ? 'bg-orange-500/20 mix-blend-overlay' :
-                  f === 'cool' ? 'bg-blue-500/20 mix-blend-overlay' :
-                    'bg-transparent'
-              }`}></div>
-          </div>
-          <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white text-[9px] py-1.5 text-center font-bold uppercase tracking-widest">
-            {f}
-          </div>
-        </button>
-      ))}
-    </div>
+    !isVideo ? (
+      <div className="absolute bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-2 z-50">
+        {FILTER_TYPES.map(f => (
+          <button
+            key={f}
+            onClick={() => applyFilter(f)}
+            className={`flex-shrink-0 w-20 h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-xl' : 'border-white/20'}`}
+          >
+            <div className="w-full h-full bg-gray-800 flex items-center justify-center relative">
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${mediaURL})`, opacity: 0.8 }}></div>
+              <div className={`absolute inset-0 ${f === 'vintage' ? 'bg-amber-500/30 sepia contrast-125' :
+                f === 'bw' ? 'grayscale contrast-125' :
+                  f === 'warm' ? 'bg-orange-500/20 mix-blend-overlay' :
+                    f === 'cool' ? 'bg-blue-500/20 mix-blend-overlay' :
+                      'bg-transparent'
+                }`}></div>
+            </div>
+            <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white text-[9px] py-1.5 text-center font-bold uppercase tracking-widest">
+              {f}
+            </div>
+          </button>
+        ))}
+      </div>
+    ) : (
+      <div className="absolute bottom-28 left-0 right-0 z-50 flex items-center justify-center">
+        <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-4 text-white/70 text-sm text-center">
+          <IoVideocamOutline className="text-3xl mx-auto mb-2 text-white/40" />
+          <p>Filters are not available for video stories</p>
+        </div>
+      </div>
+    )
   );
 
   const renderInfoDrawer = () => (
@@ -723,8 +733,8 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
           { id: 'text', icon: IoTextOutline, label: 'Text', action: handleAddText, color: 'bg-purple-500' },
           { id: 'draw', icon: IoBrushOutline, label: 'Draw', action: () => { setActiveTool("draw"); toggleDrawingMode(true); }, color: 'bg-pink-500' },
           { id: 'stickers', icon: IoHappyOutline, label: 'Stickers', action: () => setActiveTool('stickers_menu'), color: 'bg-yellow-500' },
-          { id: 'effects', icon: IoContrastOutline, label: 'Effects', action: () => setActiveTool("filter"), color: 'bg-orange-500' },
-          { id: 'canvas', icon: IoScan, label: 'Canvas', action: () => setActiveTool('background'), color: 'bg-green-500' },
+          ...(!isVideo ? [{ id: 'effects', icon: IoContrastOutline, label: 'Effects', action: () => setActiveTool("filter"), color: 'bg-orange-500' }] : []),
+          ...(!isVideo ? [{ id: 'canvas', icon: IoScan, label: 'Canvas', action: () => setActiveTool('background'), color: 'bg-green-500' }] : []),
         ].map(tool => (
           <button key={tool.id} onClick={tool.action} className="relative group overflow-hidden rounded-3xl p-4 h-32 flex flex-col items-start justify-between bg-white/5 border border-white/10 hover:border-white/30 transition-all">
             <div className={`absolute top-0 right-0 w-24 h-24 ${tool.color} blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity`} />
@@ -732,7 +742,38 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
             <span className="text-white font-bold text-lg">{tool.label}</span>
           </button>
         ))}
+        {/* Video-specific: mute toggle */}
+        {isVideo && (
+          <button
+            onClick={() => {
+              const v = videoPreviewRef.current;
+              if (v) { v.muted = !v.muted; setVideoMuted(!videoMuted); }
+            }}
+            className="relative group overflow-hidden rounded-3xl p-4 h-32 flex flex-col items-start justify-between bg-white/5 border border-white/10 hover:border-white/30 transition-all"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500 blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity" />
+            {videoMuted
+              ? <IoVolumeMuteOutline className="text-3xl text-white" />
+              : <IoVolumeHighOutline className="text-3xl text-white" />
+            }
+            <span className="text-white font-bold text-lg">{videoMuted ? 'Unmute' : 'Mute'}</span>
+          </button>
+        )}
       </div>
+
+      {/* Video info badge */}
+      {isVideo && (
+        <div className="mt-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
+          <IoVideocamOutline className="text-indigo-400 text-2xl shrink-0" />
+          <div>
+            <p className="text-white font-semibold text-sm">Video Story</p>
+            <p className="text-white/50 text-xs">
+              {videoDuration ? `Duration: ${videoDuration}s` : 'Loading...'}
+              {' · '}Original video quality preserved
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -763,7 +804,38 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   return (
     <div className="w-full h-full mx-auto flex flex-col items-center justify-center relative select-none">
       <div ref={wrapperRef} className="relative w-full aspect-[9/16] max-w-[420px] bg-black overflow-hidden rounded-3xl shadow-2xl border border-white/10 ring-1 ring-white/5">
-        <canvas id="fabric-canvas" className="w-full h-full" />
+
+        {/* --- Video background (shown underneath transparent canvas overlay) --- */}
+        {isVideo && mediaURL && (
+          <video
+            ref={videoPreviewRef}
+            src={mediaURL}
+            className="absolute inset-0 w-full h-full object-contain z-0"
+            autoPlay
+            loop
+            muted={videoMuted}
+            playsInline
+            onLoadedMetadata={handleVideoLoaded}
+          />
+        )}
+
+        {/* Fabric Canvas (overlaid on top of video for text/stickers) */}
+        <canvas
+          id="fabric-canvas"
+          className={`w-full h-full ${isVideo ? 'absolute inset-0 z-10' : ''}`}
+          style={isVideo ? { background: 'transparent' } : {}}
+        />
+
+        {/* Video badge */}
+        {isVideo && (
+          <div className="absolute top-16 right-4 z-40 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-red-500/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20">
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span className="text-white text-xs font-bold tracking-wider">VIDEO</span>
+            </div>
+          </div>
+        )}
+
         {!ready && (
           <div className="absolute inset-0 flex items-center justify-center z-50 bg-black">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
@@ -800,7 +872,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
         {activeTool === "menu" && renderToolsMenu()}
         {activeTool === "stickers_menu" && renderInfoDrawer()}
 
-        {/* --- STICKER DRAWER FIX: Can stay active, scrollable --- */}
+        {/* --- STICKER DRAWER --- */}
         {activeTool === "sticker" && (
           <div className="absolute top-32 inset-x-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-5 z-50 grid grid-cols-6 gap-3 animate-in zoom-in-95 duration-200 h-96 overflow-y-auto no-scrollbar content-start">
             <div className="col-span-6 flex justify-between mb-2">
@@ -887,7 +959,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
                   <div className="flex flex-col gap-2">
                     <h4 className="text-white/70 text-sm font-semibold text-center uppercase tracking-widest">Duration</h4>
                     <div className="flex justify-center gap-3">
-                      {[15, 20, 30].map(d => (
+                      {(isVideo && videoDuration
+                        ? [Math.min(15, videoDuration), Math.min(30, videoDuration), Math.min(60, videoDuration)].filter((v, i, a) => a.indexOf(v) === i)
+                        : [15, 20, 30]
+                      ).map(d => (
                         <button
                           key={d}
                           onClick={() => setStoryDuration(d)}
@@ -919,15 +994,25 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
         {!["text", "draw", "filter", "music", "background", "menu"].includes(activeTool) && (
           <div className="absolute bottom-8 left-6 right-6 flex items-center justify-between z-40 animate-in fade-in slide-in-from-bottom-4 duration-500 pointer-events-none">
             <div className="flex gap-3 pointer-events-auto">
-              <IconButton icon={IoDownloadOutline} onClick={handleExport} className="bg-black/50 hover:bg-black/70" />
+              {!isVideo && <IconButton icon={IoDownloadOutline} onClick={handleExport} className="bg-black/50 hover:bg-black/70" />}
               <IconButton icon={IoTrash} onClick={deleteActive} className="bg-black/50 hover:bg-red-500/50 text-red-500" />
             </div>
 
             <button
               onClick={handleNext}
-              className="pointer-events-auto flex items-center gap-3 px-8 py-4 bg-white text-black rounded-full font-black text-lg shadow-[0_0_25px_rgba(255,255,255,0.4)] hover:scale-105 transition-all active:scale-95"
+              disabled={isPublishing}
+              className={`pointer-events-auto flex items-center gap-3 px-8 py-4 bg-white text-black rounded-full font-black text-lg shadow-[0_0_25px_rgba(255,255,255,0.4)] hover:scale-105 transition-all active:scale-95 ${isPublishing ? 'opacity-80 cursor-not-allowed scale-95' : ''}`}
             >
-              SHARE <IoMove className="text-xl" />
+              {isPublishing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  PUBLISHING...
+                </>
+              ) : (
+                <>
+                  SHARE <IoMove className="text-xl" />
+                </>
+              )}
             </button>
           </div>
         )}

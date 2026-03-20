@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createReel } from '../../../api/reelApi';
-import { FaVideo, FaArrowLeft, FaMagic } from 'react-icons/fa';
+import { FaVideo, FaArrowLeft, FaMagic, FaLock } from 'react-icons/fa';
 import Button from '../../common/Button';
 import ReelEditor from './ReelEditor';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,8 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
 
   // Final Details
   const [caption, setCaption] = useState('');
+  const [isExclusive, setIsExclusive] = useState(false);
+  const [requiredTier, setRequiredTier] = useState('basic');
   const [uploading, setUploading] = useState(false);
   const [isDraftLoad, setIsDraftLoad] = useState(false);
 
@@ -85,6 +87,11 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
     // Add draft status
     if (isDraft) formData.append('is_draft', 'true');
 
+    formData.append('is_exclusive', isExclusive);
+    if (isExclusive) {
+      formData.append('required_tier', requiredTier);
+    }
+    
     if (metadata) {
       formData.append('duration', Math.round(metadata.duration || 15));
       if (metadata.music) {
@@ -171,7 +178,7 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
             </div>
           </div>
 
-          <div className="mb-6">
+          <div className="mb-6 space-y-4">
             {metadata?.music && (
               <div className="glass-panel p-3 rounded-lg flex items-center gap-3">
                 <span className="text-xl">🎵</span>
@@ -181,6 +188,39 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
                 </div>
               </div>
             )}
+
+            {/* Exclusive Toggle */}
+            <div className="flex items-center justify-between p-4 bg-background-secondary rounded-xl border border-border">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${isExclusive ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/10 text-gray-500'}`}>
+                  <FaLock className="text-lg" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-text-primary">Exclusive Content</p>
+                  <p className="text-xs text-text-secondary">Visible only to active subscribers</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {isExclusive && (
+                  <select
+                    value={requiredTier}
+                    onChange={(e) => setRequiredTier(e.target.value)}
+                    className="bg-background-primary text-xs text-purple-300 border border-purple-500/30 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="basic">Basic+</option>
+                    <option value="pro">Pro+</option>
+                    <option value="elite">Elite Only</option>
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsExclusive(!isExclusive)}
+                  className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${isExclusive ? 'bg-purple-600' : 'bg-gray-700'}`}
+                >
+                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${isExclusive ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-4">

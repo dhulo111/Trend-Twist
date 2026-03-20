@@ -41,6 +41,13 @@ const PostGridItem = ({ post }) => {
         </div>
       )}
 
+      {/* Exclusive Indicator Icon */}
+      {post.is_exclusive && (
+        <div className="absolute top-2 left-2 bg-purple-600/80 text-white p-1 rounded-md shadow-lg border border-purple-400/50 backdrop-blur-sm">
+          <IoLockClosed className="h-3 w-3" />
+        </div>
+      )}
+
       <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity space-x-4">
         <span className="text-white font-semibold text-lg flex items-center">
           <IoHeartOutline className="h-5 w-5 mr-1" /> {post.likes_count}
@@ -64,6 +71,14 @@ const ReelGridItem = ({ reel }) => (
     <div className="absolute inset-0 flex items-center justify-center">
       <IoPlay className="text-white/80 text-3xl drop-shadow-md" />
     </div>
+
+    {/* Exclusive Indicator Icon */}
+    {reel.is_exclusive && (
+      <div className="absolute top-2 left-2 bg-purple-600/80 text-white p-1 rounded-md shadow-lg border border-purple-400/50 backdrop-blur-sm z-10">
+        <IoLockClosed className="h-3 w-3" />
+      </div>
+    )}
+
     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
       <span className="text-white text-xs font-semibold flex items-center">
         <IoPlay className="h-3 w-3 mr-1" /> {reel.views_count}
@@ -87,7 +102,7 @@ const ProfilePage = () => {
   const [userDrafts, setUserDrafts] = useState([]); // Drafts State
   const [userStories, setUserStories] = useState(null);
 
-  const [activeTab, setActiveTab] = useState('posts'); // 'posts', 'reels', 'drafts'
+  const [activeTab, setActiveTab] = useState('posts'); // 'posts', 'twists', 'reels', 'exclusive', 'drafts'
 
   const [loading, setLoading] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
@@ -218,7 +233,19 @@ const ProfilePage = () => {
 
   const isOwner = profileData?.id === currentUser?.id;
   const isPrivate = profileData?.profile?.is_private;
+  const isSubscribed = profileData?.is_subscribed;
   const canViewContent = !isPrivate || isOwner || profileData?.is_following;
+
+  // Filter content
+  const regularPosts = userPosts.filter(p => !p.is_exclusive);
+  const regularTwists = userTwists.filter(t => !t.is_exclusive);
+  const regularReels = userReels.filter(r => !r.is_exclusive);
+
+  const exclusivePosts = userPosts.filter(p => p.is_exclusive);
+  const exclusiveTwists = userTwists.filter(t => t.is_exclusive);
+  const exclusiveReels = userReels.filter(r => r.is_exclusive);
+
+  const hasExclusive = exclusivePosts.length > 0 || exclusiveTwists.length > 0 || exclusiveReels.length > 0;
 
 
   return (
@@ -256,6 +283,17 @@ const ProfilePage = () => {
               <IoFilmOutline className="h-4 w-4 md:h-5 md:w-5" />
               <span className="font-semibold text-xs md:text-sm tracking-wider">REELS</span>
             </button>
+            
+            {(isOwner || isSubscribed) && hasExclusive && (
+              <button
+                onClick={() => setActiveTab('exclusive')}
+                className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'exclusive' ? 'border-purple-500 text-purple-500' : 'border-transparent text-text-secondary hover:text-purple-400'}`}
+              >
+                <IoLockClosed className="h-4 w-4 md:h-5 md:w-5" />
+                <span className="font-semibold text-xs md:text-sm tracking-wider">EXCLUSIVE</span>
+              </button>
+            )}
+
             {isOwner && userDrafts.length > 0 && (
               <button
                 onClick={() => setActiveTab('drafts')}
@@ -277,22 +315,22 @@ const ProfilePage = () => {
                   {/* POSTS GRID */}
                   {activeTab === 'posts' && (
                     <div className="grid grid-cols-3 gap-1 md:gap-3">
-                      {userPosts.filter(p => p.media_file).length > 0 ? (
-                        userPosts.filter(p => p.media_file).map((post) => <PostGridItem key={post.id} post={post} />)
+                      {regularPosts.filter(p => p.media_file).length > 0 ? (
+                        regularPosts.filter(p => p.media_file).map((post) => <PostGridItem key={post.id} post={post} />)
                       ) : (
                         <div className="col-span-3 text-center text-text-secondary p-12 card border border-border">
                           <IoGridOutline className="mx-auto text-4xl mb-3 opacity-50" />
-                          <h3 className="text-lg font-semibold">No Media Posts</h3>
+                          <h3 className="text-lg font-semibold">No Public Posts</h3>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* TWISTS FEED (Twitter Style) */}
+                  {/* TWISTS FEED */}
                   {activeTab === 'twists' && (
                     <div className="max-w-2xl mx-auto space-y-4">
-                      {userTwists.length > 0 ? (
-                        userTwists.map((twist) => (
+                      {regularTwists.length > 0 ? (
+                        regularTwists.map((twist) => (
                           <div key={twist.id} className="border border-border rounded-xl bg-background-secondary overflow-hidden">
                             <TwistCard post={twist} />
                           </div>
@@ -300,7 +338,7 @@ const ProfilePage = () => {
                       ) : (
                         <div className="text-center text-text-secondary p-12 card border border-border">
                           <IoRepeatOutline className="mx-auto text-4xl mb-3 opacity-50" />
-                          <h3 className="text-lg font-semibold">No Twists Yet</h3>
+                          <h3 className="text-lg font-semibold">No Public Twists</h3>
                         </div>
                       )}
                     </div>
@@ -309,15 +347,58 @@ const ProfilePage = () => {
                   {/* REELS GRID */}
                   {activeTab === 'reels' && (
                     <div className="grid grid-cols-3 md:grid-cols-4 gap-1 md:gap-3">
-                      {userReels.length > 0 ? (
-                        userReels.map((reel) => <ReelGridItem key={reel.id} reel={reel} />)
+                      {regularReels.length > 0 ? (
+                        regularReels.map((reel) => <ReelGridItem key={reel.id} reel={reel} />)
                       ) : (
                         <div className="col-span-full text-center text-text-secondary p-12 card border border-border">
                           <IoFilmOutline className="mx-auto text-4xl mb-3 opacity-50" />
-                          <h3 className="text-lg font-semibold">No Reels Yet</h3>
-                          {isOwner && (
-                            <Button className="mt-3" to="/create/post" variant="primary">Create a Reel</Button>
-                          )}
+                          <h3 className="text-lg font-semibold">No Public Reels Yet</h3>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* EXCLUSIVE CONTENT (Combined) */}
+                  {activeTab === 'exclusive' && (
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                      
+                      {/* Exclusive Posts */}
+                      {exclusivePosts.length > 0 && (
+                        <div>
+                          <h3 className="text-purple-400 font-bold mb-4 flex items-center">
+                            <IoGridOutline className="mr-2" /> Exclusive Posts
+                          </h3>
+                          <div className="grid grid-cols-3 gap-1 md:gap-3">
+                            {exclusivePosts.map((post) => <PostGridItem key={post.id} post={post} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Exclusive Reels */}
+                      {exclusiveReels.length > 0 && (
+                        <div>
+                          <h3 className="text-purple-400 font-bold mb-4 flex items-center">
+                            <IoFilmOutline className="mr-2" /> Exclusive Reels
+                          </h3>
+                          <div className="grid grid-cols-3 md:grid-cols-4 gap-1 md:gap-3">
+                            {exclusiveReels.map((reel) => <ReelGridItem key={reel.id} reel={reel} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Exclusive Twists */}
+                      {exclusiveTwists.length > 0 && (
+                        <div className="max-w-2xl mx-auto">
+                          <h3 className="text-purple-400 font-bold mb-4 flex items-center">
+                            <IoRepeatOutline className="mr-2" /> Exclusive Twists
+                          </h3>
+                          <div className="space-y-4">
+                            {exclusiveTwists.map((twist) => (
+                              <div key={twist.id} className="border-2 border-purple-500/20 rounded-xl bg-background-secondary overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                                <TwistCard post={twist} />
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

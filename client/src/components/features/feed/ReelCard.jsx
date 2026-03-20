@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { FaHeart, FaComment, FaShare, FaMusic, FaPlay, FaRegHeart, FaTrash, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
+import { FaHeart, FaComment, FaShare, FaMusic, FaPlay, FaRegHeart, FaTrash, FaVolumeUp, FaVolumeMute, FaRegBookmark, FaBookmark, FaLock } from 'react-icons/fa';
 import { IoPaperPlaneOutline, IoEllipsisVertical } from 'react-icons/io5';
 import { likeReel, deleteReel, registerReelView } from '../../../api/reelApi';
-import { toggleFollow } from '../../../api/userApi';
+import { toggleFollow, toggleSave } from '../../../api/userApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReelCommentDrawer from './ReelCommentDrawer';
 import ShareReelModal from './ShareReelModal';
@@ -11,6 +11,7 @@ import ReportModal from '../../common/ReportModal';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import Avatar from '../../common/Avatar';
+import TierBadge from '../../common/TierBadge';
 
 const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   const { user: currentUser } = useContext(AuthContext);
@@ -23,13 +24,18 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   const [isCommentOpen, setIsCommentOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false); // NEW STATE
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isSaved, setIsSaved] = useState(reel.is_saved);
+
+  useEffect(() => {
+    setIsSaved(reel.is_saved);
+  }, [reel.is_saved]);
 
   // ... (rest of state items like isFollowing, videoRef, etc... keep them!)
   const [isFollowing, setIsFollowing] = useState(reel.is_following || false);
   const [isOwner, setIsOwner] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const videoRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const audioRef = useRef(new Audio());
   const [isMuted, setIsMuted] = useState(false);
@@ -58,8 +64,14 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
         if (entry.isIntersecting) {
           if (onVisible) onVisible(reel.id); // Notify parent this reel is in view
           
-          videoRef.current?.play().catch(() => { });
-          setIsPlaying(true);
+          const playPromise = videoRef.current?.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              setIsPlaying(true);
+            }).catch(() => {
+              setIsPlaying(false);
+            });
+          }
 
           if (!hasViewedRef.current) {
             hasViewedRef.current = true; // Mark immediately synchronously
@@ -118,8 +130,15 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
       }
     };
 
-    const handlePlay = () => safePlayAudio();
-    const handlePause = () => a.pause();
+    const handlePlay = () => {
+      setIsPlaying(true);
+      safePlayAudio();
+    };
+    
+    const handlePause = () => {
+      setIsPlaying(false);
+      a.pause();
+    };
 
     const handleTimeUpdate = () => {
       if (metadata?.trim) {
@@ -171,6 +190,18 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
       console.error("Error liking reel:", error);
       setIsLiked(previousState);
       setLikesCount(prev => previousState ? prev + 1 : prev - 1);
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    const prevSaved = isSaved;
+    setIsSaved(!prevSaved);
+    try {
+      await toggleSave('reel', reel.id);
+    } catch (error) {
+      console.error("Error saving reel:", error);
+      setIsSaved(prevSaved);
     }
   };
 
@@ -227,21 +258,40 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   };
 
   return (
-    <div className="relative w-full h-full bg-black snap-start overflow-hidden flex items-center justify-center">
-      {/* Video */}
-      <div
-        className="absolute inset-0 cursor-pointer"
-        onDoubleClick={handleDoubleTap}
-        onClick={togglePlay}
-      >
-        <video
-          ref={videoRef}
-          src={reel.video_file}
-          className={`w-full h-full object-contain ${getFilterClass(metadata?.filter)}`}
-          loop
-          playsInline
-          muted
-        />
+    <div className="relative w-full h-full bg-black snap-start flex md:flex-row flex-col items-center justify-center md:bg-transparent">
+      {/* Video Container */}
+      <div className="relative w-full h-full md:w-[380px] md:h-[calc(100vh-80px)] md:max-h-[850px] md:rounded-xl overflow-hidden bg-black flex-shrink-0 shadow-none md:shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+        {/* Video */}
+        <div
+          className="absolute inset-0 cursor-pointer"
+          onDoubleClick={handleDoubleTap}
+          onClick={togglePlay}
+        >
+        {/* Video or Locked Overlay */}
+        {reel.has_access === false ? (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-2xl px-6 text-center">
+            <FaLock className="text-white text-6xl mb-6 shadow-2xl" />
+            <h3 className="text-white text-2xl font-black mb-2 tracking-tight">Premium Reel</h3>
+            <p className="text-white/70 text-sm mb-8 max-w-[280px]">
+              {reel.caption || "Subscribe to unlock this exclusive content."}
+            </p>
+            <button 
+              onClick={(e) => { e.stopPropagation(); navigate(`/profile/${reel.author_username}/subscribe`); }}
+              className="w-full max-w-[240px] bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-4 rounded-full shadow-[0_0_20px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 transition-all text-sm uppercase tracking-wider"
+            >
+              Subscribe
+            </button>
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            src={reel.video_file}
+            className={`w-full h-full object-contain ${getFilterClass(metadata?.filter)}`}
+            loop
+            playsInline
+            muted
+          />
+        )}
 
         {/* Editor Overlays (Text, Stickers) */}
         {reel.editor_json && (
@@ -275,7 +325,6 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
         )}
       </div>
 
-      {/* Mute Button - Top Right */}
       <button
         onClick={toggleMute}
         className="absolute top-4 right-4 z-40 bg-black/40 backdrop-blur-md p-2 md:p-3 rounded-full"
@@ -287,8 +336,68 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
         )}
       </button>
 
-      {/* Right Sidebar Actions */}
-      <div className="absolute right-2 bottom-12 z-40 flex flex-col items-center space-y-4 md:space-y-6 md:right-3">
+      {/* Bottom Caption & Info */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 z-30 pointer-events-none">
+        <div className="max-w-full pointer-events-auto">
+          {/* User Info */}
+          <div className="flex items-center mb-3">
+            <button onClick={navigateToProfile} className="flex items-center space-x-2">
+              <Avatar
+                src={reel.author_profile_picture}
+                alt={reel.author_username}
+                size="sm"
+                className="border border-white"
+              />
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <p className="text-white font-bold text-sm md:text-base drop-shadow-lg">
+                    {reel.author_username}
+                  </p>
+                  {reel.is_exclusive && reel.required_tier && (
+                    <TierBadge tier={reel.required_tier} />
+                  )}
+                </div>
+              </div>
+            </button>
+
+            {!isOwner && (
+              <button
+                onClick={handleFollow}
+                className={`ml-3 px-4 py-1 rounded-full text-xs md:text-sm font-bold transition-all duration-300 shadow hover:shadow-lg active:scale-95 ${
+                  isFollowing
+                    ? 'bg-transparent border border-white/40 text-white hover:bg-white/10'
+                    : 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border border-transparent hover:scale-105'
+                  }`}
+              >
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+            )}
+          </div>
+
+          {/* Caption */}
+          {reel.caption && (
+            <p className="text-white text-sm leading-relaxed mb-3 drop-shadow-lg line-clamp-2">
+              {reel.caption}
+            </p>
+          )}
+
+          {/* Music Ticker */}
+          <div className="flex items-center space-x-2">
+            <FaMusic className="text-white text-sm" />
+            <div className="overflow-hidden max-w-[70vw]">
+              <p className="text-white text-sm font-medium truncate animate-marquee-inline">
+                {reel.music_name || 'Original audio'} • {reel.author_username}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Gradient */}
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+
+      {/* Right Sidebar Actions (Mobile Only) */}
+      <div className="absolute right-2 bottom-12 z-40 flex flex-col items-center space-y-4 md:hidden">
         {/* Like */}
         <div className="flex flex-col items-center space-y-1">
           <button onClick={(e) => { e.stopPropagation(); handleLike(); }} className="p-2">
@@ -317,6 +426,17 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
         <div className="flex flex-col items-center space-y-1">
           <button onClick={(e) => { e.stopPropagation(); setIsShareOpen(true); }} className="p-2">
             <IoPaperPlaneOutline className="text-2xl md:text-3xl text-white drop-shadow-lg rotate-[-30deg]" />
+          </button>
+        </div>
+
+        {/* Save */}
+        <div className="flex flex-col items-center space-y-1">
+          <button onClick={handleSave} className="p-2">
+            {isSaved ? (
+              <FaBookmark className="text-2xl md:text-3xl text-white drop-shadow-lg" />
+            ) : (
+              <FaRegBookmark className="text-2xl md:text-3xl text-white drop-shadow-lg" />
+            )}
           </button>
         </div>
 
@@ -375,61 +495,108 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
           </div>
         </div>
       </div>
+      
+      </div> {/* End Video Container */}
 
-      {/* Bottom Caption & Info */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 z-30 pointer-events-none">
-        <div className="max-w-full pointer-events-auto">
-          {/* User Info */}
-          <div className="flex items-center mb-3">
-            <button onClick={navigateToProfile} className="flex items-center space-x-2">
+      {/* Right Sidebar Actions (Desktop Only) */}
+      <div className="hidden md:flex flex-col items-center space-y-4 md:space-y-6 ml-4 self-end mb-4">
+        {/* Like */}
+        <div className="flex flex-col items-center space-y-1">
+          <button onClick={(e) => { e.stopPropagation(); handleLike(); }} className="bg-gray-800/80 hover:bg-gray-700 p-3 rounded-full transition-colors flex items-center justify-center w-12 h-12">
+            {isLiked ? (
+              <FaHeart className="text-xl text-red-500" />
+            ) : (
+              <FaRegHeart className="text-xl text-white" />
+            )}
+          </button>
+          <span className="text-white text-xs font-semibold drop-shadow-md">
+            {likesCount.toLocaleString()}
+          </span>
+        </div>
+
+        {/* Comment */}
+        <div className="flex flex-col items-center space-y-1">
+          <button onClick={(e) => { e.stopPropagation(); setIsCommentOpen(true); }} className="bg-gray-800/80 hover:bg-gray-700 p-3 rounded-full transition-colors flex items-center justify-center w-12 h-12">
+            <FaComment className="text-xl text-white scale-x-[-1]" />
+          </button>
+          <span className="text-white text-xs font-semibold drop-shadow-md">
+            {reel.comments_count}
+          </span>
+        </div>
+
+        {/* Share */}
+        <div className="flex flex-col items-center space-y-1">
+          <button onClick={(e) => { e.stopPropagation(); setIsShareOpen(true); }} className="bg-gray-800/80 hover:bg-gray-700 p-3 rounded-full transition-colors flex items-center justify-center w-12 h-12">
+            <IoPaperPlaneOutline className="text-xl text-white rotate-[-30deg]" />
+          </button>
+        </div>
+
+        {/* Save */}
+        <div className="flex flex-col items-center space-y-1">
+          <button onClick={handleSave} className="bg-gray-800/80 hover:bg-gray-700 p-3 rounded-full transition-colors flex items-center justify-center w-12 h-12">
+            {isSaved ? (
+              <FaBookmark className="text-xl text-white" />
+            ) : (
+              <FaRegBookmark className="text-xl text-white" />
+            )}
+          </button>
+        </div>
+
+        {/* Options */}
+        <div className="flex flex-col items-center space-y-1 relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
+            className="bg-gray-800/80 hover:bg-gray-700 p-3 rounded-full transition-colors flex items-center justify-center w-12 h-12 mt-2"
+          >
+            <IoEllipsisVertical className="text-xl text-white" />
+          </button>
+          
+          {/* Options Dropdown for Desktop */}
+          <AnimatePresence>
+            {showOptions && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="absolute right-14 top-0 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden w-36 z-50 shadow-2xl"
+              >
+                {isOwner ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(); setShowOptions(false); }}
+                    className="w-full px-4 py-3 text-left text-red-500 font-medium text-xs hover:bg-gray-800 transition-colors"
+                  >
+                    <FaTrash className="inline mr-2" /> Delete
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowOptions(false); setIsReportOpen(true); }}
+                    className="w-full px-4 py-3 text-left text-white font-medium text-xs hover:bg-gray-800 transition-colors"
+                  >
+                    Report Reel
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Music Disc */}
+        <div className="mt-4">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-lg animate-spin-slow">
               <Avatar
                 src={reel.author_profile_picture}
-                alt={reel.author_username}
-                size="sm"
-                className="border border-white"
+                alt="Artist"
+                size="md"
+                className="w-full h-full"
               />
-              <div>
-                <p className="text-white font-bold text-sm md:text-base drop-shadow-lg">
-                  {reel.author_username}
-                </p>
-              </div>
-            </button>
-
-            {!isOwner && (
-              <button
-                onClick={handleFollow}
-                className={`ml-3 px-4 py-1 rounded-full text-xs md:text-sm font-bold transition-all duration-300 shadow hover:shadow-lg active:scale-95 ${
-                  isFollowing
-                    ? 'bg-transparent border border-white/40 text-white hover:bg-white/10'
-                    : 'bg-gradient-to-r from-pink-500 to-purple-500 text-white border border-transparent hover:scale-105'
-                  }`}
-              >
-                {isFollowing ? 'Following' : 'Follow'}
-              </button>
-            )}
-          </div>
-
-          {/* Caption */}
-          {reel.caption && (
-            <p className="text-white text-sm leading-relaxed mb-3 drop-shadow-lg line-clamp-2">
-              {reel.caption}
-            </p>
-          )}
-
-          {/* Music Ticker */}
-          <div className="flex items-center space-x-2">
-            <FaMusic className="text-white text-sm" />
-            <div className="overflow-hidden max-w-[70vw]">
-              <p className="text-white text-sm font-medium truncate animate-marquee-inline">
-                {reel.music_name || 'Original audio'} • {reel.author_username}
-              </p>
+            </div>
+            <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-pink-500 to-purple-600 p-0.5 rounded-full">
+              <FaMusic className="text-white text-[10px]" />
             </div>
           </div>
         </div>
       </div>
-
-      {/* Bottom Gradient */}
-      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
 
       {/* Comment Drawer */}
       <ReelCommentDrawer

@@ -119,6 +119,55 @@ const Message = ({ message, currentUsername, onEdit, onDelete }) => {
                 </div>
               </div>
             ) : null}
+
+            {message.shared_twist_data ? (
+              <div
+                onClick={() => navigate(`/twists/${message.shared_twist_data.id}`)}
+                className="mb-2 rounded-lg overflow-hidden cursor-pointer border border-border bg-background-secondary min-w-[150px] transition-transform hover:scale-[1.02] shadow-sm"
+              >
+                {message.shared_twist_data.thumbnail && (
+                  <div className="relative w-full aspect-square max-h-[200px] flex items-center justify-center bg-background-primary overflow-hidden">
+                    <img
+                      src={message.shared_twist_data.thumbnail}
+                      alt="Shared twist"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="p-2 text-xs border-t border-border">
+                  <p className="font-bold truncate text-text-primary">@{message.shared_twist_data.author_username}</p>
+                  <p className="truncate text-text-secondary">{message.shared_twist_data.content}</p>
+                </div>
+              </div>
+            ) : null}
+
+            {message.story_reply_data ? (
+              <div
+                className="mb-2 rounded-lg overflow-hidden border border-white/20 bg-black/40 min-w-[120px] max-w-[180px] shadow-sm flex flex-col"
+              >
+                <div className="relative w-full aspect-[4/5] overflow-hidden bg-gray-900">
+                  {message.story_reply_data.media_type === 'video' ? (
+                    <video
+                      src={message.story_reply_data.media_file}
+                      className="w-full h-full object-cover opacity-60"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <img
+                      src={message.story_reply_data.media_file}
+                      alt="Story"
+                      className="w-full h-full object-cover opacity-60"
+                    />
+                  )}
+                  <div className="absolute inset-0 flex flex-col justify-end p-2 bg-gradient-to-t from-black/80 to-transparent">
+                    <p className="text-[10px] text-white/70 italic mb-0.5">Replied to story</p>
+                    <p className="text-xs font-bold text-white truncate">@{message.story_reply_data.author_username}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <p className="whitespace-pre-wrap">{message.content}</p>
             <span className={`block text-right mt-1 text-[10px] ${isMine ? 'text-white/70' : 'text-text-secondary'}`}>
               {new Date(message.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}

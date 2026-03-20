@@ -98,13 +98,13 @@ const StoryAnalyticsModal = ({ isOpen, onClose, storyId }) => {
       isOpen={isOpen}
       onClose={onClose}
       title="Story Analytics"
-      className="max-w-md bg-white"
+      className="max-w-md"
     >
       <div className="flex flex-col -mt-3">
         <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
           <div className="flex items-center space-x-2">
-            <IoEyeOutline className="h-6 w-6 text-text-accent" />
-            <h3 className="text-xl font-bold text-black">
+            <IoEyeOutline className="h-6 w-6 text-indigo-500" />
+            <h3 className="text-xl font-bold text-text-primary">
               {analytics?.total_views || 0} Total Views
             </h3>
           </div>

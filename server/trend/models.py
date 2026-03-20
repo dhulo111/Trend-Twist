@@ -94,13 +94,95 @@ class Follow(models.Model):
         return f"{self.follower.username} follows {self.following.username}"
 
 
-# --- 4. Content & Post Models (No change) ---
+# --- Subscriptions (Creator Monetization) ---
+
+class SubscriptionPlan(models.Model):
+    TIER_CHOICES = [
+        ('basic', 'Basic'),
+        ('pro', 'Pro'),
+        ('elite', 'Elite'),
+    ]
+    # Global plans set by the admin
+    tier = models.CharField(max_length=10, choices=TIER_CHOICES, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stripe_price_id = models.CharField(max_length=255, blank=True, null=True)
+    features = models.TextField(blank=True, null=True, help_text="List of features")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Global {self.get_tier_display()} Plan - ₹{self.price}"
+
+class UserSubscription(models.Model):
+    subscriber = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscribers')
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True)
+    tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES)
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=50, default='active') # active, past_due, canceled
+    start_date = models.DateTimeField(auto_now_add=True)
+    expiry_date = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ('subscriber', 'creator')
+
+    def __str__(self):
+        return f"{self.subscriber.username} -> {self.creator.username} ({self.tier})"
+
+    def is_valid(self):
+        return self.status == 'active' and (self.expiry_date is None or timezone.now() < self.expiry_date)
+
+
+class CreatorEarning(models.Model):
+    """
+    Records each subscription payment split:
+      - gross_amount: what the subscriber paid
+      - platform_fee (20%): kept by admin
+      - creator_amount (80%): owed to creator
+    """
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='earnings')
+    subscriber = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='payments_made')
+    subscription = models.ForeignKey(UserSubscription, on_delete=models.SET_NULL, null=True)
+    tier = models.CharField(max_length=10)
+
+    gross_amount = models.DecimalField(max_digits=10, decimal_places=2)   # total paid by subscriber
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2)   # 20% admin share
+    creator_amount = models.DecimalField(max_digits=10, decimal_places=2) # 80% creator share
+
+    stripe_payment_intent = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"₹{self.gross_amount} from {self.subscriber} to {self.creator} on {self.created_at.date()}"
+
+
+class CreatorPayout(models.Model):
+    """
+    Tracks when admin distributes accumulated earnings to a creator.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+    ]
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payouts')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    note = models.TextField(blank=True, null=True, help_text="Admin note (e.g. transfer method)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Payout ₹{self.amount} to {self.creator.username} [{self.status}]"
+
 
 class Post(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField()
     media_file = models.FileField(upload_to='posts/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Subscription Content Gating
+    is_exclusive = models.BooleanField(default=False)
+    required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
 
     def __str__(self):
         return f"Post by {self.author.username} at {self.created_at.strftime('%Y-%m-%d')}"
@@ -146,6 +228,10 @@ class Twist(models.Model):
     # Twist on a Post (Quote Post logic)
     original_post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name='twists')
 
+    # Subscription Content Gating
+    is_exclusive = models.BooleanField(default=False)
+    required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
+
     def __str__(self):
         return f"Twist by {self.author.username}"
 
@@ -167,8 +253,13 @@ class TwistComment(models.Model):
 # --- 5. Story Models ---
 
 class Story(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+    ]
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stories')
     media_file = models.FileField(upload_to='stories/', blank=False, null=False)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='image')
     caption = models.CharField(max_length=255, blank=True, null=True)
     # NEW: Advanced Story Features
     music_title = models.CharField(max_length=200, blank=True, null=True)
@@ -178,6 +269,10 @@ class Story(models.Model):
     is_draft = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     expires_at = models.DateTimeField(default=get_story_expiry_time)
+    
+    # Subscription Content Gating (Required by DB schema)
+    is_exclusive = models.BooleanField(default=False)
+    required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
 
     def __str__(self):
         return f"Story by {self.author.username} at {self.created_at.strftime('%H:%M')}"
@@ -284,6 +379,10 @@ class Reel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     views_count = models.IntegerField(default=0)
 
+    # Subscription Content Gating
+    is_exclusive = models.BooleanField(default=False)
+    required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
+
     def __str__(self):
         return f"Reel by {self.author.username} - {self.id}"
 
@@ -365,3 +464,23 @@ class Report(models.Model):
 
     def __str__(self):
         return f"Report against {self.reported_user.username} by {self.reporter.username}"
+
+# --- 10. Saved Items Model ---
+
+class SavedItem(models.Model):
+    """
+    Allows users to save/bookmark Posts, Reels, or Twists.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='saved_items')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True, related_name='saved_records')
+    reel = models.ForeignKey(Reel, on_delete=models.CASCADE, null=True, blank=True, related_name='saved_records')
+    twist = models.ForeignKey(Twist, on_delete=models.CASCADE, null=True, blank=True, related_name='saved_records')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        # Ensure a user can't save the same item twice (client logic handles this too)
+        # Note: We don't enforce absolute unique_together because some fields are null.
+
+    def __str__(self):
+        return f"{self.user.username} saved an item ({self.id})"

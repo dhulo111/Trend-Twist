@@ -11,9 +11,11 @@ import {
   IoRepeatOutline
 } from 'react-icons/io5';
 import { GiTwister } from 'react-icons/gi';
-import { FaRegChartBar } from 'react-icons/fa';
+import { FaRegChartBar, FaLock } from 'react-icons/fa';
 import Avatar from '../../common/Avatar';
+import TierBadge from '../../common/TierBadge';
 import { toggleLike, deletePost } from '../../../api/postApi';
+import { toggleSave } from '../../../api/userApi';
 import { AuthContext } from '../../../context/AuthContext';
 import SharePostModal from './SharePostModal';
 import CreateTwistModal from './CreateTwistModal';
@@ -30,7 +32,6 @@ const Post = ({ post, onUpdate }) => {
 
   const isAuthor = currentUser?.username === post.author_username;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSaved, setIsSaved] = useState(false); // Mock state for Save/Bookmark
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isTwistModalOpen, setIsTwistModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -144,9 +145,22 @@ const Post = ({ post, onUpdate }) => {
     }
   }
 
-  const handleSave = () => {
-    setIsSaved(!isSaved);
-    // TODO: Call API to save post
+  const [isSaved, setIsSaved] = useState(post.is_saved);
+
+  React.useEffect(() => {
+    setIsSaved(post.is_saved);
+  }, [post.is_saved]);
+
+  const handleSave = async () => {
+    // Optimistic Update
+    const prevSaved = isSaved;
+    setIsSaved(!prevSaved);
+    try {
+      await toggleSave('post', post.id);
+    } catch (error) {
+      console.error('Failed to toggle save:', error);
+      setIsSaved(prevSaved);
+    }
   }
 
   return (
@@ -172,9 +186,14 @@ const Post = ({ post, onUpdate }) => {
               </div>
             </Link>
             <div>
-              <Link to={`/profile/${post.author_username}`} className="font-bold text-text-primary hover:text-text-secondary transition-colors">
-                {post.author_username}
-              </Link>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Link to={`/profile/${post.author_username}`} className="font-bold text-text-primary hover:text-text-secondary transition-colors">
+                  {post.author_username}
+                </Link>
+                {post.is_exclusive && post.required_tier && (
+                  <TierBadge tier={post.required_tier} />
+                )}
+              </div>
               <div className="text-xs text-text-secondary">
                 {post.location && <span>{post.location} • </span>}
                 {formatTimeAgo(post.created_at)}
@@ -229,12 +248,25 @@ const Post = ({ post, onUpdate }) => {
           </div>
         </div>
 
-        {/* --- 2. Post Media --- */}
         <div
           className="relative w-full bg-black aspect-[4/5] sm:aspect-square flex items-center justify-center overflow-hidden cursor-pointer"
           onDoubleClick={handleDoubleTap}
         >
-          {post.media_file ? (
+          {post.has_access === false ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-3xl p-6 text-center border-y border-gray-800">
+              <FaLock className="text-white text-5xl mb-4 opacity-80" />
+              <h3 className="text-white text-xl font-bold mb-2">Exclusive Post</h3>
+              <p className="text-gray-400 text-sm mb-6 max-w-xs text-center">
+                Subscribe to {post.author_username} to unlock this premium content.
+              </p>
+              <button 
+                onClick={(e) => { e.stopPropagation(); navigate(`/profile/${post.author_username}/subscribe`); }}
+                className="bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-2 px-6 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-all text-sm uppercase tracking-wider"
+              >
+                Subscribe Now
+              </button>
+            </div>
+          ) : post.media_file ? (
             /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(post.media_file) ? (
               <video
                 src={post.media_file}

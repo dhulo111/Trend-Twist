@@ -3,6 +3,7 @@ import React, { useContext, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
 import Avatar from '../../common/Avatar';
+import TierBadge from '../../common/TierBadge';
 import {
   IoChatbubbleOutline,
   IoHeartOutline,
@@ -10,9 +11,13 @@ import {
   IoRepeatOutline,
   IoShareOutline,
   IoStatsChart,
-  IoEllipsisHorizontal
+  IoEllipsisHorizontal,
+  IoBookmarkOutline,
+  IoBookmark
 } from 'react-icons/io5';
+import { FaLock } from 'react-icons/fa';
 import { toggleTwistLike, deleteTwist } from '../../../api/postApi';
+import { toggleSave } from '../../../api/userApi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ShareTwistModal from './ShareTwistModal';
@@ -29,6 +34,11 @@ const TwistCard = ({ post, onUpdate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isSaved, setIsSaved] = useState(post.is_saved);
+
+  React.useEffect(() => {
+    setIsSaved(post.is_saved);
+  }, [post.is_saved]);
 
   const menuRef = useRef(null);
   useOnClickOutside(menuRef, () => setIsMenuOpen(false));
@@ -73,6 +83,18 @@ const TwistCard = ({ post, onUpdate }) => {
     navigate(`/twists/${post.id}`);
   };
 
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    const prevSaved = isSaved;
+    setIsSaved(!prevSaved);
+    try {
+      await toggleSave('twist', post.id);
+    } catch (error) {
+      console.error("Save failed", error);
+      setIsSaved(prevSaved);
+    }
+  };
+
   return (
     <>
       <article
@@ -96,6 +118,9 @@ const TwistCard = ({ post, onUpdate }) => {
                 {post.author.first_name ? `${post.author.first_name} ${post.author.last_name}` : post.author_username}
               </Link>
               <span className="text-text-secondary truncate text-sm">@{post.author_username}</span>
+              {post.is_exclusive && post.required_tier && (
+                <TierBadge tier={post.required_tier} className="-ml-1" />
+              )}
               <span className="text-text-secondary text-xs">•</span>
               <span className="text-text-secondary hover:underline text-sm">{formatTime(post.created_at)}</span>
             </div>
@@ -130,7 +155,21 @@ const TwistCard = ({ post, onUpdate }) => {
           </div>
 
           {/* Text Content */}
-          {post.content && (
+          {post.has_access === false ? (
+            <div className="mb-4 bg-gray-900/50 border border-purple-500/20 rounded-xl p-5 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-pink-500 to-purple-600"></div>
+              <FaLock className="text-purple-400 text-3xl mx-auto mb-2 opacity-80" />
+              <p className="text-gray-300 text-sm font-medium mb-3">
+                {post.content || "Subscribe to unlock this premium Twist."}
+              </p>
+              <button 
+                onClick={(e) => { e.stopPropagation(); navigate(`/profile/${post.author_username}/subscribe`); }}
+                className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold py-1.5 px-4 rounded-full border border-purple-500/30 transition-colors"
+              >
+                Subscribe Now
+              </button>
+            </div>
+          ) : post.content && (
             <div className="mb-3 text-text-primary text-[15px] leading-relaxed whitespace-pre-wrap font-normal">
               {post.content.split(' ').map((word, i) =>
                 word.startsWith('#') ? <span key={i} className="text-text-accent font-medium">{word} </span> : word + ' '
@@ -204,6 +243,17 @@ const TwistCard = ({ post, onUpdate }) => {
                 {isLiked ? <IoHeartSharp size={20} /> : <IoHeartOutline size={20} />}
               </div>
               <span className="text-sm font-medium">{likesCount || 0}</span>
+            </motion.button>
+
+            {/* Save Button */}
+            <motion.button
+              whileTap={{ scale: 0.8 }}
+              onClick={handleSave}
+              className={`flex items-center gap-2 group transition-colors ${isSaved ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+            >
+              <div className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-text-secondary/10' : 'group-hover:bg-text-secondary/10'}`}>
+                {isSaved ? <IoBookmark size={20} /> : <IoBookmarkOutline size={20} />}
+              </div>
             </motion.button>
 
             {/* Share/View */}

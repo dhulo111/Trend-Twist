@@ -70,8 +70,8 @@ const ReelsPage = () => {
   return (
     <div className="h-full w-full bg-black flex justify-center items-center">
 
-      {/* Centered Column for Reels (Mobile Wrapper style - adjusted for "somewhat small" request) */}
-      <div className="relative w-[94%] h-[94%] md:w-[420px] md:h-full bg-black shadow-2xl overflow-hidden flex flex-col rounded-xl">
+      {/* Centered Column for Reels (Mobile Wrapper style - adjusted for sidebars on desktop) */}
+      <div className="relative w-[94%] h-[94%] md:w-full md:max-w-[500px] md:h-full bg-black shadow-2xl md:shadow-none overflow-hidden md:overflow-visible flex flex-col rounded-xl md:rounded-none">
 
         {/* Feed Container */}
         <div

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, FileText, MessageSquare, Video, Activity, TrendingUp } from 'lucide-react';
+import { Users, FileText, MessageSquare, Video, Activity, TrendingUp, IndianRupee, ShieldCheck } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -10,6 +10,8 @@ const AdminDashboard = () => {
     posts: 0,
     twists: 0,
     reels: 0,
+    total_revenue: 0,
+    total_fees: 0,
   });
 
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,9 @@ const AdminDashboard = () => {
           users: res.data.users || 0,
           posts: res.data.posts || 0,
           twists: res.data.twists || 0,
-          reels: res.data.reels || 0
+          reels: res.data.reels || 0,
+          total_revenue: res.data.total_revenue || 0,
+          total_fees: res.data.total_fees || 0,
         });
       } catch (err) {
         console.error("Failed to fetch dashboard stats", err);
@@ -38,9 +42,9 @@ const AdminDashboard = () => {
   }, []);
 
   const cards = [
+    { title: 'Total Revenue', value: stats.total_revenue, symbol: '₹', icon: IndianRupee, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/40' },
+    { title: 'Commission (Fee)', value: stats.total_fees, symbol: '₹', icon: ShieldCheck, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/40' },
     { title: 'Total Users', value: stats.users, icon: Users, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-    { title: 'Total Posts', value: stats.posts, icon: FileText, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/40' },
-    { title: 'Total Twists', value: stats.twists, icon: MessageSquare, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/40' },
     { title: 'Total Reels', value: stats.reels, icon: Video, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/40' },
   ];
 
@@ -76,7 +80,8 @@ const AdminDashboard = () => {
 
             <div className="flex items-baseline gap-3 relative z-10">
               <dd className="text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                {card.value.toLocaleString()}
+                {card.symbol && <span className="text-2xl mr-1 opacity-60 font-medium">{card.symbol}</span>}
+                {card.value.toLocaleString(undefined, { minimumFractionDigits: card.symbol ? 2 : 0, maximumFractionDigits: card.symbol ? 2 : 0 })}
               </dd>
               <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100/50 text-green-700 dark:text-green-400">
                 +12%

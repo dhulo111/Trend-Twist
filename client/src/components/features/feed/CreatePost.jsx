@@ -10,6 +10,7 @@ import Spinner from '../../common/Spinner';
 
 // --- Icons ---
 import { IoImageOutline, IoVideocamOutline, IoSend, IoCloseOutline } from 'react-icons/io5';
+import { FaLock } from 'react-icons/fa';
 
 /**
  * Component for creating a new post.
@@ -20,6 +21,8 @@ const CreatePost = ({ onPostSuccess }) => {
   const { user } = useContext(AuthContext);
   const [content, setContent] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
+  const [isExclusive, setIsExclusive] = useState(false);
+  const [requiredTier, setRequiredTier] = useState('basic');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -63,11 +66,17 @@ const CreatePost = ({ onPostSuccess }) => {
       if (mediaFile) {
         formData.append('media_file', mediaFile);
       }
+      formData.append('is_exclusive', isExclusive);
+      if (isExclusive) {
+        formData.append('required_tier', requiredTier);
+      }
 
       await createPost(formData);
 
       // Reset state and call success callback
       setContent('');
+      setIsExclusive(false);
+      setRequiredTier('basic');
       handleRemoveMedia(); // Clears file state and input value
       if (onPostSuccess) {
         onPostSuccess();
@@ -138,7 +147,7 @@ const CreatePost = ({ onPostSuccess }) => {
         <div className="flex items-center justify-between">
 
           {/* Media Buttons */}
-          <div className="flex space-x-2">
+          <div className="flex space-x-4 items-center flex-wrap gap-y-2">
             <Button
               type="button"
               variant="secondary"
@@ -151,6 +160,30 @@ const CreatePost = ({ onPostSuccess }) => {
               Add Photo/Video
             </Button>
 
+            {/* Exclusive Content Toggle */}
+            <div className="flex items-center space-x-2 bg-gray-900/50 rounded-lg px-3 py-1.5 border border-purple-500/20">
+              <button
+                type="button"
+                onClick={() => setIsExclusive(!isExclusive)}
+                className={`flex items-center space-x-1 text-sm font-semibold transition-colors ${
+                  isExclusive ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <FaLock className="mb-0.5" /> <span>Exclusive</span>
+              </button>
+
+              {isExclusive && (
+                <select
+                  value={requiredTier}
+                  onChange={(e) => setRequiredTier(e.target.value)}
+                  className="bg-transparent text-sm text-purple-300 border-none outline-none focus:ring-0 ml-2 py-0 cursor-pointer"
+                >
+                  <option value="basic" className="bg-gray-900">Basic Tier</option>
+                  <option value="pro" className="bg-gray-900">Pro Tier</option>
+                  <option value="elite" className="bg-gray-900">Elite Tier</option>
+                </select>
+              )}
+            </div>
           </div>
 
           {/* Submit Button */}

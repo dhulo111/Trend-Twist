@@ -93,3 +93,13 @@ export const likeStory = async (storyId) => {
     throw error;
   }
 };
+
+export const getStoryArchive = async () => {
+  try {
+    const response = await axiosInstance.get('/stories/archive/');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching story archive:", error);
+    throw error;
+  }
+};

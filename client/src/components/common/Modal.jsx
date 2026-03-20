@@ -75,7 +75,7 @@ const Modal = ({ isOpen, onClose, children, title, className = '' }) => {
               {/* --- Modal Header (Optional) --- */}
               <div className="flex items-center justify-between border-b border-border p-5">
                 {title ? (
-                  <h3 className="text-lg font-semibold text-black">
+                  <h3 className="text-lg font-semibold text-text-primary">
                     {title}
                   </h3>
                 ) : (
@@ -86,7 +86,7 @@ const Modal = ({ isOpen, onClose, children, title, className = '' }) => {
                 <button
                   onClick={onClose}
                   className="rounded-full p-1 text-text-secondary transition-colors
-                             hover:bg-background-accent hover:text-black
+                             hover:bg-background-accent hover:text-text-primary
                              focus:outline-none focus:ring-2 focus:ring-text-accent"
                 >
                   <svg
