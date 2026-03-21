@@ -21,10 +21,12 @@ import {
   IoFilmSharp,
   IoAddCircleOutline,
   IoHeartOutline,
-  IoHeart
+  IoHeart,
+  IoPeopleOutline,
+  IoPeople
 } from 'react-icons/io5';
 import { MdTrendingUp } from 'react-icons/md';
-import { FaUserCircle } from 'react-icons/fa';
+import { FaUserCircle, FaRandom } from 'react-icons/fa';
 
 const Navbar = () => {
   const { user, logoutUser } = useContext(AuthContext);
@@ -122,6 +124,7 @@ const Navbar = () => {
               { to: '/reels', icon: IoFilmOutline, activeIcon: IoFilmSharp, label: 'Reels' },
               { to: '/messages', icon: IoChatbubbleEllipsesOutline, activeIcon: IoChatbubbleEllipsesSharp, label: 'Messages' },
               { to: '/notifications', icon: IoHeartOutline, activeIcon: IoHeart, label: 'Notifications' },
+              { to: '/stranger', icon: IoPeopleOutline, activeIcon: IoPeople, label: 'Talk Stranger', special: true },
             ].map((item) => (
               <NavLink
                 key={item.label}
@@ -133,7 +136,9 @@ const Navbar = () => {
                       transition-all duration-300 group
                       ${isActive
                         ? 'bg-text-accent/10 text-text-accent font-semibold shadow-inner'
-                        : 'text-text-secondary hover:bg-white/10 hover:text-text-primary hover:shadow-sm'}
+                        : item.special
+                          ? 'text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 hover:shadow-sm'
+                          : 'text-text-secondary hover:bg-white/10 hover:text-text-primary hover:shadow-sm'}
                     `}
                   >
                     <span className={`text-2xl transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-105'} relative`}>
@@ -251,7 +256,12 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* 4. Reels */}
+        {/* 4. Stranger Talk */}
+        <NavLink to="/stranger" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-purple-400 scale-110' : 'text-text-secondary'}`}>
+          {({ isActive }) => (isActive ? <IoPeople size={26} /> : <IoPeopleOutline size={26} />)}
+        </NavLink>
+
+        {/* 5. Reels */}
         <NavLink to="/reels" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
           {({ isActive }) => (isActive ? <IoFilmSharp size={26} /> : <IoFilmOutline size={26} />)}
         </NavLink>

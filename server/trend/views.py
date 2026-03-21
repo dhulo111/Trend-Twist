@@ -10,11 +10,11 @@ from django.core.mail import send_mail
 from django.conf import settings
 import random
 
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import generics, permissions, status, viewsets, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import PermissionDenied
 
 # Import JWT tokens
@@ -26,7 +26,7 @@ from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
     Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike, ChatGroup,
-    SavedItem
+    SavedItem, WithdrawalRequest
 )
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -37,7 +37,8 @@ from .serializers import (
     OTPRequestSerializer, OTPVerifySerializer, CompleteRegistrationSerializer,
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
     ReelSerializer, ReelCommentSerializer, TwistCommentSerializer, ChatGroupSerializer,
-    NotificationSerializer, SavedItemSerializer, has_subscription_access
+    NotificationSerializer, SavedItemSerializer, has_subscription_access,
+    WithdrawalRequestSerializer, AdminWithdrawalActionSerializer
 )
 from channels.db import database_sync_to_async
 # --- Permissions ---
@@ -360,9 +361,28 @@ class ProfileUpdateView(generics.UpdateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     def get_object(self): return self.request.user.profile
     def get_serializer_context(self): return {'request': self.request}
+
+class CreatorModeToggleView(APIView):
+    """PATCH /api/profile/creator-mode/ - Enables or disables creator mode for the current user."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        is_creator = request.data.get('is_creator')
+        if is_creator is None:
+            return Response({"error": "is_creator field is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        profile = request.user.profile
+        profile.is_creator = bool(is_creator)
+        profile.save()
+        
+        return Response({
+            "status": "success",
+            "is_creator": profile.is_creator,
+            "message": "Creator mode enabled successfully." if profile.is_creator else "Creator mode disabled."
+        }, status=status.HTTP_200_OK)
 
 class UserProfileDetailView(generics.RetrieveAPIView):
     """Retrieves a user profile, respecting privacy settings."""
@@ -2012,3 +2032,89 @@ class PingView(APIView):
 
     def get(self, request):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+# --- 13. Withdrawal & Creator Earnings Views ---
+
+class WithdrawalListCreateView(generics.ListCreateAPIView):
+    """
+    GET: List my withdrawal requests
+    POST: Submit a new withdrawal request
+    """
+    serializer_class = WithdrawalRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return WithdrawalRequest.objects.filter(creator=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Check if user is a creator
+        if not hasattr(user, 'profile') or not user.profile.is_creator:
+            raise serializers.ValidationError({"error": "Only creators can request withdrawals."})
+
+        # Check Balance
+        from django.db.models import Sum
+        from .models import CreatorEarning
+        total_earned = CreatorEarning.objects.filter(creator=user).aggregate(total=Sum('creator_amount'))['total'] or 0
+        total_processed = WithdrawalRequest.objects.filter(creator=user, status__in=['pending', 'completed']).aggregate(total=Sum('amount'))['total'] or 0
+        available_balance = total_earned - total_processed
+
+        requested_amount = serializer.validated_data['amount']
+        if requested_amount > available_balance:
+            raise serializers.ValidationError({"error": f"Insufficient balance. Available: ₹{available_balance:.2f}"})
+        
+        if requested_amount < 100:
+            raise serializers.ValidationError({"error": "Minimum withdrawal amount is ₹100.00"})
+
+        # Capture current withdrawal info from profile
+        payment_details = user.profile.withdrawal_info or {}
+        if not payment_details:
+             raise serializers.ValidationError({"error": "Please set your withdrawal information in Settings first."})
+
+        serializer.save(creator=user, payment_details=payment_details)
+
+
+class AdminWithdrawalListView(generics.ListAPIView):
+    """Admin-only view to see all withdrawal requests across the platform."""
+    serializer_class = WithdrawalRequestSerializer
+    permission_classes = [IsAdminUser]
+    queryset = WithdrawalRequest.objects.all().order_by('-created_at')
+
+
+class AdminWithdrawalActionView(APIView):
+    """Admin-only view to approve/complete or reject a specific request."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        try:
+            withdrawal = WithdrawalRequest.objects.get(pk=pk)
+        except WithdrawalRequest.DoesNotExist:
+            return Response({"error": "Request not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if withdrawal.status != 'pending':
+            return Response({"error": "Already processed"}, status=status.HTTP_400_BAD_REQUEST)
+
+        action_ser = AdminWithdrawalActionSerializer(data=request.data)
+        if action_ser.is_valid():
+            withdrawal.status = action_ser.validated_data['status']
+            withdrawal.admin_note = action_ser.validated_data.get('admin_note', '')
+            withdrawal.processed_at = timezone.now()
+            withdrawal.save()
+            return Response({"status": "success", "new_status": withdrawal.status})
+        
+        return Response(action_ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WithdrawalTAndCView(APIView):
+    """Returns fixed Terms & Conditions for creators."""
+    permission_classes = [AllowAny]
+    def get(self, request):
+        content = [
+            "1. Withdrawal processing can take 3-5 business days.",
+            "2. Ensure your bank/UPI details are correct. Incorrect details may lead to loss of funds.",
+            "3. Platform fee (20%) is already deducted from earnings shown in your balance.",
+            "4. Minimum withdrawal amount is ₹100.",
+            "5. Any fraudulent activity will lead to permanent account suspension and forfeiture of earnings."
+        ]
+        return Response({"terms": content})
+

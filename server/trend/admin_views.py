@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Post, Twist, Reel, Comment, Hashtag, Profile, CreatorEarning
+from .models import Post, Twist, Reel, Comment, Hashtag, Profile, CreatorEarning, WithdrawalRequest
 from decimal import Decimal
 
 class IsAdminUser(permissions.BasePermission):
@@ -25,6 +25,10 @@ class AdminDashboardStatsView(views.APIView):
         total_revenue = CreatorEarning.objects.aggregate(Sum('gross_amount'))['gross_amount__sum'] or Decimal('0.00')
         total_fees = CreatorEarning.objects.aggregate(Sum('platform_fee'))['platform_fee__sum'] or Decimal('0.00')
         
+        # New Withdrawal Stats for Dashboard
+        pending_withdrawal_sum = WithdrawalRequest.objects.filter(status='pending').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        pending_withdrawal_count = WithdrawalRequest.objects.filter(status='pending').count()
+        
         stats = {
             'users': User.objects.count(),
             'posts': Post.objects.count(),
@@ -34,6 +38,8 @@ class AdminDashboardStatsView(views.APIView):
             'hashtags': Hashtag.objects.count(),
             'total_revenue': float(total_revenue),
             'total_fees': float(total_fees),
+            'pending_withdrawals_total': float(pending_withdrawal_sum),
+            'pending_withdrawals_count': pending_withdrawal_count,
         }
         return Response(stats)
 

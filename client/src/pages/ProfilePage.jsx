@@ -235,6 +235,8 @@ const ProfilePage = () => {
   const isPrivate = profileData?.profile?.is_private;
   const isSubscribed = profileData?.is_subscribed;
   const canViewContent = !isPrivate || isOwner || profileData?.is_following;
+  // Only show exclusive content tab/features if the profile owner is a creator
+  const isProfileOwnerCreator = profileData?.is_creator || profileData?.profile?.is_creator || false;
 
   // Filter content
   const regularPosts = userPosts.filter(p => !p.is_exclusive);
@@ -284,7 +286,8 @@ const ProfilePage = () => {
               <span className="font-semibold text-xs md:text-sm tracking-wider">REELS</span>
             </button>
             
-            {(isOwner || isSubscribed) && hasExclusive && (
+            {/* EXCLUSIVE tab — only visible if profile owner is a creator */}
+            {isProfileOwnerCreator && (isOwner || isSubscribed) && hasExclusive && (
               <button
                 onClick={() => setActiveTab('exclusive')}
                 className={`flex items-center space-x-1 md:space-x-2 px-4 md:px-8 py-3 md:py-4 border-t-2 transition-all ${activeTab === 'exclusive' ? 'border-purple-500 text-purple-500' : 'border-transparent text-text-secondary hover:text-purple-400'}`}

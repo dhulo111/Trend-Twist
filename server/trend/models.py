@@ -27,6 +27,8 @@ class Profile(models.Model):
     profile_picture = models.ImageField(upload_to='profiles/', blank=True, null=True, default='profiles/default_avatar.png')
     website_url = models.URLField(blank=True, null=True)
     is_trendsetter = models.BooleanField(default=False)
+    # Creator Mode: User must opt-in to enable creator features
+    is_creator = models.BooleanField(default=False)
     # NEW: Privacy Field for Private Accounts
     is_private = models.BooleanField(default=False) 
     
@@ -37,6 +39,9 @@ class Profile(models.Model):
     # NEW: Blocking System
     blocked_until = models.DateTimeField(null=True, blank=True)
     block_reason = models.TextField(blank=True, null=True)
+
+    # Withdrawal Information (Stored as JSON for flexibility: Bank, UPI, etc.)
+    withdrawal_info = models.JSONField(default=dict, blank=True, null=True)
 
     def __str__(self):
         return self.user.username
@@ -155,23 +160,39 @@ class CreatorEarning(models.Model):
         return f"₹{self.gross_amount} from {self.subscriber} to {self.creator} on {self.created_at.date()}"
 
 
-class CreatorPayout(models.Model):
+class WithdrawalRequest(models.Model):
     """
-    Tracks when admin distributes accumulated earnings to a creator.
+    Tracks creator withdrawal requests.
+    Statuses:
+      - pending: Request submitted by creator
+      - completed: Paid by admin
+      - rejected: Denied by admin
     """
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('paid', 'Paid'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
     ]
-    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payouts')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    METHOD_CHOICES = [
+        ('bank', 'Bank Transfer'),
+        ('upi', 'UPI ID'),
+    ]
+
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='withdrawals')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    note = models.TextField(blank=True, null=True, help_text="Admin note (e.g. transfer method)")
+    
+    payment_method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='bank')
+    # Captured snapshots of withdrawal info at the time of request
+    payment_details = models.JSONField(default=dict)
+    
+    admin_note = models.TextField(blank=True, null=True, help_text="Note from admin back to creator")
     created_at = models.DateTimeField(auto_now_add=True)
-    paid_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"Payout ₹{self.amount} to {self.creator.username} [{self.status}]"
+        return f"Withdrawal ₹{self.amount} for {self.creator.username} [{self.status}]"
 
 
 class Post(models.Model):

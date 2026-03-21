@@ -31,6 +31,7 @@ urlpatterns = [
     # Profile Management
     path('user/', views.CurrentUserProfileView.as_view(), name='current_user_profile'),
     path('profile/update/', views.ProfileUpdateView.as_view(), name='profile_update'),
+    path('profile/creator-mode/', views.CreatorModeToggleView.as_view(), name='creator_mode_toggle'),
     path('profiles/<str:username>/', views.UserProfileDetailView.as_view(), name='user_profile_detail'),
     path('users/<int:user_id>/posts/', views.UserPostListView.as_view(), name='user_posts_list'),
     
@@ -162,9 +163,17 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     path('admin/global-plans/', views_subscription.AdminGlobalPlansView.as_view(), name='admin_global_plans'),
     # Admin Revenue & Payouts
     path('admin/earnings/', views_subscription.AdminEarningsView.as_view(), name='admin_earnings'),
+    path('admin/creators/<int:creator_id>/payout/', views_subscription.AdminCreatorPayoutView.as_view(), name='admin_creator_payout'),
     path('subscriptions/debug-stats/', views_subscription.DebugStatsView.as_view(), name='debug_stats'),
     path('subscriptions/peek/', views_subscription.PeekSessionView.as_view(), name='peek_session'),
-    path('admin/creators/<int:creator_id>/payout/', views_subscription.AdminCreatorPayoutView.as_view(), name='admin_creator_payout'),
+    # Creator Withdrawals
+    path('withdrawals/', views.WithdrawalListCreateView.as_view(), name='withdrawal_list_create'),
+    path('withdrawals/terms/', views.WithdrawalTAndCView.as_view(), name='withdrawal_terms'),
+    
+    # Admin Withdrawal Management
+    path('admin/withdrawals/', views.AdminWithdrawalListView.as_view(), name='admin_withdrawal_list'),
+    path('admin/withdrawals/<int:pk>/action/', views.AdminWithdrawalActionView.as_view(), name='admin_withdrawal_action'),
+
 
     # ------------------------------------------------------------------
     # 8. KEEP-ALIVE (prevents Render free-tier cold starts)

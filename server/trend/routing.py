@@ -2,6 +2,7 @@
 
 from django.urls import re_path
 from . import consumers
+from .stranger_consumer import StrangerConsumer
 
 websocket_urlpatterns = [
     # The URL pattern for connecting to a specific chat room
@@ -11,4 +12,7 @@ websocket_urlpatterns = [
     
     # Global Notification Socket for the logged-in user
     re_path(r'ws/notifications/$', consumers.NotificationConsumer.as_asgi()),
-]
+
+    # Talk with Stranger — random video chat matchmaking
+    re_path(r'ws/stranger/$', StrangerConsumer.as_asgi()),
+]

@@ -19,6 +19,7 @@ import { FaLock } from 'react-icons/fa';
  */
 const CreatePost = ({ onPostSuccess }) => {
   const { user } = useContext(AuthContext);
+  const isCreator = user?.is_creator || user?.profile?.is_creator || false;
   const [content, setContent] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
   const [isExclusive, setIsExclusive] = useState(false);
@@ -160,30 +161,32 @@ const CreatePost = ({ onPostSuccess }) => {
               Add Photo/Video
             </Button>
 
-            {/* Exclusive Content Toggle */}
-            <div className="flex items-center space-x-2 bg-gray-900/50 rounded-lg px-3 py-1.5 border border-purple-500/20">
-              <button
-                type="button"
-                onClick={() => setIsExclusive(!isExclusive)}
-                className={`flex items-center space-x-1 text-sm font-semibold transition-colors ${
-                  isExclusive ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                <FaLock className="mb-0.5" /> <span>Exclusive</span>
-              </button>
-
-              {isExclusive && (
-                <select
-                  value={requiredTier}
-                  onChange={(e) => setRequiredTier(e.target.value)}
-                  className="bg-transparent text-sm text-purple-300 border-none outline-none focus:ring-0 ml-2 py-0 cursor-pointer"
+            {/* Exclusive Content Toggle — only for creators */}
+            {isCreator && (
+              <div className="flex items-center space-x-2 bg-gray-900/50 rounded-lg px-3 py-1.5 border border-purple-500/20">
+                <button
+                  type="button"
+                  onClick={() => setIsExclusive(!isExclusive)}
+                  className={`flex items-center space-x-1 text-sm font-semibold transition-colors ${
+                    isExclusive ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'
+                  }`}
                 >
-                  <option value="basic" className="bg-gray-900">Basic Tier</option>
-                  <option value="pro" className="bg-gray-900">Pro Tier</option>
-                  <option value="elite" className="bg-gray-900">Elite Tier</option>
-                </select>
-              )}
-            </div>
+                  <FaLock className="mb-0.5" /> <span>Exclusive</span>
+                </button>
+
+                {isExclusive && (
+                  <select
+                    value={requiredTier}
+                    onChange={(e) => setRequiredTier(e.target.value)}
+                    className="bg-transparent text-sm text-purple-300 border-none outline-none focus:ring-0 ml-2 py-0 cursor-pointer"
+                  >
+                    <option value="basic" className="bg-gray-900">Basic Tier</option>
+                    <option value="pro" className="bg-gray-900">Pro Tier</option>
+                    <option value="elite" className="bg-gray-900">Elite Tier</option>
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}

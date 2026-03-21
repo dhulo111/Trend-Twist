@@ -25,6 +25,8 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
   const isPrivate = profileData.profile?.is_private;
   const isFollowing = profileData.is_following;
   const hasPendingRequest = profileData.has_pending_request;
+  // Only show creator features if the profile owner is a creator
+  const isProfileOwnerCreator = profileData.is_creator || profileData.profile?.is_creator || false;
 
   // Counts (Assumed from UserSerializer)
   const postsCount = profileData.posts_count || 0;
@@ -94,7 +96,8 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
             Message
           </Button>
           
-          {profileData.has_active_plans && (
+          {/* Subscribe button — only visible if profile owner is a creator */}
+          {isProfileOwnerCreator && profileData.has_active_plans && (
             <Button
               variant={profileData.is_subscribed ? "secondary" : "primary"}
               className={profileData.is_subscribed ? "border-purple-500 text-purple-600" : "bg-gradient-to-r from-purple-600 to-pink-600 border-none shadow-purple-500/20"}
@@ -135,7 +138,8 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
           </Button>
         )}
         
-        {profileData.has_active_plans && (
+        {/* Subscribe button — only visible if profile owner is a creator */}
+        {isProfileOwnerCreator && profileData.has_active_plans && (
           <Button
             variant={profileData.is_subscribed ? "secondary" : "primary"}
             className={profileData.is_subscribed ? "border-purple-500 text-purple-600" : "bg-gradient-to-r from-purple-600 to-pink-600 border-none shadow-purple-500/20"}
@@ -242,8 +246,8 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
               <span className="text-xs md:text-sm text-text-secondary">Following</span>
             </div>
 
-            {/* NEW: Subscribers Stat (Only show if user has active plans or is already a creator) */}
-            {(profileData.has_active_plans || subscribersCount > 0) && (
+            {/* NEW: Subscribers Stat (Only show if profile owner is a creator) */}
+            {isProfileOwnerCreator && (profileData.has_active_plans || subscribersCount > 0) && (
               <div className="text-center rounded-md p-1 min-w-[70px] border border-purple-500/10 bg-purple-500/5 transition-all">
                 <div className="flex items-center justify-center gap-1">
                   <span className="block text-lg font-bold text-purple-500">

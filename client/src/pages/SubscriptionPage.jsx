@@ -103,6 +103,30 @@ const SubscriptionPage = () => {
     </div>
   );
 
+  // Guard: If this creator has not enabled creator mode, show a message
+  const isProfileACreator = creatorInfo?.is_creator || creatorInfo?.profile?.is_creator;
+  if (!isOwnProfile && creatorInfo && !isProfileACreator) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center px-4">
+        <div className="max-w-md">
+          <div className="w-20 h-20 rounded-full bg-background-secondary border border-border flex items-center justify-center mx-auto mb-5">
+            <FaCrown className="text-4xl text-gray-500" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">Not a Creator</h2>
+          <p className="text-text-secondary text-sm mb-6">
+            @{username} has not enabled Creator Mode yet. They cannot accept subscriptions at this time.
+          </p>
+          <button
+            onClick={() => navigate(`/profile/${username}`)}
+            className="text-sm text-text-accent hover:underline"
+          >
+            ← Back to Profile
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-transparent text-text-primary">
       {/* Header */}

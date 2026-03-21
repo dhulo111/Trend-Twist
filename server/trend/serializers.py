@@ -60,8 +60,9 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        # Added is_private field, and User fields
-        fields = ['username', 'email', 'first_name', 'last_name', 'bio', 'profile_picture', 'website_url', 'is_trendsetter', 'is_private']
+        # Added is_private and is_creator fields, and User fields
+        # Added is_private, is_creator, and withdrawal_info
+        fields = ['username', 'email', 'first_name', 'last_name', 'bio', 'profile_picture', 'website_url', 'is_trendsetter', 'is_private', 'is_creator', 'withdrawal_info']
         read_only_fields = ['is_trendsetter']
 
     def update(self, instance, validated_data):
@@ -93,18 +94,49 @@ class UserSerializer(serializers.ModelSerializer):
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
     subscribers_count = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
+    creator_balance = serializers.SerializerMethodField()
+    creator_pending_withdrawals = serializers.SerializerMethodField()
+
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 
                   'is_following', 'has_pending_request', 'is_subscribed', 'has_active_plans',
-                  'posts_count', 'followers_count', 'following_count', 'subscribers_count']
+                  'posts_count', 'followers_count', 'following_count', 'subscribers_count', 'is_creator', 'creator_balance', 'creator_pending_withdrawals']
+
+    def get_is_creator(self, obj):
+        try:
+            return obj.profile.is_creator
+        except:
+            return False
+
+    def get_creator_balance(self, obj):
+        try:
+            if not obj.profile.is_creator: return 0
+        except: return 0
+        from django.db.models import Sum
+        from .models import CreatorEarning, WithdrawalRequest
+        total_earned = CreatorEarning.objects.filter(creator=obj).aggregate(total=Sum('creator_amount'))['total'] or 0
+        total_processed = WithdrawalRequest.objects.filter(creator=obj, status__in=['pending', 'completed']).aggregate(total=Sum('amount'))['total'] or 0
+        return float(total_earned - total_processed)
+
+    def get_creator_pending_withdrawals(self, obj):
+        try:
+            if not obj.profile.is_creator: return 0
+        except: return 0
+        from django.db.models import Sum
+        from .models import WithdrawalRequest
+        return float(WithdrawalRequest.objects.filter(creator=obj, status='pending').aggregate(total=Sum('amount'))['total'] or 0)
 
     def get_has_active_plans(self, obj):
-        # We check if this user has any active subscription plans
+        # Only return True if the user is a creator AND global plans are active
+        try:
+            if not obj.profile.is_creator:
+                return False
+        except:
+            return False
         return SubscriptionPlan.objects.filter(is_active=True).exists()
-        # Wait, SubscriptionPlans are GLOBAL in this current model? 
-        # Let's check models.py again.
 
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
@@ -613,4 +645,19 @@ class SavedItemSerializer(serializers.ModelSerializer):
         model = SavedItem
         fields = ['id', 'user', 'post', 'reel', 'twist', 'post_details', 'reel_details', 'twist_details', 'created_at']
         read_only_fields = ['user']
+
+# --- 12. Withdrawal Serializers ---
+from .models import WithdrawalRequest
+
+class WithdrawalRequestSerializer(serializers.ModelSerializer):
+    creator_username = serializers.ReadOnlyField(source='creator.username')
+
+    class Meta:
+        model = WithdrawalRequest
+        fields = '__all__'
+        read_only_fields = ['creator', 'status', 'processed_at', 'admin_note']
+
+class AdminWithdrawalActionSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=['completed', 'rejected'])
+    admin_note = serializers.CharField(required=False, allow_blank=True)
 

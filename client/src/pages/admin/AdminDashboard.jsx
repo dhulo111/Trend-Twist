@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, FileText, MessageSquare, Video, Activity, TrendingUp, IndianRupee, ShieldCheck } from 'lucide-react';
+import { Users, FileText, MessageSquare, Video, Activity, TrendingUp, IndianRupee, ShieldCheck, CreditCard } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -12,6 +13,8 @@ const AdminDashboard = () => {
     reels: 0,
     total_revenue: 0,
     total_fees: 0,
+    pending_withdrawals_total: 0,
+    pending_withdrawals_count: 0
   });
 
   const [loading, setLoading] = useState(true);
@@ -30,6 +33,8 @@ const AdminDashboard = () => {
           reels: res.data.reels || 0,
           total_revenue: res.data.total_revenue || 0,
           total_fees: res.data.total_fees || 0,
+          pending_withdrawals_total: res.data.pending_withdrawals_total || 0,
+          pending_withdrawals_count: res.data.pending_withdrawals_count || 0,
         });
       } catch (err) {
         console.error("Failed to fetch dashboard stats", err);
@@ -44,8 +49,8 @@ const AdminDashboard = () => {
   const cards = [
     { title: 'Total Revenue', value: stats.total_revenue, symbol: '₹', icon: IndianRupee, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/40' },
     { title: 'Commission (Fee)', value: stats.total_fees, symbol: '₹', icon: ShieldCheck, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/40' },
+    { title: 'Pending Payouts', value: stats.pending_withdrawals_total, symbol: '₹', icon: CreditCard, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/40', link: '/admin/earnings' },
     { title: 'Total Users', value: stats.users, icon: Users, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-    { title: 'Total Reels', value: stats.reels, icon: Video, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/40' },
   ];
 
   if (loading) return (
@@ -61,12 +66,12 @@ const AdminDashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Platform Overview</h2>
-          <p className="text-gray-500 mt-1">Key metrics and statistics for Trend Twist.</p>
+          <p className="text-xs text-gray-500 mt-1">Real-time metrics for Trend Twist Economy.</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm">
+        <Link to="/admin/earnings" className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm text-sm font-bold">
           <Activity size={18} />
-          Generate Report
-        </button>
+          Go to Payout Queue ({stats.pending_withdrawals_count})
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -79,13 +84,13 @@ const AdminDashboard = () => {
             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize mb-2">{card.title}</dt>
 
             <div className="flex items-baseline gap-3 relative z-10">
-              <dd className="text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                {card.symbol && <span className="text-2xl mr-1 opacity-60 font-medium">{card.symbol}</span>}
+              <dd className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                {card.symbol && <span className="text-xl mr-1 opacity-60 font-medium">{card.symbol}</span>}
                 {card.value.toLocaleString(undefined, { minimumFractionDigits: card.symbol ? 2 : 0, maximumFractionDigits: card.symbol ? 2 : 0 })}
               </dd>
-              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100/50 text-green-700 dark:text-green-400">
-                +12%
-              </span>
+              {card.link && (
+                 <Link to={card.link} className="text-[10px] font-bold text-purple-500 hover:underline">Manage &rarr;</Link>
+              )}
             </div>
           </div>
         ))}
@@ -115,7 +120,7 @@ const AdminDashboard = () => {
                   <Users size={16} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">New user registered: <span className="text-purple-500 font-bold">@alex{i}</span></p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">New user registered: <span className="text-purple-500 font-bold">@alex{i}</span></p>
                   <p className="text-xs text-gray-400">2 minutes ago</p>
                 </div>
               </div>

@@ -75,7 +75,7 @@ const CallInterface = ({
           )}
 
           {/* Local Video (Picture-in-Picture) - Mirrored */}
-          {callType === 'video' && localStream && (callStatus === 'connected' || callStatus === 'connecting') && (
+          {callType === 'video' && localStream && (callStatus === 'connected' || callStatus === 'connecting' || callStatus === 'calling') && (
             <div className="absolute top-4 right-4 w-32 h-44 md:w-56 md:h-72 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl z-20">
               <video
                 ref={localVideoRef}

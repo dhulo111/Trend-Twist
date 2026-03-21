@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
-from .models import SubscriptionPlan, UserSubscription, CreatorEarning, CreatorPayout
+from .models import SubscriptionPlan, UserSubscription, CreatorEarning, WithdrawalRequest
 from .serializers import SubscriptionPlanSerializer, UserSubscriptionSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 import datetime
@@ -83,13 +83,17 @@ class MyCreatorEarningsView(APIView):
     def get(self, request):
         creator = request.user
         earnings = CreatorEarning.objects.filter(creator=creator).order_by('-created_at')
-        payouts = CreatorPayout.objects.filter(creator=creator).order_by('-created_at')
+        withdrawals = WithdrawalRequest.objects.filter(creator=creator).order_by('-created_at')
 
         total_gross = earnings.aggregate(t=Sum('gross_amount'))['t'] or Decimal('0')
         total_platform = earnings.aggregate(t=Sum('platform_fee'))['t'] or Decimal('0')
         total_creator = earnings.aggregate(t=Sum('creator_amount'))['t'] or Decimal('0')
-        total_paid = payouts.filter(status='paid').aggregate(t=Sum('amount'))['t'] or Decimal('0')
-        pending = total_creator - total_paid
+        
+        # Balance = total_creator - (completed + pending withdrawals)
+        total_processed_withdrawals = withdrawals.filter(status__in=['pending', 'completed']).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+        available_balance = total_creator - total_processed_withdrawals
+        
+        total_completed_withdrawn = withdrawals.filter(status='completed').aggregate(t=Sum('amount'))['t'] or Decimal('0')
 
         earnings_data = [{
             'id': e.id,
@@ -99,16 +103,17 @@ class MyCreatorEarningsView(APIView):
             'platform_fee': str(e.platform_fee),
             'creator_amount': str(e.creator_amount),
             'date': e.created_at.isoformat(),
-        } for e in earnings[:20]]  # latest 20 txs
+        } for e in earnings[:20]]
 
         return Response({
             'total_gross': str(total_gross),
             'platform_fee_total': str(total_platform),
             'creator_earnings_total': str(total_creator),
-            'total_paid_out': str(total_paid),
-            'pending_payout': str(max(pending, Decimal('0'))),
+            'available_balance': str(available_balance),
+            'total_withdrawn': str(total_completed_withdrawn),
             'recent_transactions': earnings_data,
-            'terms': 'Platform takes 20% of every subscription. You earn 80%. Payments are manually paid out by the admin.'
+            'withdrawal_info': creator.profile.withdrawal_info,
+            'terms': 'Platform fee (20%) is already deducted. Withdrawals take 3-5 days. Minimum ₹100.'
         })
 
 
@@ -429,8 +434,6 @@ class AdminEarningsView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get(self, request):
-        # Aggregate total earned, platform fee, creator share, and pending payout per creator
-        from django.db.models import Count
         creators = User.objects.filter(earnings__isnull=False).distinct()
         data = []
         for creator in creators:
@@ -438,20 +441,23 @@ class AdminEarningsView(APIView):
             total_gross = earnings.aggregate(t=Sum('gross_amount'))['t'] or Decimal('0')
             total_platform = earnings.aggregate(t=Sum('platform_fee'))['t'] or Decimal('0')
             total_creator = earnings.aggregate(t=Sum('creator_amount'))['t'] or Decimal('0')
-            total_paid = CreatorPayout.objects.filter(creator=creator, status='paid').aggregate(
+            
+            # Use WithdrawalRequest instead of CreatorPayout
+            total_withdrawn = WithdrawalRequest.objects.filter(creator=creator, status='completed').aggregate(
                 t=Sum('amount'))['t'] or Decimal('0')
-            pending = total_creator - total_paid
+            total_pending = WithdrawalRequest.objects.filter(creator=creator, status='pending').aggregate(
+                t=Sum('amount'))['t'] or Decimal('0')
+                
             data.append({
                 'creator_id': creator.id,
                 'creator_username': creator.username,
                 'total_gross': str(total_gross),
                 'platform_fee_total': str(total_platform),
                 'creator_earnings_total': str(total_creator),
-                'total_paid_out': str(total_paid),
-                'pending_payout': str(pending if pending > 0 else Decimal('0')),
+                'total_withdrawn': str(total_withdrawn),
+                'pending_payout': str(total_pending),
                 'transaction_count': earnings.count(),
             })
-        # Platform totals
         platform_total = CreatorEarning.objects.aggregate(t=Sum('platform_fee'))['t'] or Decimal('0')
         gross_total = CreatorEarning.objects.aggregate(t=Sum('gross_amount'))['t'] or Decimal('0')
         return Response({
@@ -468,10 +474,10 @@ class AdminCreatorPayoutView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     def get(self, request, creator_id):
-        """Get full earnings history and payouts for a specific creator."""
+        """Get full earnings history and withdrawal requests for a specific creator."""
         creator = get_object_or_404(User, id=creator_id)
         earnings = CreatorEarning.objects.filter(creator=creator).order_by('-created_at')
-        payouts = CreatorPayout.objects.filter(creator=creator).order_by('-created_at')
+        withdrawals = WithdrawalRequest.objects.filter(creator=creator).order_by('-created_at')
 
         earnings_data = [{
             'id': e.id,
@@ -483,47 +489,23 @@ class AdminCreatorPayoutView(APIView):
             'date': e.created_at.isoformat(),
         } for e in earnings]
 
-        payouts_data = [{
-            'id': p.id,
-            'amount': str(p.amount),
-            'status': p.status,
-            'note': p.note,
-            'created_at': p.created_at.isoformat(),
-            'paid_at': p.paid_at.isoformat() if p.paid_at else None,
-        } for p in payouts]
+        withdrawals_data = [{
+            'id': w.id,
+            'amount': str(w.amount),
+            'status': w.status,
+            'payment_method': w.payment_method,
+            'created_at': w.created_at.isoformat(),
+            'processed_at': w.processed_at.isoformat() if w.processed_at else None,
+        } for w in withdrawals]
 
         total_earned = earnings.aggregate(t=Sum('creator_amount'))['t'] or Decimal('0')
-        total_paid = payouts.filter(status='paid').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+        total_withdrawn = WithdrawalRequest.objects.filter(creator=creator, status='completed').aggregate(t=Sum('amount'))['t'] or Decimal('0')
 
         return Response({
             'creator': creator.username,
             'earnings': earnings_data,
-            'payouts': payouts_data,
+            'withdrawals': withdrawals_data,
             'total_earned': str(total_earned),
-            'total_paid': str(total_paid),
-            'pending_payout': str(max(total_earned - total_paid, Decimal('0'))),
+            'total_withdrawn': str(total_withdrawn),
+            'available_balance': str(max(total_earned - total_withdrawn, Decimal('0'))),
         })
-
-    def post(self, request, creator_id):
-        """Admin creates a payout for a creator (marks distribution as paid)."""
-        creator = get_object_or_404(User, id=creator_id)
-        amount = request.data.get('amount')
-        note = request.data.get('note', '')
-
-        if not amount or Decimal(str(amount)) <= 0:
-            return Response({'error': 'Valid amount required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        payout = CreatorPayout.objects.create(
-            creator=creator,
-            amount=Decimal(str(amount)),
-            status='paid',
-            note=note,
-            paid_at=timezone.now(),
-        )
-        return Response({
-            'id': payout.id,
-            'creator': creator.username,
-            'amount': str(payout.amount),
-            'status': payout.status,
-            'paid_at': payout.paid_at.isoformat(),
-        }, status=status.HTTP_201_CREATED)

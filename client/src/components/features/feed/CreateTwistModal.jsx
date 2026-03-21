@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const CreateTwistModal = ({ isOpen, onClose, originalPost, onSuccess }) => {
   const { user } = useContext(AuthContext);
+  const isCreator = user?.is_creator || user?.profile?.is_creator || false;
   const [content, setContent] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
   const [isExclusive, setIsExclusive] = useState(false);
@@ -162,30 +163,34 @@ const CreateTwistModal = ({ isOpen, onClose, originalPost, onSuccess }) => {
               
               <div className="h-6 w-[1px] bg-border mx-2" />
               
-              {/* Exclusive Toggle */}
-              <button
-                type="button"
-                onClick={() => setIsExclusive(!isExclusive)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                  isExclusive 
-                    ? 'bg-purple-500/10 border-purple-500/50 text-purple-400' 
-                    : 'border-border text-text-secondary hover:border-text-primary'
-                }`}
-              >
-                <FaLock size={12} className={isExclusive ? 'text-purple-400' : 'text-text-secondary'} />
-                <span>Premium Twist</span>
-              </button>
+              {/* Exclusive Toggle — only for creators */}
+              {isCreator && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsExclusive(!isExclusive)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                      isExclusive 
+                        ? 'bg-purple-500/10 border-purple-500/50 text-purple-400' 
+                        : 'border-border text-text-secondary hover:border-text-primary'
+                    }`}
+                  >
+                    <FaLock size={12} className={isExclusive ? 'text-purple-400' : 'text-text-secondary'} />
+                    <span>Premium Twist</span>
+                  </button>
 
-              {isExclusive && (
-                <select
-                  value={requiredTier}
-                  onChange={(e) => setRequiredTier(e.target.value)}
-                  className="bg-transparent text-xs text-purple-300 font-bold border-none outline-none focus:ring-0 cursor-pointer"
-                >
-                  <option value="basic" className="bg-background-secondary">Basic+</option>
-                  <option value="pro" className="bg-background-secondary">Pro+</option>
-                  <option value="elite" className="bg-background-secondary">Elite</option>
-                </select>
+                  {isExclusive && (
+                    <select
+                      value={requiredTier}
+                      onChange={(e) => setRequiredTier(e.target.value)}
+                      className="bg-transparent text-xs text-purple-300 font-bold border-none outline-none focus:ring-0 cursor-pointer"
+                    >
+                      <option value="basic" className="bg-background-secondary">Basic+</option>
+                      <option value="pro" className="bg-background-secondary">Pro+</option>
+                      <option value="elite" className="bg-background-secondary">Elite</option>
+                    </select>
+                  )}
+                </>
               )}
             </div>
 

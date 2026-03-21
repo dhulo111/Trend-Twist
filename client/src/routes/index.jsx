@@ -17,6 +17,7 @@ import EditProfilePage from '../pages/EditProfilePage';
 import SubscriptionPage from '../pages/SubscriptionPage';
 
 import MessagesPage from '../pages/MessagesPage'; // For Live Chat Inbox
+import StrangerTalkPage from '../pages/StrangerTalkPage'; // Talk with Stranger
 
 // --- Import Full-Screen Creation Pages ---
 import CreatePostPage from '../pages/CreatePostPage'; // Full page for post creation
@@ -69,6 +70,7 @@ const AppRoutes = () => {
         <Route path="profile/:username/subscribe" element={<SubscriptionPage />} />
         <Route path="success" element={<PaymentSuccessPage />} />
         <Route path="requests" element={<RequestsPage />} />
+        {/* Stranger is moved out of MainLayout */}
 
         {/* --- Content Details --- */}
         <Route path="post/:postId" element={<PostDetailPage />} />
@@ -95,6 +97,16 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <ReelCreatePage />
+          </ProtectedRoute>
+        }
+      />
+ 
+      {/* 4. Full-Screen Stranger Talk (No sidebar/navbar) */}
+      <Route
+        path="/stranger"
+        element={
+          <ProtectedRoute>
+            <StrangerTalkPage />
           </ProtectedRoute>
         }
       />
