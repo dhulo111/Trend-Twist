@@ -242,12 +242,17 @@ const Navbar = () => {
           {({ isActive }) => (isActive ? <IoHomeSharp size={26} /> : <IoHomeOutline size={26} />)}
         </NavLink>
 
-        {/* 2. Search (Trend Twist usually emphasizes Trending/Search) */}
+        {/* 2. Reels */}
+        <NavLink to="/reels" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
+          {({ isActive }) => (isActive ? <IoFilmSharp size={26} /> : <IoFilmOutline size={26} />)}
+        </NavLink>
+
+        {/* 3. Trending */}
         <NavLink to="/trending" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
           {({ isActive }) => (isActive ? <MdTrendingUp size={28} /> : <MdTrendingUp size={28} className="opacity-70" />)}
         </NavLink>
 
-        {/* 3. Create (Center Floating Button) */}
+        {/* 4. Create (Center Floating Button) */}
         <div className="relative -top-3">
           <Link to="/create/post">
             <div className="h-14 w-14 rounded-full bg-gradient-to-tr from-text-accent to-purple-400 flex items-center justify-center text-white  border-4 border-white dark:border-[#1a1a1a]">
@@ -256,17 +261,12 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* 4. Stranger Talk */}
+        {/* 5. Stranger Talk */}
         <NavLink to="/stranger" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-purple-400 scale-110' : 'text-text-secondary'}`}>
           {({ isActive }) => (isActive ? <IoPeople size={26} /> : <IoPeopleOutline size={26} />)}
         </NavLink>
 
-        {/* 5. Reels */}
-        <NavLink to="/reels" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
-          {({ isActive }) => (isActive ? <IoFilmSharp size={26} /> : <IoFilmOutline size={26} />)}
-        </NavLink>
-
-        {/* 5. Profile */}
+        {/* 6. Profile */}
         <NavLink to={`/profile/${user?.username}`} className={({ isActive }) => `p-1 rounded-full w-10 border-2 transition-all duration-200 ${isActive ? 'border-text-accent' : 'border-transparent'}`}>
           <Avatar src={user?.profile?.profile_picture} size="xs" />
         </NavLink>
