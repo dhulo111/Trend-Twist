@@ -105,11 +105,16 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event["payload"]))
 
     async def stranger_matched(self, event):
-        """Notify this client that a match was found."""
+        """Notify this client that a match was found (or put in queue)."""
+        self.partner_channel = event.get("partner_channel") # Might be None for 'waiting'
+        self.pair_group = event.get("pair_group")           # Might be None for 'waiting'
         await self.send(text_data=json.dumps(event["payload"]))
 
     async def stranger_disconnected(self, event):
         """Notify this client that the partner disconnected/switched."""
+        # Clear local partner refs if partner is gone
+        self.partner_channel = None
+        self.pair_group = None
         await self.send(text_data=json.dumps(event["payload"]))
 
     # ------------------------------------------------------------------
@@ -165,6 +170,8 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         # Notify partner via channel layer
         await self.channel_layer.send(partner_channel, {
             "type": "stranger_matched",
+            "partner_channel": self.channel_name,
+            "pair_group": self.pair_group,
             "payload": {
                 "type": "matched",
                 "role": "answerer" if i_am_offerer else "offerer",
