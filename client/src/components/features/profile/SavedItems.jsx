@@ -101,9 +101,13 @@ const SavedItems = () => {
                                             onClick={() => window.location.href = `/reels/${item.reel_details.id}`}
                                             className="aspect-[9/16] relative rounded-lg overflow-hidden group cursor-pointer border border-border shadow-sm hover:shadow-xl transition-all"
                                         >
-                                            <video src={item.reel_details.video_file} className="w-full h-full object-cover" />
+                                            {item.reel_details.media_type === 'video' ? (
+                                                <video src={item.reel_details.media_file} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <img src={item.reel_details.media_file} className="w-full h-full object-cover" />
+                                            )}
                                             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/50 transition-all flex flex-col items-center justify-center opacity-0 group-hover:opacity-100">
-                                                <IoVideocamOutline className="text-white text-3xl mb-2" />
+                                                {item.reel_details.media_type === 'video' ? <IoVideocamOutline className="text-white text-3xl mb-2" /> : <div className="text-white text-3xl mb-2">🖼️</div>}
                                                 <span className="text-white text-xs font-bold px-3 py-1 bg-white/20 rounded-full backdrop-blur-md">VIEW REEL</span>
                                             </div>
                                         </div>

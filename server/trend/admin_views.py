@@ -174,7 +174,8 @@ class AdminReelListView(views.APIView):
                 'caption': getattr(reel, 'caption', ''),
                 'author': reel.author.username,
                 'created_at': reel.created_at,
-                'media_url': reel.video_file.url if reel.video_file else None,
+                'media_url': reel.media_file.url if reel.media_file else None,
+                'media_type': getattr(reel, 'media_type', 'video'),
             })
         return paginator.get_paginated_response(data)
 

@@ -246,9 +246,12 @@ const ProfileHeader = ({ profileData, onProfileUpdate, userStories, handleStoryC
               <span className="text-xs md:text-sm text-text-secondary">Following</span>
             </div>
 
-            {/* NEW: Subscribers Stat (Only show if profile owner is a creator) */}
+            {/* NEW: Subscribers Stat (Clickable) */}
             {isProfileOwnerCreator && (profileData.has_active_plans || subscribersCount > 0) && (
-              <div className="text-center rounded-md p-1 min-w-[70px] border border-purple-500/10 bg-purple-500/5 transition-all">
+              <div 
+                className="text-center cursor-pointer hover:bg-purple-100/50 rounded-md p-1 min-w-[70px] border border-purple-500/10 bg-purple-500/5 transition-all"
+                onClick={() => handleStatClick('subscribers')}
+              >
                 <div className="flex items-center justify-center gap-1">
                   <span className="block text-lg font-bold text-purple-500">
                     {subscribersCount}

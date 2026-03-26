@@ -8,6 +8,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 import random
 
 from rest_framework import generics, permissions, status, viewsets, serializers
@@ -1349,20 +1350,31 @@ class UserStoryListView(generics.ListAPIView):
         return {'request': self.request}
 
 class FollowerListView(generics.ListAPIView):
-    serializer_class = FollowerSerializer
+    """
+    Returns a list of User objects who follow the target user.
+    Uses UserSerializer for rich profile data and follow state.
+    """
+    serializer_class = UserSerializer
     permission_classes = [AllowAny]
+    
     def get_queryset(self):
         username = self.kwargs['username']
-        user = User.objects.get(username=username)
-        return Follow.objects.filter(following=user).exclude(follower__profile__blocked_until__gt=timezone.now())
+        user = get_object_or_404(User, username__iexact=username)
+        # return the User objects from the follow records
+        return User.objects.filter(following__following=user).distinct().exclude(profile__blocked_until__gt=timezone.now())
 
 class FollowingListView(generics.ListAPIView):
-    serializer_class = FollowingSerializer
+    """
+    Returns a list of User objects whom the target user is following.
+    Uses UserSerializer for rich profile data and follow state.
+    """
+    serializer_class = UserSerializer
     permission_classes = [AllowAny]
+    
     def get_queryset(self):
         username = self.kwargs['username']
-        user = User.objects.get(username=username)
-        return Follow.objects.filter(follower=user).exclude(following__profile__blocked_until__gt=timezone.now())
+        user = get_object_or_404(User, username__iexact=username)
+        return User.objects.filter(followers__follower=user).distinct().exclude(profile__blocked_until__gt=timezone.now())
 
 class TrendingHashtagsView(generics.ListAPIView):
     serializer_class = HashtagSerializer

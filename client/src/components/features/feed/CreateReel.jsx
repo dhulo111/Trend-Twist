@@ -28,10 +28,11 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
       const loadDraft = async () => {
         try {
           // Fetch Video Blob
-          const response = await fetch(initialDraft.video_file);
+          const response = await fetch(initialDraft.media_file);
           const blob = await response.blob();
-          const videoFile = new File([blob], "draft_video.mp4", { type: "video/mp4" });
-          setFile(videoFile);
+          const mediaType = initialDraft.media_type === 'video' ? 'video/mp4' : 'image/jpeg';
+          const mediaFile = new File([blob], initialDraft.media_type === 'video' ? "draft_video.mp4" : "draft_image.jpg", { type: mediaType });
+          setFile(mediaFile);
 
           // Set State
           setCaption(initialDraft.caption || '');
@@ -81,7 +82,9 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
     setUploading(true);
 
     const formData = new FormData();
-    formData.append('video_file', file);
+    formData.append('media_file', file);
+    const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+    formData.append('media_type', mediaType);
     formData.append('caption', caption);
 
     // Add draft status
@@ -128,14 +131,14 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
         <div className="flex-1 flex flex-col items-center justify-center p-8 border-2 border-dashed border-border rounded-xl hover:border-text-accent transition group cursor-pointer relative bg-background-secondary m-4">
           <input
             type="file"
-            accept="video/*"
+            accept="video/*,image/*"
             onChange={handleFileChange}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div className="w-20 h-20 bg-background-accent/20 rounded-full flex items-center justify-center mb-6">
             <FaVideo className="text-4xl text-text-accent" />
           </div>
-          <p className="font-bold text-xl mb-2 text-text-primary">Select Video</p>
+          <p className="font-bold text-xl mb-2 text-text-primary">Select Video or Image</p>
           <p className="text-sm text-text-secondary">Drag and drop or click to upload</p>
         </div>
       )}
@@ -166,7 +169,11 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
           <div className="flex gap-4 mb-6">
             {/* Thumbnail Preview (Static for now) */}
             <div className="w-24 h-40 bg-gray-800 rounded-lg overflow-hidden relative">
-              <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" muted />
+              {file.type.startsWith('video/') ? (
+                <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" muted />
+              ) : (
+                <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+              )}
             </div>
             <div className="flex-1">
               <textarea

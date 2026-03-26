@@ -389,8 +389,13 @@ class ChatMessage(models.Model):
 # --- 7. Reel Models (Instagram Reels Clone) ---
 
 class Reel(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+    ]
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reels')
-    video_file = models.FileField(upload_to='reels/', blank=False, null=False)
+    media_file = models.FileField(upload_to='reels/', blank=False, null=False)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='video')
     caption = models.TextField(blank=True, null=True)
     music_name = models.CharField(max_length=200, blank=True, null=True)
     music_file = models.FileField(upload_to='reels/music/', blank=True, null=True)

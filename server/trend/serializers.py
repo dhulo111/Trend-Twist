@@ -330,7 +330,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         if obj.shared_reel:
             return {
                 'id': obj.shared_reel.id,
-                'thumbnail': obj.shared_reel.video_file.url, # Or a specific thumbnail field if you had one, for now video URL can be used as src for video tag
+                'thumbnail': obj.shared_reel.media_file.url, # Or a specific thumbnail field if you had one, for now video URL can be used as src for video tag
                 'author_username': obj.shared_reel.author.username,
                 'caption': obj.shared_reel.caption[:30] + '...' if obj.shared_reel.caption else ''
             }
@@ -552,7 +552,7 @@ class ReelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reel
         fields = [
-            'id', 'author', 'author_username', 'author_profile_picture', 'video_file', 'caption', 
+            'id', 'author', 'author_username', 'author_profile_picture', 'media_file', 'media_type', 'caption', 
             'music_name', 'music_file', 'editor_json', 'duration', 'is_draft', 'created_at', 
             'views_count', 'likes_count', 'comments_count', 'is_liked', 'is_saved', 'is_following',
             'is_exclusive', 'required_tier', 'has_access'
@@ -571,7 +571,7 @@ class ReelSerializer(serializers.ModelSerializer):
         repr_data = super().to_representation(instance)
         if not repr_data.get('has_access', True):
             repr_data['caption'] = "*** Subscribe to unlock this premium Reel ***"
-            repr_data['video_file'] = None
+            repr_data['media_file'] = None
             repr_data['music_file'] = None
         return repr_data
 
@@ -609,7 +609,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source='sender.username')
     sender_profile_picture = serializers.ImageField(source='sender.profile.profile_picture', read_only=True)
     post_image = serializers.FileField(source='post.media_file', read_only=True)
-    reel_thumbnail = serializers.FileField(source='reel.video_file', read_only=True) # Or generate thumbnail logic
+    reel_thumbnail = serializers.FileField(source='reel.media_file', read_only=True) # Or generate thumbnail logic
     
     class Meta:
         model = Notification

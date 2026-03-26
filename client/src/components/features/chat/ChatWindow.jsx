@@ -42,6 +42,8 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [incomingCallData, setIncomingCallData] = useState(null);
   const [showGroupDetails, setShowGroupDetails] = useState(false);
+  // --- WebRTC Logic (Enhanced for Reliability) ---
+  const iceCandidatesQueue = useRef([]);
 
   const peerConnectionRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -87,9 +89,18 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
   // --- WebRTC Logic (Defined before WS to be available in closure if needed, though with Refs it's flexible) ---
 
   // 1. Helper to End Call
-  const endCall = (sendSignal = true) => {
+  const endCall = (sendSignal = true, duration = 0) => {
     if (sendSignal && wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'call_ended' }));
+      wsRef.current.send(JSON.stringify({
+        type: 'call_ended',
+        duration: duration
+      }));
+
+      // Persist call log in chat if call was connected
+      if (callStatusRef.current === 'connected') {
+        const callMsg = `☎️ ${callType === 'video' ? 'Video' : 'Voice'} call ended`;
+        wsRef.current.send(JSON.stringify({ 'message': callMsg }));
+      }
     }
 
     if (peerConnectionRef.current) {
@@ -109,6 +120,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
     setIncomingCallData(null);
     setIsMicMuted(false);
     setIsVideoOff(false);
+    iceCandidatesQueue.current = [];
   };
 
   // NOTE: endCallRef to be used in ws.onclose
@@ -129,23 +141,30 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
     };
 
     pc.ontrack = (event) => {
-      setRemoteStream(event.streams[0]);
+       console.log("Remote track received:", event.streams[0]);
+       if (event.streams && event.streams[0]) {
+         setRemoteStream(event.streams[0]);
+       }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log("Connection state:", pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        endCallRef.current(false);
+      }
     };
 
     peerConnectionRef.current = pc;
     return pc;
   };
 
-  // 3. Handle Signaling Messages
+  // 3. Handle Signaling Messages (With ICE Buffering)
   const handleCallSignal = async (signal) => {
     const { data } = signal;
     const { type } = data;
 
     if (type === 'call_offer') {
-      if (callStatusRef.current !== 'idle') {
-        // Busy
-        return;
-      }
+      if (callStatusRef.current !== 'idle') return;
       setIncomingCallData(data);
       setCallType(data.callType);
       setCallStatus('incoming');
@@ -154,15 +173,23 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
       if (callStatusRef.current === 'calling' && peerConnectionRef.current) {
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
         setCallStatus('connected');
+        // Process buffered candidates
+        while (iceCandidatesQueue.current.length > 0) {
+          const candidate = iceCandidatesQueue.current.shift();
+          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        }
       }
     }
     else if (type === 'new_ice_candidate') {
-      if (peerConnectionRef.current) {
+      if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
         try {
           await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (e) {
-          console.error("Error adding received ice candidate", e);
+          console.error("Error adding ice candidate", e);
         }
+      } else {
+        // Buffer candidates until remote description is set
+        iceCandidatesQueue.current.push(data.candidate);
       }
     }
     else if (type === 'call_ended') {
@@ -182,8 +209,13 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: type === 'video',
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        video: type === 'video' ? { width: 1280, height: 720, frameRate: 30 } : false,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
       });
       setLocalStream(stream);
 
@@ -204,11 +236,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
     } catch (err) {
       console.error("Error starting call:", err);
       setCallStatus('idle');
-      if (err.name === 'NotReadableError') {
-        alert("Camera/Microphone is already in use using by another app or tab. Please close them and try again.");
-      } else {
-        alert("Could not access camera/microphone");
-      }
+      alert(`Permission denied or device in use: ${err.message}`);
     }
   };
 
@@ -221,8 +249,13 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: incomingData.callType === 'video',
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        video: incomingData.callType === 'video' ? { width: 1280, height: 720, frameRate: 30 } : false,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
       });
       setLocalStream(stream);
 
@@ -230,6 +263,12 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       await pc.setRemoteDescription(new RTCSessionDescription(incomingData.sdp));
+
+      // Process buffered candidates after setting remote description
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -245,11 +284,7 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
 
     } catch (err) {
       console.error("Error accepting call:", err);
-      if (err.name === 'NotReadableError') {
-        alert("Camera/Microphone is already in use using by another app or tab. Please close them and try again.");
-      } else {
-        alert(`Connection failed: ${err.message}`);
-      }
+      alert(`Could not join call: ${err.message}`);
       endCallRef.current(true);
     }
   };

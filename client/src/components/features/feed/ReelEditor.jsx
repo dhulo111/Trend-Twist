@@ -65,7 +65,10 @@ const IconButton = ({ icon: Icon, onClick, className, size = "w-6 h-6", active, 
 );
 
 const ToolbarContainer = ({ children, className }) => (
-  <div className={`absolute left-0 right-0 p-4 z-[100] flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}>
+  <div 
+    onClick={(e) => e.stopPropagation()}
+    className={`absolute left-0 right-0 p-4 z-[100] flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}
+  >
     <div className="bg-black/85 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl">
       {children}
     </div>
@@ -102,6 +105,8 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   const [musicQuery, setMusicQuery] = useState("");
   const [musicResults, setMusicResults] = useState([]);
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
+  const isVideo = mediaFile?.type.startsWith('video/');
+  const isImage = mediaFile?.type.startsWith('image/');
 
   const historyRef = useRef([]);
   const isRestoringRef = useRef(false);
@@ -120,8 +125,14 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
       if (initialMetadata.music) {
         setSelectedMusic(initialMetadata.music);
       }
+      if (initialMetadata.duration && isImage) {
+        setVideoDuration(initialMetadata.duration);
+      }
+    } else if (isImage) {
+      setVideoDuration(15); // Default for images
+      setTrimRange({ start: 0, end: 15 });
     }
-  }, [initialMetadata]);
+  }, [initialMetadata, isImage]);
 
   // Audio Sync Effect
   useEffect(() => {
@@ -242,7 +253,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   // Trimming Loop Logic
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || !isVideo) return;
 
     const checkTime = () => {
       if (v.currentTime < trimRange.start) v.currentTime = trimRange.start;
@@ -254,7 +265,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
     };
     const handle = requestAnimationFrame(checkTime);
     return () => cancelAnimationFrame(handle);
-  }, [trimRange]);
+  }, [trimRange, isVideo]);
 
   // Overlay Logic
   const handleAddText = () => {
@@ -453,22 +464,41 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
     onNext(mediaFile, json, metadata);
   };
 
+  const handleBackgroundClick = (e) => {
+    // Only close if we're not in a drawing/text editing mode where clicks are needed on canvas
+    if (activeTool !== 'none' && activeTool !== 'draw' && activeTool !== 'text' && activeTool !== 'sticker_edit') {
+      setActiveTool('none');
+      if (canvasRef.current) canvasRef.current.discardActiveObject().requestRenderAll();
+    }
+  };
+
   // --- RENDER ---
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative select-none bg-black">
-      <div ref={wrapperRef} className="relative w-full h-full md:max-w-[420px] md:h-auto md:aspect-[9/16] bg-black overflow-hidden md:shadow-2xl md:rounded-3xl md:border border-white/10 shrink-0">
+      <div 
+        ref={wrapperRef} 
+        onClick={handleBackgroundClick}
+        className="relative w-full h-full md:max-w-[420px] md:h-auto md:aspect-[9/16] bg-black overflow-hidden md:shadow-2xl md:rounded-3xl md:border border-white/10 shrink-0"
+      >
 
-        {/* Layer 1: Video Background */}
-        <video
-          ref={videoRef}
-          src={mediaURL}
-          className={`absolute inset-0 w-full z-0 h-full object-contain pointer-events-none ${getFilterClass(filterType)}`}
-          loop
-          muted={!!selectedMusic} // Only mute original video if we have selected a music track
-          playsInline
-          autoPlay
-          onLoadedMetadata={handleVideoLoadedMetadata}
-        />
+        {/* Layer 1: Background */}
+        {isVideo ? (
+          <video
+            ref={videoRef}
+            src={mediaURL}
+            className={`absolute inset-0 w-full z-0 h-full object-contain pointer-events-none ${getFilterClass(filterType)}`}
+            loop
+            muted={!!selectedMusic} // Only mute original video if we have selected a music track
+            playsInline
+            autoPlay
+            onLoadedMetadata={handleVideoLoadedMetadata}
+          />
+        ) : (
+          <img
+            src={mediaURL}
+            className={`absolute inset-0 w-full z-0 h-full object-contain pointer-events-none ${getFilterClass(filterType)}`}
+          />
+        )}
 
         {/* Layer 2: Canvas Overlay */}
         <div className="absolute inset-0 z-10">
@@ -517,7 +547,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
               { id: 'draw', icon: IoBrushOutline, action: () => { setActiveTool('draw'); toggleDrawingMode(true); }, label: 'Draw' },
               { id: 'sticker', icon: IoHappyOutline, action: () => setActiveTool('sticker_menu'), label: 'Sticker' },
               { id: 'filter', icon: IoContrastOutline, action: () => setActiveTool('filter'), label: 'Effects' },
-              { id: 'trim', icon: IoCutOutline, action: () => setActiveTool('trim'), label: 'Trim' },
+              { id: 'trim', icon: isVideo ? IoCutOutline : IoTimeOutline, action: () => setActiveTool('trim'), label: isVideo ? 'Trim' : 'Duration' },
             ].map(t => (
               <div key={t.id} className="flex flex-col items-center gap-1 group">
                 <button onClick={t.action} className="p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/20 hover:scale-110 transition-all shadow-lg">
@@ -529,56 +559,70 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
           </div>
         )}
 
-        {/* Trimming UI: Uses ToolbarContainer (z-[100]) */}
+        {/* Trimming / Duration UI */}
         {activeTool === 'trim' && (
           <ToolbarContainer className="bottom-0">
-            <h3 className="text-white mb-3 text-center font-bold text-sm uppercase tracking-wider">Trim Video</h3>
-            <div className="relative h-16 w-full bg-gray-800 rounded-lg overflow-hidden border border-white/20 select-none">
-
-              {/* Filmstrip Background Look */}
-              <div className="absolute inset-0 flex opacity-50 pointer-events-none">
-                <div className="w-full h-full bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-30"></div>
-                <div className="w-full h-full bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 opacity-50"></div>
+            <h3 className="text-white mb-3 text-center font-bold text-sm uppercase tracking-wider">
+              {isVideo ? 'Trim Video' : 'Set Duration'}
+            </h3>
+            
+            {isVideo ? (
+              <div className="relative h-16 w-full bg-gray-800 rounded-lg overflow-hidden border border-white/20 select-none">
+                <div className="absolute inset-0 flex opacity-50 pointer-events-none">
+                  <div className="w-full h-full bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-30"></div>
+                  <div className="w-full h-full bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 opacity-50"></div>
+                </div>
+                <div
+                  className="absolute top-0 bottom-0 bg-yellow-400/30 border-x-4 border-yellow-400 z-10 cursor-move pointer-events-none"
+                  style={{
+                    left: `${(trimRange.start / videoDuration) * 100}%`,
+                    right: `${100 - (trimRange.end / videoDuration) * 100}%`
+                  }}
+                />
+                <input
+                  type="range"
+                  min="0" max={videoDuration} step="0.1"
+                  value={trimRange.start}
+                  onChange={(e) => {
+                    const val = Math.min(Number(e.target.value), trimRange.end - 1);
+                    setTrimRange(p => ({ ...p, start: val }));
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-col-resize appearance-none pointer-events-auto"
+                  style={{ zIndex: 20 }}
+                />
+                <input
+                  type="range"
+                  min="0" max={videoDuration} step="0.1"
+                  value={trimRange.end}
+                  onChange={(e) => {
+                    const val = Math.max(Number(e.target.value), trimRange.start + 1);
+                    setTrimRange(p => ({ ...p, end: val }));
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-col-resize appearance-none pointer-events-auto"
+                  style={{ zIndex: 21 }}
+                />
+                <span className="absolute left-2 bottom-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded pointer-events-none z-30">{trimRange.start.toFixed(1)}s</span>
+                <span className="absolute right-2 bottom-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded pointer-events-none z-30">{trimRange.end.toFixed(1)}s</span>
               </div>
-
-              {/* Selected Range Highlight */}
-              <div
-                className="absolute top-0 bottom-0 bg-yellow-400/30 border-x-4 border-yellow-400 z-10 cursor-move pointer-events-none"
-                style={{
-                  left: `${(trimRange.start / videoDuration) * 100}%`,
-                  right: `${100 - (trimRange.end / videoDuration) * 100}%`
-                }}
-              />
-
-              {/* Slider Inputs */}
-              <input
-                type="range"
-                min="0" max={videoDuration} step="0.1"
-                value={trimRange.start}
-                onChange={(e) => {
-                  const val = Math.min(Number(e.target.value), trimRange.end - 1);
-                  setTrimRange(p => ({ ...p, start: val }));
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-col-resize appearance-none pointer-events-auto"
-                style={{ zIndex: 20 }}
-              />
-              <input
-                type="range"
-                min="0" max={videoDuration} step="0.1"
-                value={trimRange.end}
-                onChange={(e) => {
-                  const val = Math.max(Number(e.target.value), trimRange.start + 1);
-                  setTrimRange(p => ({ ...p, end: val }));
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-col-resize appearance-none pointer-events-auto"
-                style={{ zIndex: 21 }}
-              />
-
-              {/* Time Indicators */}
-              <span className="absolute left-2 bottom-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded pointer-events-none z-30">{trimRange.start.toFixed(1)}s</span>
-              <span className="absolute right-2 bottom-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded pointer-events-none z-30">{trimRange.end.toFixed(1)}s</span>
-            </div>
-            <p className="text-center text-xs text-white/50 mt-2">Drag ends to trim</p>
+            ) : (
+              <div className="flex justify-center gap-4">
+                {[5, 15, 30, 60].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => {
+                      setVideoDuration(d);
+                      setTrimRange({ start: 0, end: d });
+                    }}
+                    className={`w-12 h-12 rounded-full border-2 font-bold transition-all ${videoDuration === d ? 'border-yellow-400 bg-yellow-400 text-black scale-110' : 'border-white/20 text-white hover:bg-white/10'}`}
+                  >
+                    {d}s
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-center text-xs text-white/50 mt-2">
+              {isVideo ? 'Drag ends to trim' : 'Select reel length'}
+            </p>
           </ToolbarContainer>
         )}
 
@@ -659,7 +703,10 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Sticker Menu (New) */}
         {activeTool === 'sticker_menu' && (
-          <div className="absolute inset-x-0 bottom-0 top-1/2 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-x-0 bottom-0 top-1/2 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300"
+          >
             <div className="flex justify-between mb-6">
               <h3 className="text-white font-bold text-xl">Stickers</h3>
               <button onClick={() => setActiveTool('none')} className="bg-white/10 p-2 rounded-full text-white"><IoChevronDown /></button>
@@ -676,7 +723,10 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Music Drawer */}
         {activeTool === 'music' && (
-          <div className="absolute inset-x-0 bottom-0 top-20 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-x-0 bottom-0 top-20 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300"
+          >
             <div className="flex justify-between mb-6">
               <h3 className="text-white font-bold text-xl">Select Audio</h3>
               <button onClick={() => setActiveTool('none')} className="bg-white/10 p-2 rounded-full text-white"><IoChevronDown /></button>
@@ -711,7 +761,10 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Filter UI */}
         {activeTool === 'filter' && (
-          <div className="absolute bottom-24 md:bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-4 z-[100]">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-24 md:bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-4 z-[100]"
+          >
             {FILTER_TYPES.map(f => (
               <button key={f} onClick={() => setFilterType(f)} className={`flex-shrink-0 w-20 h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-[0_0_15px_#facc15]' : 'border-white/20'}`}>
                 <div className={`w-full h-full bg-gray-800 ${getFilterClass(f)}`}>

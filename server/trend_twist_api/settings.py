@@ -82,20 +82,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 ASGI_APPLICATION = 'trend_twist_api.asgi.application' 
 
 # --- Channel Layers (REQUIRED FOR LIVE CHAT) ---
-# Using InMemoryChannelLayer for Development (No Redis required)
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
+    'default': {
+        'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
+        'CONFIG': {
+             "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379/1')], # Assumes Redis is running
+        },
+    },
 }
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
-#         'CONFIG': {
-#             "hosts": [('127.0.0.1', 6379)], # Assumes Redis is running on default port
-#         },
-#     },
-# }
 
 # --- CORS Configuration ---
 CORS_ALLOWED_ORIGINS = [
@@ -215,7 +209,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'trend.permissions.IsNotBlocked',
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 SIMPLE_JWT = {
@@ -226,8 +222,8 @@ SIMPLE_JWT = {
 }
 
 # --- Celery & Redis Configuration (Used by Channels) ---
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
 # --- Default primary key (No change) ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

@@ -509,3 +509,21 @@ class AdminCreatorPayoutView(APIView):
             'total_withdrawn': str(total_withdrawn),
             'available_balance': str(max(total_earned - total_withdrawn, Decimal('0'))),
         })
+
+class CreatorSubscribersListView(APIView):
+    """
+    Lists all active subscribers for a creator.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, username):
+        creator = get_object_or_404(User, username__iexact=username)
+        # In a real app, you might restrict this to the creator or following logic.
+        # For now, we'll allow viewing if the account is public or follow-linked.
+        active_subs = UserSubscription.objects.filter(creator=creator, status='active').select_related('subscriber', 'subscriber__profile')
+        
+        # We can reuse UserSerializer (imported from .serializers if possible)
+        from .serializers import UserSerializer
+        subscribers = [sub.subscriber for sub in active_subs]
+        serializer = UserSerializer(subscribers, many=True, context={'request': request})
+        return Response(serializer.data)

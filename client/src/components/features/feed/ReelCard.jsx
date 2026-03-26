@@ -40,6 +40,8 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   const audioRef = useRef(new Audio());
   const [isMuted, setIsMuted] = useState(false);
   const [metadata, setMetadata] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const containerRef = useRef(null);
   const hasViewedRef = useRef(false);
 
   useEffect(() => {
@@ -64,13 +66,17 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
         if (entry.isIntersecting) {
           if (onVisible) onVisible(reel.id); // Notify parent this reel is in view
           
-          const playPromise = videoRef.current?.play();
-          if (playPromise !== undefined) {
-            playPromise.then(() => {
-              setIsPlaying(true);
-            }).catch(() => {
-              setIsPlaying(false);
-            });
+          if (reel.media_type === 'video') {
+            const playPromise = videoRef.current?.play();
+            if (playPromise !== undefined) {
+              playPromise.then(() => {
+                setIsPlaying(true);
+              }).catch(() => {
+                setIsPlaying(false);
+              });
+            }
+          } else {
+            setIsPlaying(true); // Always "playing" for images
           }
 
           if (!hasViewedRef.current) {
@@ -87,13 +93,14 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
           videoRef.current?.pause();
           audioRef.current?.pause();
           setIsPlaying(false);
+          setProgress(0);
         }
       },
       { threshold: 0.6 }
     );
 
-    if (videoRef.current) observer.observe(videoRef.current);
-    return () => videoRef.current && observer.unobserve(videoRef.current);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => containerRef.current && observer.unobserve(containerRef.current);
   }, [reel.id]);
 
   useEffect(() => {
@@ -141,16 +148,21 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
     };
 
     const handleTimeUpdate = () => {
-      if (metadata?.trim) {
-        const { start, end } = metadata.trim;
-        if (v.currentTime < start) v.currentTime = start;
-        if (v.currentTime >= end) {
-          v.currentTime = start;
-          if (metadata.music) {
-            a.currentTime = 0;
-            safePlayAudio();
+      if (v.duration) {
+        if (metadata?.trim) {
+          const { start, end } = metadata.trim;
+          if (v.currentTime < start) v.currentTime = start;
+          if (v.currentTime >= end) {
+            v.currentTime = start;
+            if (metadata.music) {
+              a.currentTime = 0;
+              safePlayAudio();
+            }
+            v.play().catch(() => { });
           }
-          v.play().catch(() => { });
+          setProgress(((v.currentTime - start) / (end - start)) * 100);
+        } else {
+          setProgress((v.currentTime / v.duration) * 100);
         }
       }
     };
@@ -171,6 +183,41 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
       a.pause();
     };
   }, [metadata]);
+  
+  // Simulated Progress for Images
+  useEffect(() => {
+    let interval;
+    if (isVisible && isPlaying && reel.media_type === 'image') {
+      const duration = reel.duration || 15;
+      const step = 100; // ms
+      const increment = (step / (duration * 1000)) * 100;
+      
+      // Start audio if any
+      if (metadata?.music && audioRef.current.paused) {
+        audioRef.current.play().catch(() => {});
+      }
+
+      interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            // Loop audio
+            if (metadata?.music) {
+              audioRef.current.currentTime = 0;
+              audioRef.current.play().catch(() => {});
+            }
+            return 0;
+          }
+          return prev + increment;
+        });
+      }, step);
+    } else {
+      if (reel.media_type === 'image' && !isPlaying) {
+        audioRef.current.pause();
+      }
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isVisible, isPlaying, reel.media_type, reel.duration, metadata]);
 
   const handleDoubleTap = (e) => {
     e.stopPropagation();
@@ -239,10 +286,17 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   };
 
   const togglePlay = () => {
-    if (videoRef.current.paused) {
-      videoRef.current.play();
+    if (reel.media_type === 'video') {
+      const v = videoRef.current;
+      if (!v) return;
+      if (v.paused) {
+        v.play().catch(() => {});
+      } else {
+        v.pause();
+      }
     } else {
-      videoRef.current.pause();
+      // Toggle "play" state for images
+      setIsPlaying(!isPlaying);
     }
   };
 
@@ -260,13 +314,25 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   return (
     <div className="relative w-full h-full bg-black snap-start flex md:flex-row flex-col items-center justify-center md:bg-transparent">
       {/* Video Container */}
-      <div className="relative w-full h-full md:w-[380px] md:h-[calc(100vh-80px)] md:max-h-[850px] md:rounded-xl overflow-hidden bg-black flex-shrink-0 shadow-none md:shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+      <div 
+        ref={containerRef}
+        className="relative w-full h-full md:w-[380px] md:h-[calc(100vh-80px)] md:max-h-[850px] md:rounded-xl overflow-hidden bg-black flex-shrink-0 shadow-none md:shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+      >
         {/* Video */}
         <div
           className="absolute inset-0 cursor-pointer"
           onDoubleClick={handleDoubleTap}
           onClick={togglePlay}
         >
+          {/* Progress Bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 z-50 flex gap-0.5 px-1 pt-1 opacity-80">
+            <div className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden">
+               <div 
+                 className="h-full bg-white transition-all duration-100 ease-linear"
+                 style={{ width: `${progress}%` }}
+               />
+            </div>
+          </div>
         {/* Video or Locked Overlay */}
         {reel.has_access === false ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-2xl px-6 text-center">
@@ -282,14 +348,20 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
               Subscribe
             </button>
           </div>
-        ) : (
+        ) : reel.media_type === 'video' ? (
           <video
             ref={videoRef}
-            src={reel.video_file}
+            src={reel.media_file}
             className={`w-full h-full object-contain ${getFilterClass(metadata?.filter)}`}
             loop
             playsInline
             muted
+          />
+        ) : (
+          <img
+            src={reel.media_file}
+            className={`w-full h-full object-contain ${getFilterClass(metadata?.filter)}`}
+            alt={reel.caption}
           />
         )}
 
@@ -323,7 +395,7 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
             </div>
           </div>
         )}
-      </div>
+      </div> {/* End Click Overlay */}
 
       <button
         onClick={toggleMute}
@@ -494,9 +566,9 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
             </div>
           </div>
         </div>
-      </div>
+      </div> {/* End Mobile Sidebar */}
       
-      </div> {/* End Video Container */}
+      </div> {/* End Video Container (containerRef) */}
 
       {/* Right Sidebar Actions (Desktop Only) */}
       <div className="hidden md:flex flex-col items-center space-y-4 md:space-y-6 ml-4 self-end mb-4">

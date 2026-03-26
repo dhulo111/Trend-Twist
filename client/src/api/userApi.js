@@ -76,6 +76,18 @@ export const getFollowing = async (username) => {
   }
 };
 
+export const getSubscribers = async (username) => {
+  try {
+    const response = await axiosInstance.get(
+      `/profiles/${username}/subscribers/`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching subscribers list:", error);
+    throw error;
+  }
+};
+
 export const getFollowRequests = async () => {
   try {
     // API endpoint: GET /api/requests/

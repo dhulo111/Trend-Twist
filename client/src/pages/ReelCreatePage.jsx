@@ -20,7 +20,9 @@ const ReelCreatePage = () => {
 
     setUploading(true);
     const formData = new FormData();
-    formData.append('video_file', file);
+    formData.append('media_file', file);
+    const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+    formData.append('media_type', mediaType);
     formData.append('caption', caption);
     if (musicName) formData.append('music_name', musicName);
 
@@ -45,20 +47,20 @@ const ReelCreatePage = () => {
           <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-pink-500 transition h-64 bg-gray-900 relative">
             <input
               type="file"
-              accept="video/*"
+              accept="video/*,image/*"
               onChange={handleFileChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             {file ? (
               <div className="text-center">
-                <FaVideo className="text-4xl text-green-500 mb-2 mx-auto" />
+                {file.type.startsWith('video/') ? <FaVideo className="text-4xl text-green-500 mb-2 mx-auto" /> : <div className="text-4xl mb-2 mx-auto">🖼️</div>}
                 <p className="font-semibold">{file.name}</p>
               </div>
             ) : (
               <div className="text-center text-gray-400">
                 <FaVideo className="text-5xl mb-4 mx-auto" />
-                <p>Tap to select video</p>
-                <p className="text-xs mt-2">MP4, WebM (Max 60s)</p>
+                <p>Tap to select video or image</p>
+                <p className="text-xs mt-2">MP4, JPG, PNG (Max 60s)</p>
               </div>
             )}
           </div>

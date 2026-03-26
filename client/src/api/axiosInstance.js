@@ -40,9 +40,26 @@ axiosInstance.interceptors.request.use(
   }
 );
 
-// Response Interceptor: Catch globally 403 Forbidden for Blocked Users
+// Response Interceptor: Catch globally 403 Forbidden for Blocked Users & Handle DRF Pagination dynamically
 axiosInstance.interceptors.response.use(
   (response) => {
+    // If the response is paginated from Django, unwrap it smoothly for older views that expect arrays.
+    // Avoid unwrapping for admin endpoints assuming they properly consume "count" and "results".
+    if (
+      response.data && 
+      response.data.results !== undefined && 
+      response.config && 
+      !response.config.url.includes('/admin/')
+    ) {
+      // Return the unpaginated results to array loops, but attach full paginated data silently for infinite loaders
+      const pagedData = response.data.results;
+      pagedData._paginationContext = {
+          count: response.data.count,
+          next: response.data.next,
+          previous: response.data.previous
+      };
+      return { ...response, data: pagedData };
+    }
     return response;
   },
   (error) => {

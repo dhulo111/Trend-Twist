@@ -85,7 +85,10 @@ const IconButton = ({ icon: Icon, onClick, className, size = "w-6 h-6", active, 
 );
 
 const ToolbarContainer = ({ children, className }) => (
-  <div className={`absolute left-0 right-0 p-4 z-50 flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}>
+  <div 
+    onClick={(e) => e.stopPropagation()}
+    className={`absolute left-0 right-0 p-4 z-50 flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}
+  >
     <div className="bg-black/85 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl">
       {children}
     </div>
@@ -675,7 +678,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
 
   const renderFilterToolbar = () => (
     !isVideo ? (
-      <div className="absolute bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-2 z-50">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="absolute bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-2 z-50"
+      >
         {FILTER_TYPES.map(f => (
           <button
             key={f}
@@ -708,7 +714,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   );
 
   const renderInfoDrawer = () => (
-    <div className="absolute top-24 inset-x-4 z-50 flex gap-2 justify-center animate-in zoom-in-95">
+    <div 
+      onClick={(e) => e.stopPropagation()}
+      className="absolute top-24 inset-x-4 z-50 flex gap-2 justify-center animate-in zoom-in-95"
+    >
       <button onClick={handleAddDateSticker} className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col items-center gap-2 text-white hover:bg-white/20 transition-all">
         <IoTimeOutline className="text-3xl" />
         <span className="text-xs font-bold">TIME</span>
@@ -721,7 +730,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   );
 
   const renderToolsMenu = () => (
-    <div className="absolute inset-x-0 bottom-0 top-20 bg-black/95 backdrop-blur-xl z-50 p-6 flex flex-col animate-in slide-in-from-bottom-10 duration-300">
+    <div 
+      onClick={(e) => e.stopPropagation()}
+      className="absolute inset-x-0 bottom-0 top-20 bg-black/95 backdrop-blur-xl z-50 p-6 flex flex-col animate-in slide-in-from-bottom-10 duration-300"
+    >
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-white text-2xl font-black tracking-tight">TOOLS</h2>
         <button onClick={() => setActiveTool('none')} className="p-2 bg-white/10 rounded-full text-white"><IoCloseOutline size={24} /></button>
@@ -801,9 +813,21 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     </ToolbarContainer>
   );
 
+  const handleBackgroundClick = () => {
+    if (activeTool !== 'none' && activeTool !== 'draw' && activeTool !== 'text') {
+      setActiveTool('none');
+      if (canvasRef.current) canvasRef.current.discardActiveObject().renderAll();
+      toggleDrawingMode(false);
+    }
+  };
+
   return (
     <div className="w-full h-full mx-auto flex flex-col items-center justify-center relative select-none">
-      <div ref={wrapperRef} className="relative w-full aspect-[9/16] max-w-[420px] bg-black overflow-hidden rounded-3xl shadow-2xl border border-white/10 ring-1 ring-white/5">
+      <div 
+        ref={wrapperRef} 
+        onClick={handleBackgroundClick}
+        className="relative w-full aspect-[9/16] max-w-[420px] bg-black overflow-hidden rounded-3xl shadow-2xl border border-white/10 ring-1 ring-white/5"
+      >
 
         {/* --- Video background (shown underneath transparent canvas overlay) --- */}
         {isVideo && mediaURL && (
@@ -874,7 +898,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
 
         {/* --- STICKER DRAWER --- */}
         {activeTool === "sticker" && (
-          <div className="absolute top-32 inset-x-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-5 z-50 grid grid-cols-6 gap-3 animate-in zoom-in-95 duration-200 h-96 overflow-y-auto no-scrollbar content-start">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-32 inset-x-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-5 z-50 grid grid-cols-6 gap-3 animate-in zoom-in-95 duration-200 h-96 overflow-y-auto no-scrollbar content-start"
+          >
             <div className="col-span-6 flex justify-between mb-2">
               <span className="text-white font-bold">Stickers</span>
               <button onClick={() => setActiveTool('none')}><IoCloseOutline className="text-white text-xl" /></button>
@@ -887,7 +914,10 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
 
         {/* --- MUSIC DRAWER WITH 2 STEPS --- */}
         {activeTool === "music" && (
-          <div className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl animate-in slide-in-from-bottom-10 duration-300 flex flex-col">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl animate-in slide-in-from-bottom-10 duration-300 flex flex-col"
+          >
             {/* Music Header */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
               {musicStep === 'crop' && (

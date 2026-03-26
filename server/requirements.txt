@@ -17,3 +17,6 @@ stripe
 dj-database-url
 psycopg2-binary
 uvicorn[standard]
+
+# Development / Seeding only
+Faker

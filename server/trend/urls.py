@@ -46,9 +46,10 @@ urlpatterns = [
     # Toggle Follow/Send Request
     path('users/<int:pk>/follow/', views.FollowToggleView.as_view(), name='follow_toggle'),
     
-    # Follower/Following Lists
+    # Follower/Following/Subscriber Lists
     path('profiles/<str:username>/followers/', views.FollowerListView.as_view(), name='follower_list'),
     path('profiles/<str:username>/following/', views.FollowingListView.as_view(), name='following_list'),
+    path('profiles/<str:username>/subscribers/', views_subscription.CreatorSubscribersListView.as_view(), name='subscriber_list'),
 
     # Follow Request Inbox (NEW)
     path('requests/', views.FollowRequestListView.as_view(), name='follow_request_list'),
