@@ -18,7 +18,12 @@ export const SocketProvider = ({ children }) => {
 
   // Connect to WebSocket
   useEffect(() => {
-    if (user && authToken?.access) {
+    let reconnectTimeout;
+    let newSocket;
+
+    const connect = () => {
+      if (!user || !authToken?.access) return;
+
       let wsProtocol = 'ws:';
       let wsHost = '127.0.0.1:8000';
 
@@ -34,7 +39,7 @@ export const SocketProvider = ({ children }) => {
       }
 
       const wsUrl = `${wsProtocol}//${wsHost}/ws/notifications/?token=${authToken.access}`;
-      const newSocket = new WebSocket(wsUrl);
+      newSocket = new WebSocket(wsUrl);
 
       newSocket.onopen = () => {
         console.log("Notification Socket Connected");
@@ -45,52 +50,43 @@ export const SocketProvider = ({ children }) => {
           const message = JSON.parse(event.data);
           if (message.type === 'notification_message') {
             const notifData = message.data;
-
-            // Handle Deletion Event
             if (notifData.action === 'deleted') {
               setNotifications(prev => prev.filter(n => n.id !== notifData.id));
               setUnreadCount(prev => Math.max(0, prev - 1));
             } else {
-              // Handle New or Update
               setNotifications(prev => {
                 const exists = prev.find(n => n.id === notifData.id);
-                if (exists) {
-                  // UPDATE existing
-                  return prev.map(n => n.id === notifData.id ? notifData : n);
-                } else {
-                  // INSERT new
-                  setUnreadCount(c => c + 1);
-                  return [notifData, ...prev];
-                }
+                if (exists) return prev.map(n => n.id === notifData.id ? notifData : n);
+                setUnreadCount(c => c + 1);
+                return [notifData, ...prev];
               });
             }
           } else if (message.type === 'chat_alert') {
-            const alertData = message.data;
-            // Inline addToast logic to avoid closure/dependency issues
-            setToasts(prev => [...prev, { id: Date.now(), ...alertData }]);
+            setToasts(prev => [...prev, { id: Date.now(), ...message.data }]);
           }
         } catch (e) {
           console.error("Socket message error", e);
         }
       };
 
-
-      newSocket.onclose = (e) => console.log("Notification Socket Disconnected", e.code, e.reason);
+      newSocket.onclose = (e) => {
+        console.log("Notification Socket Disconnected", e.code, e.reason);
+        // Attempt to reconnect if still logged in
+        if (user && authToken?.access) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
+      };
 
       setSocket(newSocket);
+    };
 
-      // Fetch initial notifications
-      fetchNotifications();
+    connect();
+    fetchNotifications();
 
-      return () => {
-        newSocket.close();
-      };
-    } else {
-      if (socket) socket.close();
-      setSocket(null);
-      setNotifications([]);
-      setUnreadCount(0);
-    }
+    return () => {
+      if (newSocket) newSocket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, [user, authToken]);
 
   const fetchNotifications = async () => {

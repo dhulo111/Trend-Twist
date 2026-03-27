@@ -82,14 +82,22 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 ASGI_APPLICATION = 'trend_twist_api.asgi.application' 
 
 # --- Channel Layers (REQUIRED FOR LIVE CHAT) ---
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
-        'CONFIG': {
-             "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379/1')], # Assumes Redis is running
+if os.environ.get('REDIS_URL'):
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
+            'CONFIG': {
+                "hosts": [os.environ.get('REDIS_URL')], # Assumes Redis is running
+            },
         },
-    },
-}
+    }
+else:
+    # Use In-Memory Layer for local development without Redis
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer'
+        }
+    }
 
 # --- CORS Configuration ---
 CORS_ALLOWED_ORIGINS = [

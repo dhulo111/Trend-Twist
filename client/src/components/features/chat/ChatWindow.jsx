@@ -306,12 +306,14 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
 
 
   // --- 2. WebSocket Connection Logic ---
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   useEffect(() => {
     if ((isGroup && !activeChat) || (!isGroup && !otherUser)) return;
 
-    // Determine WS Host dynamically
     let wsProtocol = 'ws:';
     let wsHost = '127.0.0.1:8000';
+    let reconnectTimeout;
 
     try {
       const url = new URL(config.API_BASE_URL);
@@ -332,7 +334,6 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
     ws.onopen = () => {
       setWsStatus('Connected.');
       if (ws.readyState === WebSocket.OPEN) {
-        // Only mark read for DMs for now, or handle group read receipts later
         if (!isGroup) ws.send(JSON.stringify({ 'type': 'mark_read' }));
       }
     };
@@ -348,7 +349,11 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
       } else if (data.type === 'message_read') {
         if (!isGroup) setMessages(prev => prev.map(m => ({ ...m, is_read: true })));
       } else if (data.type === 'chat_message') {
-        setMessages((prevMessages) => [...prevMessages, data]);
+        setMessages((prevMessages) => {
+          const exists = prevMessages.find(m => m.id === data.id);
+          if (exists) return prevMessages;
+          return [...prevMessages, data];
+        });
         if (!isGroup && data.author_username === otherUser.username) {
           ws.send(JSON.stringify({ 'type': 'mark_read' }));
         }
@@ -364,20 +369,22 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
 
     ws.onclose = () => {
       setWsStatus('Disconnected. Attempting to reconnect...');
-      // Clean up call if disconnected
       endCallRef.current();
+      reconnectTimeout = setTimeout(() => {
+        setRefreshTrigger(prev => prev + 1);
+      }, 3000);
     };
 
     ws.onerror = (e) => {
-      setWsStatus('Connection Error.');
       console.error('WebSocket Error:', e);
     };
 
     return () => {
       ws.close();
+      clearTimeout(reconnectTimeout);
       endCallRef.current(false);
     };
-  }, [activeChat, otherUser, isGroup, authToken]);
+  }, [activeChat, otherUser, isGroup, authToken, refreshTrigger]);
 
   // --- 3. Scroll to Bottom Effect ---
   useEffect(() => {

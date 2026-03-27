@@ -33,7 +33,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if str(self.current_user.id) == self.user_id_param:
                 await self.close()
                 return
-            user_ids = sorted([str(self.current_user.id), self.user_id_param])
+            self.other_user_id = str(self.user_id_param)
+            user_ids = sorted([str(self.current_user.id), self.other_user_id])
             self.room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
             self.room_group_name = f'chat_{self.room_name}'
         else:

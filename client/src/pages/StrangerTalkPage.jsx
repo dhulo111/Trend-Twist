@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import config from '../config';
 
 // --- Icons ---
@@ -42,7 +43,7 @@ function buildWsUrl(apiBase) {
 
 const StrangerTalkPage = () => {
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const { user, authToken } = useContext(AuthContext);
 
   // Refs
   const localVideoRef = useRef(null);
@@ -68,6 +69,16 @@ const StrangerTalkPage = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isChatOpenMobile, setIsChatOpenMobile] = useState(false);
+  const [floatingMessages, setFloatingMessages] = useState([]);
+
+  // Floating messages helper
+  const addFloatingMessage = useCallback((sender, content, isMine) => {
+    const id = Date.now() + Math.random();
+    setFloatingMessages(prev => [...prev.slice(-4), { id, sender, content, isMine }]);
+    setTimeout(() => {
+       setFloatingMessages(prev => prev.filter(m => m.id !== id));
+    }, 4500); // Overlay duration
+  }, []);
 
   // Scroll to bottom helper
   const scrollToBottom = () => {
@@ -158,12 +169,13 @@ const StrangerTalkPage = () => {
     else if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
 
     const wsUrl = buildWsUrl(config.API_BASE_URL);
-    let token = null;
-    try {
-      const raw = localStorage.getItem('authToken');
-      if (raw) token = JSON.parse(raw)?.access;
-    } catch (_) {}
-    if (!token) token = localStorage.getItem('access_token');
+    const token = authToken?.access;
+    
+    if (!token) {
+      setError('You must be logged in to use this feature.');
+      setStatus(STATUS.ERROR);
+      return;
+    }
 
     const ws = new WebSocket(`${wsUrl}?token=${token}`);
     wsRef.current = ws;
@@ -215,7 +227,16 @@ const StrangerTalkPage = () => {
           break;
 
         case 'chat_message':
-          setMessages(prev => [...prev, { sender: data.sender || 'Stranger', content: data.content, isMine: false }]);
+          setMessages(prev => [
+            ...prev, 
+            { 
+              sender: data.sender || 'Stranger', 
+              content: data.content, 
+              isMine: false,
+              timestamp: new Date().toISOString()
+            }
+          ]);
+          addFloatingMessage(data.sender || 'Stranger', data.content, false);
           break;
 
         case 'partner_left':
@@ -239,6 +260,7 @@ const StrangerTalkPage = () => {
     if (!inputMessage.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ type: 'chat', content: inputMessage }));
     setMessages(prev => [...prev, { sender: 'You', content: inputMessage, isMine: true }]);
+    addFloatingMessage('You', inputMessage, true);
     setInputMessage('');
   };
 
@@ -376,11 +398,41 @@ const StrangerTalkPage = () => {
 
           {/* Stranger Name Overlay */}
           {isConnected && strangerInfo && (
-            <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10 animate-in slide-in-from-left-4 duration-500">
+            <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10 animate-in slide-in-from-left-4 duration-500 z-30">
                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center font-black text-white text-[10px]">?</div>
                <div><p className="text-[8px] font-black uppercase tracking-widest text-white/70 leading-none mb-0.5">Stranger</p><p className="text-xs font-bold text-purple-400">@{strangerInfo.username}</p></div>
             </div>
           )}
+
+          {/* Floating Message Overlays (Bottom-Left Corner) */}
+          <div className="absolute left-6 bottom-24 flex flex-col gap-2 z-40 pointer-events-none max-w-[280px] sm:max-w-[320px]">
+            <AnimatePresence>
+              {floatingMessages.map((m) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, x: -40, scale: 0.9, filter: 'blur(8px)' }}
+                  animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, scale: 0.8, x: -20, filter: 'blur(12px)' }}
+                  className={`
+                    px-4 py-3 rounded-[22px] shadow-2xl backdrop-blur-3xl border flex items-start gap-3
+                    ${m.isMine 
+                      ? 'bg-purple-600/30 border-purple-500/40 text-white shadow-purple-500/10' 
+                      : 'bg-black/60 border-white/10 text-white shadow-black/40'
+                    }
+                  `}
+                >
+                  <div className={`mt-1 flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] 
+                    ${m.isMine ? 'bg-purple-500/30' : 'bg-white/10'}`}>
+                    {m.isMine ? 'U' : 'S'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">{m.sender}</p>
+                    <p className="text-xs font-semibold leading-snug line-clamp-3">{m.content}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
           
           {/* Video Toolbar */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-3 z-30 bg-black/20 backdrop-scroll rounded-full p-2 border border-white/5">
@@ -417,13 +469,19 @@ const StrangerTalkPage = () => {
               </div>
             )}
             {messages.map((m, i) => m.system ? (
-              <div key={i} className="text-center py-1"><span className="text-[8px] font-black uppercase italic text-orange-400 bg-orange-400/5 px-3 py-1 rounded-full">{m.content}</span></div>
+              <div key={i} className="text-center py-2"><span className="text-[9px] font-black uppercase italic text-orange-400 bg-orange-400/10 px-4 py-1.5 rounded-full border border-orange-500/10">{m.content}</span></div>
             ) : (
-              <div key={i} className={`flex flex-col ${m.isMine ? 'items-end' : 'items-start'} max-w-[85%] ${m.isMine ? 'ml-auto' : 'mr-auto'}`}>
-                <div className={`px-4 py-2 rounded-2xl text-[13px] ${m.isMine ? 'bg-purple-600 text-white rounded-tr-none shadow-md' : 'bg-white/5 text-text-primary rounded-tl-none border border-white/5'}`}>
+              <div key={i} className={`flex flex-col ${m.isMine ? 'items-end' : 'items-start'} max-w-[88%] ${m.isMine ? 'ml-auto' : 'mr-auto'} group`}>
+                <div className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-lg transition-all
+                  ${m.isMine ? 'bg-purple-600 text-white rounded-tr-none shadow-purple-900/10' : 'bg-white/15 text-white/95 rounded-tl-none border border-white/10 shadow-black/20'}`}>
                   {m.content}
                 </div>
-                <div className="mt-1 flex items-center gap-1 px-1"><span className="text-[8px] font-black uppercase tracking-tighter text-text-secondary">{m.isMine ? 'You' : `@${strangerInfo?.username || 'Stranger'}`}</span></div>
+                <div className="mt-1 flex items-center gap-1.5 px-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                   <div className={`w-1 h-1 rounded-full ${m.isMine ? 'bg-purple-400' : 'bg-white/40'}`} />
+                   <span className="text-[8px] font-black uppercase tracking-tighter text-text-secondary">
+                     {m.isMine ? 'You' : `@${strangerInfo?.username || 'Stranger'}`}
+                   </span>
+                </div>
               </div>
             ))}
             <div ref={chatEndRef} />
