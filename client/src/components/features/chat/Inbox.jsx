@@ -1,11 +1,13 @@
 // frontend/src/components/features/chat/Inbox.jsx
 
-import React, { useState, useEffect } from 'react';
-import { getChatInbox, getGroups } from '../../../api/chatApi'; // Import getGroups
+import React, { useState, useEffect, useContext } from 'react';
+import { getChatInbox, getGroups } from '../../../api/chatApi';
 import Avatar from '../../common/Avatar';
 import Spinner from '../../common/Spinner';
-import CreateGroupModal from './CreateGroupModal'; // Import CreateGroupModal
+import CreateGroupModal from './CreateGroupModal';
 import { IoChatbubbleEllipsesOutline, IoAdd, IoPeople } from 'react-icons/io5';
+import { AuthContext } from '../../../context/AuthContext';
+import { decryptMessage, getRoomId, isEncrypted } from '../../../utils/encryption';
 
 /**
  * Displays the list of all chat rooms (DM Inbox) and Groups.
@@ -14,6 +16,7 @@ import { IoChatbubbleEllipsesOutline, IoAdd, IoPeople } from 'react-icons/io5';
  * @param {object} props.activeChat - The currently selected chat room object.
  */
 const Inbox = ({ onSelectChat, activeChat, refreshTrigger, autoSelectGroupId, onAutoSelectHandled }) => {
+  const { user } = useContext(AuthContext);
   const [inbox, setInbox] = useState([]);
   const [groups, setGroups] = useState([]); // State for groups
   const [loading, setLoading] = useState(true);
@@ -21,12 +24,44 @@ const Inbox = ({ onSelectChat, activeChat, refreshTrigger, autoSelectGroupId, on
   const [isModalOpen, setIsModalOpen] = useState(false); // Modal state
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'dms', 'groups'
 
+  /**
+   * Decrypts the last_message.content for a single inbox item.
+   * Returns the item with decrypted content (or falls back to the raw content).
+   */
+  const decryptLastMessage = async (item, isGroup) => {
+    const content = item.last_message?.content;
+    if (!content || !user || !isEncrypted(content)) return item;
+
+    try {
+      const roomId = getRoomId({
+        isGroup,
+        currentUserId: user.id,
+        otherUserId: isGroup ? undefined : item.other_user?.id,
+        groupId: isGroup ? item.id : undefined,
+      });
+      const decrypted = await decryptMessage(content, roomId);
+      return {
+        ...item,
+        last_message: { ...item.last_message, content: decrypted },
+      };
+    } catch {
+      return item; // Graceful fallback
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
       const [inboxData, groupsData] = await Promise.all([getChatInbox(), getGroups()]);
-      setInbox(inboxData);
-      setGroups(groupsData);
+
+      // Decrypt last message previews in parallel
+      const [decryptedInbox, decryptedGroups] = await Promise.all([
+        Promise.all(inboxData.map((item) => decryptLastMessage(item, false))),
+        Promise.all(groupsData.map((item) => decryptLastMessage(item, true))),
+      ]);
+
+      setInbox(decryptedInbox);
+      setGroups(decryptedGroups);
     } catch (err) {
       setError('Failed to load messages. Check connection.');
       console.error(err);

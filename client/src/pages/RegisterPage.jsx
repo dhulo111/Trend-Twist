@@ -1,6 +1,5 @@
-// frontend/src/pages/RegisterPage.jsx (UPDATED FOR OTP VERIFICATION)
-
-import React, { useState, useContext, useEffect } from 'react';
+// frontend/src/pages/RegisterPage.jsx
+import React, { useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
@@ -10,164 +9,125 @@ import Spinner from '../components/common/Spinner';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Icon Imports ---
-import { FcGoogle } from 'react-icons/fc';
-import { IoMdTrendingUp } from 'react-icons/io';
-import { BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
+import { IoMdTrendingUp, IoMdCheckmarkCircleOutline } from 'react-icons/io';
+import { BsMoonStarsFill, BsSunFill, BsCheck2, BsX } from 'react-icons/bs';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
-import { verifyRegistrationOTP } from '../api/authApi'; // <-- Import the new verification API
-
-// --- Animation Variants (No Change) ---
-const formVariants = {
-  hidden: { opacity: 0, x: -50, transition: { duration: 0.3 } },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
-  exit: { opacity: 0, x: 50, transition: { duration: 0.3 } },
-};
 
 const RegisterPage = () => {
   // --- States and Context ---
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpRequestId, setOtpRequestId] = useState(null);
-  const [isOtpVerified, setIsOtpVerified] = useState(false); // <-- NEW STATE to track verification
+  const [showRules, setShowRules] = useState(false);
 
   const [userDetails, setUserDetails] = useState({
     username: '',
+    email: '',
+    phone_number: '',
+    password: '',
+    confirmPassword: '',
     first_name: '',
     last_name: '',
     google_token: null,
   });
 
-  const { requestRegisterOTP, completeRegistration, googleLogin } = useContext(AuthContext);
+  const { registerWithPassword, googleLogin } = useContext(AuthContext);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
-  // --- OTP Verification & Step Transition (Step 2 to Step 3) ---
-  const handleOtpSubmit = async (e) => {
-    e.preventDefault();
-
-    if (otp.length !== 6) {
-      setError('Please enter the 6-digit code.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // --- API CALL FOR VERIFICATION ---
-      await verifyRegistrationOTP(otpRequestId, otp);
-
-      // Verification successful! Move to next step.
-      setIsOtpVerified(true);
-      setStep(3);
-
-    } catch (err) {
-      // If API fails (OTP is wrong/expired)
-      const errorMsg =
-        err.response?.data?.error || 'Invalid or expired OTP. Please check the code or resend.';
-      setError(errorMsg);
-      setIsOtpVerified(false);
-      setOtp(''); // Clear OTP input
-    } finally {
-      setLoading(false);
-    }
+  // --- Password Strength Logic ---
+  const getStrength = (password) => {
+    let score = 0;
+    if (!password) return 0;
+    if (password.length >= 8) score += 1;
+    if (/[A-Z]/.test(password)) score += 1;
+    if (/[a-z]/.test(password)) score += 1;
+    if (/[0-9]/.test(password)) score += 1;
+    if (/[^A-Za-z0-9]/.test(password)) score += 1;
+    return score;
   };
 
-  // --- Complete Registration (Final Step 3) ---
+  const strength = getStrength(userDetails.password);
+  const strengthLabels = ['Weak', 'Weak', 'Medium', 'Medium', 'Strong', 'Strong'];
+  const strengthColors = ['bg-red-500', 'bg-red-500', 'bg-yellow-500', 'bg-yellow-500', 'bg-green-500', 'bg-green-500'];
+
+  const rules = [
+    { label: 'Minimum 8 characters', test: (p) => p.length >= 8 },
+    { label: 'At least one uppercase letter', test: (p) => /[A-Z]/.test(p) },
+    { label: 'At least one lowercase letter', test: (p) => /[a-z]/.test(p) },
+    { label: 'At least one number', test: (p) => /[0-9]/.test(p) },
+    { label: 'At least one special character', test: (p) => /[^A-Za-z0-9]/.test(p) },
+  ];
+
   const handleDetailsSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
+    // Password Match Check
+    if (!userDetails.google_token && userDetails.password !== userDetails.confirmPassword) {
+      setError('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
+    // Password Strength Check
+    if (!userDetails.google_token && strength < 5) {
+      setError('Please make sure your password meets all security requirements shown below.');
+      setLoading(false);
+      return;
+    }
+
     // Final check for empty fields
-    if (!userDetails.username || !userDetails.first_name) {
-      setError('Username and First Name are required.');
+    if (!userDetails.username || !userDetails.email || (!userDetails.google_token && !userDetails.password) || !userDetails.first_name) {
+      setError('Username, Email, Password and First Name are required.');
       setLoading(false);
       return;
     }
 
     try {
       if (userDetails.google_token) {
-        // ... (Google Flow remains the same)
         await googleLogin(userDetails.google_token);
       } else {
-        // --- Email/OTP Flow ---
-        // IMPORTANT: The backend assumes the OTP is verified (is_verified=True) 
-        // since we successfully called verifyRegistrationOTP in Step 2.
-        const registrationData = {
-          // We must send the original OTP and ID even if verified, for backend checks.
-          id: otpRequestId,
-          otp: otp,
-          email: email,
-          ...userDetails,
-        };
-        await completeRegistration(registrationData);
+        // Remove confirmPassword before sending to backend
+        const { confirmPassword, ...dataToSend } = userDetails;
+        await registerWithPassword(dataToSend);
       }
     } catch (err) {
-      // Catch errors like "Username taken"
-      const errorMsg =
-        err.response?.data?.error ||
-        'Final registration failed. Please try again.';
+      let errorMsg = 'Registration failed. Please try again.';
+      if (err.response?.data) {
+          const data = err.response.data;
+          if (data.error) errorMsg = data.error;
+          else if (typeof data === 'object') {
+              const firstKey = Object.keys(data)[0];
+              const firstVal = data[firstKey];
+              errorMsg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+              if (firstKey !== 'error' && firstKey !== 'detail') {
+                  errorMsg = `${firstKey}: ${errorMsg}`;
+              }
+          }
+      }
       setError(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // --- Handlers & Render Functions (Rest of the code remains the same) ---
-  const handleEmailSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await requestRegisterOTP(email);
-      setOtpRequestId(response.id);
-      setStep(2);
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.error || 'Failed to send OTP. Please try again.';
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    // ... (logic remains the same)
-    setLoading(true);
-    setError(null);
-    setOtp('');
-    try {
-      const response = await requestRegisterOTP(email);
-      setOtpRequestId(response.id);
-    } catch (err) {
-      setError('Failed to resend OTP.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
-    // ... (logic remains the same)
     const googleToken = credentialResponse.credential;
     setLoading(true);
     setError(null);
 
     const decoded = jwtDecode(googleToken);
 
-    setStep(3);
-    setEmail(decoded.email);
     setUserDetails({
+      ...userDetails,
+      email: decoded.email,
       username: decoded.email.split('@')[0],
       first_name: decoded.given_name || '',
       last_name: decoded.family_name || '',
       google_token: googleToken,
     });
-    setIsOtpVerified(true); // Mark as verified via Google
+    
     setLoading(false);
   };
 
@@ -180,190 +140,14 @@ const RegisterPage = () => {
       ...userDetails,
       [e.target.id]: e.target.value,
     });
+
+    if (e.target.id === 'password' && !showRules && e.target.value.length > 0) {
+      setShowRules(true);
+    }
   };
 
-  // --- Render Functions (Updated for cleaner look/logic) ---
-
-  const renderStep1_Email = () => (
-    // (Render logic remains the same)
-    <motion.form
-      key="step1"
-      variants={formVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      onSubmit={handleEmailSubmit}
-      className="space-y-6"
-    >
-      <Input
-        id="email"
-        label="Email Address"
-        type="email"
-        placeholder="name@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={loading}
-      />
-      <Button type="submit" fullWidth disabled={loading}>
-        {loading ? <Spinner size="sm" /> : 'Send Verification Code'}
-      </Button>
-
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-border/50" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="bg-background-secondary px-2 text-text-secondary">
-            OR
-          </span>
-        </div>
-      </div>
-
-      <div className="flex w-full justify-center">
-        <GoogleLogin
-          onSuccess={handleGoogleSuccess}
-          onError={handleGoogleError}
-          useOneTap={false}
-          theme={theme === 'dark' ? 'filled_blue' : 'outline'}
-          shape="rectangular"
-          width="320px"
-        />
-      </div>
-    </motion.form>
-  );
-
-  const renderStep2_OTP = () => (
-    <motion.form
-      key="step2"
-      variants={formVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      onSubmit={handleOtpSubmit}
-      className="space-y-6"
-    >
-      <Input
-        id="otp"
-        label="6-Digit Code"
-        type="text"
-        placeholder="Enter the code sent to your email"
-        value={otp}
-        onChange={(e) => setOtp(e.target.value)}
-        disabled={loading || isOtpVerified} // Disable if already verified
-        maxLength={6}
-      />
-
-      {/* Verify Button: Calls API to verify OTP */}
-      <Button type="submit" fullWidth disabled={loading || otp.length !== 6 || isOtpVerified}>
-        {loading ? <Spinner size="sm" /> : 'Verify Code'}
-      </Button>
-
-      {/* Resend OTP Option */}
-      <div className="text-center text-sm text-text-secondary">
-        Didn't get a code?{' '}
-        <button
-          type="button"
-          onClick={handleResendOtp}
-          className="font-medium text-text-accent transition-colors hover:underline disabled:text-text-secondary"
-          disabled={loading || isOtpVerified}
-        >
-          Resend code
-        </button>
-      </div>
-
-      <Button
-        type="button"
-        variant="secondary"
-        fullWidth
-        onClick={() => setStep(1)}
-        disabled={loading || isOtpVerified}
-      >
-        Back to Email
-      </Button>
-    </motion.form>
-  );
-
-  const renderStep3_Details = () => (
-    <motion.form
-      key="step3"
-      variants={formVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      onSubmit={handleDetailsSubmit}
-      className="space-y-6"
-    >
-      <div className="rounded-lg border border-border/50 bg-background-accent p-3">
-        <span className='font-semibold text-text-accent'>Email Verified!</span>
-        <p className='text-sm text-text-secondary'>Now, choose your unique username.</p>
-      </div>
-
-      {/* Email Display */}
-      <Input
-        id="email_display"
-        label="Email Address"
-        type="text"
-        value={email || (userDetails.google_token ? jwtDecode(userDetails.google_token).email : '')}
-        disabled={true}
-        className="opacity-70"
-      />
-      {/* User Details */}
-      <Input
-        id="username"
-        label="Username"
-        type="text"
-        placeholder="Choose a unique username"
-        value={userDetails.username}
-        onChange={handleDetailsChange}
-        disabled={loading}
-      />
-      {/* ... (First/Last Name Inputs remain the same) ... */}
-      <div className="flex space-x-4">
-        <Input
-          id="first_name"
-          label="First Name"
-          type="text"
-          placeholder="Your first name"
-          value={userDetails.first_name}
-          onChange={handleDetailsChange}
-          disabled={loading}
-        />
-        <Input
-          id="last_name"
-          label="Last Name"
-          type="text"
-          placeholder="Your last name (Optional)"
-          value={userDetails.last_name}
-          onChange={handleDetailsChange}
-          disabled={loading}
-        />
-      </div>
-      {/* Final Submit */}
-      <Button type="submit" fullWidth disabled={loading}>
-        {loading ? <Spinner size="sm" /> : 'Complete Registration'}
-      </Button>
-
-      {/* Back Button for Email/OTP flow */}
-      {!userDetails.google_token && (
-        <Button
-          type="button"
-          variant="secondary"
-          fullWidth
-          onClick={() => {
-            setStep(2); // Go back to Step 2 to allow OTP change
-            setIsOtpVerified(false); // Reset verification status
-          }}
-          disabled={loading}
-        >
-          Back to OTP
-        </Button>
-      )}
-    </motion.form>
-  );
-
-  // --- Main Render (No Change) ---
   return (
-    <div className="relative flex min-h-screen w-full bg-gradient-to-br from-background-primary via-background-secondary to-background-primary">
+    <div className="relative flex min-h-screen w-full bg-gradient-to-br from-background-primary via-background-secondary to-background-primary text-text-primary">
 
       {/* --- Theme Toggle Button --- */}
       <button
@@ -378,20 +162,22 @@ const RegisterPage = () => {
       {/* --- 1. Left Column (Registration Form) --- */}
       <div className="flex w-full items-center justify-center p-4 md:w-1/2 lg:w-2/5">
 
-        <div className="w-full max-w-md overflow-hidden rounded-2xl 
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md overflow-visible rounded-2xl 
                         border border-border/50 bg-background-secondary/70 
-                        p-8 shadow-2xl backdrop-blur-lg">
+                        p-8 shadow-2xl backdrop-blur-lg"
+        >
 
           {/* Header */}
           <div className="flex flex-col items-center text-center">
             <IoMdTrendingUp className="h-10 w-10 text-text-accent" />
-            <h1 className="mt-4 text-3xl font-bold text-text-primary">
+            <h1 className="mt-4 text-3xl font-bold">
               Create Your Account
             </h1>
             <p className="mt-2 text-text-secondary">
-              {step === 1 && 'Step 1: Enter your email or use social login'}
-              {step === 2 && `Step 2: Enter code sent to ${email}`}
-              {step === 3 && 'Step 3: Set up your unique profile'}
+              Join the conversation today.
             </p>
           </div>
 
@@ -402,13 +188,202 @@ const RegisterPage = () => {
             </p>
           )}
 
-          {/* Animated Form Container */}
-          <div className="relative mt-8 h-auto">
-            <AnimatePresence mode="wait">
-              {step === 1 && renderStep1_Email()}
-              {step === 2 && renderStep2_OTP()}
-              {step === 3 && renderStep3_Details()}
-            </AnimatePresence>
+          {/* Form Container */}
+          <div className="relative mt-8">
+            <form onSubmit={handleDetailsSubmit} className="space-y-4">
+              <div className="flex flex-col gap-4">
+                <Input
+                  id="email"
+                  label="Email Address"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={userDetails.email}
+                  onChange={handleDetailsChange}
+                  disabled={loading || !!userDetails.google_token}
+                  required
+                />
+                
+                <div className="flex gap-4">
+                  <Input
+                    id="username"
+                    label="Username"
+                    type="text"
+                    placeholder="unique_id"
+                    value={userDetails.username}
+                    onChange={handleDetailsChange}
+                    disabled={loading}
+                    required
+                  />
+                  <Input
+                    id="phone_number"
+                    label="Phone"
+                    type="tel"
+                    placeholder="+1234567890"
+                    value={userDetails.phone_number}
+                    onChange={handleDetailsChange}
+                    disabled={loading}
+                  />
+                </div>
+
+                {!userDetails.google_token && (
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      label="Password"
+                      type="password"
+                      placeholder="Min 8 characters"
+                      value={userDetails.password}
+                      onChange={handleDetailsChange}
+                      disabled={loading}
+                      required
+                    />
+                    
+                    {/* Floating Rules Animation */}
+                    <AnimatePresence>
+                      {showRules && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                          animate={{ opacity: 1, scale: 1, x: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                          className="absolute left-full ml-6 top-0 z-50 hidden w-64 rounded-xl border border-border/50 bg-background-secondary/90 p-4 shadow-2xl backdrop-blur-md lg:block"
+                        >
+                          <div className="mb-2 flex items-center gap-2 font-semibold text-text-primary">
+                            <IoMdCheckmarkCircleOutline className="text-text-accent" />
+                            Password Requirements
+                          </div>
+                          <ul className="space-y-2 text-xs">
+                            {rules.map((rule, idx) => {
+                              const isPassed = rule.test(userDetails.password);
+                              return (
+                                <li key={idx} className={`flex items-center gap-2 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
+                                  {isPassed ? <BsCheck2 className="h-3 w-3" /> : <BsX className="h-3 w-3" />}
+                                  {rule.label}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          
+                          {/* Triangle Pointer */}
+                          <div className="absolute top-6 -left-2 h-4 w-4 rotate-45 border-l border-b border-border/50 bg-background-secondary/90" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Mobile/Small Screen Rules (Inline) */}
+                    <AnimatePresence>
+                      {showRules && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="mt-2 overflow-hidden lg:hidden"
+                        >
+                          <div className="rounded-lg bg-background-accent/30 p-3">
+                            <ul className="space-y-1 text-[10px]">
+                              {rules.map((rule, idx) => {
+                                const isPassed = rule.test(userDetails.password);
+                                return (
+                                  <li key={idx} className={`flex items-center gap-1.5 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
+                                    {isPassed ? <BsCheck2 className="h-2.5 w-2.5" /> : <BsX className="h-2.5 w-2.5" />}
+                                    {rule.label}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Strength Indicator */}
+                    {userDetails.password && (
+                      <div className="mt-2 text-left">
+                        <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-text-secondary">
+                          <span>Strength</span>
+                          <span className={`${strengthColors[strength].replace('bg-', 'text-')}`}>
+                            {strengthLabels[strength]}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex h-1 gap-1">
+                          {[0, 1, 2, 3, 4].map((i) => (
+                            <div 
+                              key={i} 
+                              className={`h-full flex-1 rounded-full transition-all duration-300 ${i < strength ? strengthColors[strength] : 'bg-border/30'}`} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!userDetails.google_token && (
+                  <Input
+                    id="confirmPassword"
+                    label="Confirm Password"
+                    type="password"
+                    placeholder="Repeat your password"
+                    value={userDetails.confirmPassword}
+                    onChange={handleDetailsChange}
+                    disabled={loading}
+                    required
+                    error={userDetails.confirmPassword && userDetails.password !== userDetails.confirmPassword ? 'Passwords do not match' : null}
+                  />
+                )}
+
+                <div className="flex gap-4">
+                  <Input
+                    id="first_name"
+                    label="First Name"
+                    type="text"
+                    placeholder="First"
+                    value={userDetails.first_name}
+                    onChange={handleDetailsChange}
+                    disabled={loading}
+                    required
+                  />
+                  <Input
+                    id="last_name"
+                    label="Last Name"
+                    type="text"
+                    placeholder="Last (Opt)"
+                    value={userDetails.last_name}
+                    onChange={handleDetailsChange}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              
+              <Button type="submit" fullWidth disabled={loading}>
+                {loading ? <Spinner size="sm" /> : 'Create Account'}
+              </Button>
+
+              {!userDetails.google_token && (
+                <>
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border/50" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="bg-background-secondary px-2 text-text-secondary">
+                        OR
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex w-full justify-center">
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      useOneTap={false}
+                      theme={theme === 'dark' ? 'filled_blue' : 'outline'}
+                      shape="rectangular"
+                      width="320px"
+                    />
+                  </div>
+                </>
+              )}
+            </form>
           </div>
 
           {/* Link to Login */}
@@ -421,13 +396,13 @@ const RegisterPage = () => {
               Log in
             </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
 
       {/* --- 2. Right Column (Image/Branding) --- */}
       <div className="hidden md:flex md:w-1/2 lg:w-3/5 items-center justify-center p-12">
         <div className="flex flex-col items-center text-center">
-          <h1 className="text-5xl font-extrabold text-text-primary">
+          <h1 className="text-5xl font-extrabold">
             Join the <span className="text-text-accent">Conversation</span>
           </h1>
           <p className="mt-4 max-w-md text-2xl text-text-secondary">

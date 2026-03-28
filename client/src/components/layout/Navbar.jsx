@@ -22,10 +22,11 @@ import {
   IoAddCircleOutline,
   IoHeartOutline,
   IoHeart,
-  IoPeopleOutline,
-  IoPeople
+  IoPeople,
+  IoTrendingUpOutline,
+  IoTrendingUpSharp,
+  IoAdd
 } from 'react-icons/io5';
-import { MdTrendingUp } from 'react-icons/md';
 import { FaUserCircle, FaRandom } from 'react-icons/fa';
 
 const Navbar = () => {
@@ -119,12 +120,12 @@ const Navbar = () => {
           <div className="flex flex-col space-y-2">
             {[
               { to: '/', icon: IoHomeOutline, activeIcon: IoHomeSharp, label: 'Home' },
-              { to: '/trending', icon: MdTrendingUp, activeIcon: MdTrendingUp, label: 'Trending' },
+              { to: '/trending', icon: IoTrendingUpOutline, activeIcon: IoTrendingUpSharp, label: 'Trending' },
               { to: '/search', icon: IoSearchOutline, activeIcon: IoSearchOutline, label: 'Search' },
               { to: '/reels', icon: IoFilmOutline, activeIcon: IoFilmSharp, label: 'Reels' },
               { to: '/messages', icon: IoChatbubbleEllipsesOutline, activeIcon: IoChatbubbleEllipsesSharp, label: 'Messages' },
               { to: '/notifications', icon: IoHeartOutline, activeIcon: IoHeart, label: 'Notifications' },
-              { to: '/stranger', icon: IoPeopleOutline, activeIcon: IoPeople, label: 'Talk Stranger', special: true },
+              { to: '/stranger', icon: IoPeople, activeIcon: IoPeople, label: 'Talk Stranger', special: true },
             ].map((item) => (
               <NavLink
                 key={item.label}
@@ -223,8 +224,8 @@ const Navbar = () => {
               </span>
             )}
           </Link>
-          <Link to="/messages">
-            <IoChatbubbleEllipsesOutline className="text-text-primary text-2xl" />
+          <Link to="/create/post">
+            <IoAdd className="text-text-primary text-2xl" />
           </Link>
         </div>
       </div>
@@ -234,40 +235,36 @@ const Navbar = () => {
           ================================================================================= */}
       <nav
         className="md:hidden fixed bottom-0 left-0 z-50 w-full h-16
-                   glass bg-glass-bg border-t border-glass-border
-                   flex items-center justify-around px-2 pb-safe"
+                   glass bg-glass-bg border-t border-glass-border/30
+                   flex items-center justify-around px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
       >
         {/* 1. Home */}
-        <NavLink to="/" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
-          {({ isActive }) => (isActive ? <IoHomeSharp size={26} /> : <IoHomeOutline size={26} />)}
+        <NavLink to="/" className={({ isActive }) => `flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary hover:text-text-primary'}`}>
+          {({ isActive }) => (isActive ? <IoHomeSharp size={22} /> : <IoHomeOutline size={22} />)}
         </NavLink>
 
         {/* 2. Reels */}
-        <NavLink to="/reels" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
-          {({ isActive }) => (isActive ? <IoFilmSharp size={26} /> : <IoFilmOutline size={26} />)}
+        <NavLink to="/reels" className={({ isActive }) => `flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary hover:text-text-primary'}`}>
+          {({ isActive }) => (isActive ? <IoFilmSharp size={22} /> : <IoFilmOutline size={22} />)}
         </NavLink>
 
-        {/* 3. Trending */}
-        <NavLink to="/trending" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary'}`}>
-          {({ isActive }) => (isActive ? <MdTrendingUp size={28} /> : <MdTrendingUp size={28} className="opacity-70" />)}
+        {/* 3. Messenger (Center) */}
+        <NavLink to="/messages" className={({ isActive }) => `flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 relative ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary hover:text-text-primary'}`}>
+          {({ isActive }) => (isActive ? <IoChatbubbleEllipsesSharp size={24} /> : <IoChatbubbleEllipsesOutline size={24} />)}
         </NavLink>
 
-        {/* 4. Create (Center Floating Button) */}
-        <div className="relative -top-3">
-          <Link to="/create/post">
-            <div className="h-14 w-14 rounded-full bg-gradient-to-tr from-text-accent to-purple-400 flex items-center justify-center text-white  border-4 border-white dark:border-[#1a1a1a]">
-              <IoAddCircleOutline size={32} />
-            </div>
-          </Link>
-        </div>
+        {/* 4. Trending */}
+        <NavLink to="/trending" className={({ isActive }) => `flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 ${isActive ? 'text-text-accent scale-110' : 'text-text-secondary hover:text-text-primary'}`}>
+          {({ isActive }) => (isActive ? <IoTrendingUpSharp size={22} /> : <IoTrendingUpOutline size={22} />)}
+        </NavLink>
 
         {/* 5. Stranger Talk */}
-        <NavLink to="/stranger" className={({ isActive }) => `p-2 rounded-full transition-all duration-200 ${isActive ? 'text-purple-400 scale-110' : 'text-text-secondary'}`}>
-          {({ isActive }) => (isActive ? <IoPeople size={26} /> : <IoPeopleOutline size={26} />)}
+        <NavLink to="/stranger" className={({ isActive }) => `flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 ${isActive ? 'text-purple-400 scale-110' : 'text-text-secondary hover:text-text-primary'}`}>
+          {({ isActive }) => (isActive ? <IoPeople size={22} /> : <IoPeople size={22} />)}
         </NavLink>
 
         {/* 6. Profile */}
-        <NavLink to={`/profile/${user?.username}`} className={({ isActive }) => `p-1 rounded-full w-10 border-2 transition-all duration-200 ${isActive ? 'border-text-accent' : 'border-transparent'}`}>
+        <NavLink to={`/profile/${user?.username}`} className={({ isActive }) => `flex flex-col items-center justify-center p-0.5 rounded-full border-2 transition-all duration-300 ${isActive ? 'border-text-accent scale-110' : 'border-transparent'}`}>
           <Avatar src={user?.profile?.profile_picture} size="xs" />
         </NavLink>
       </nav>

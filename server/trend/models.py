@@ -40,6 +40,9 @@ class Profile(models.Model):
     blocked_until = models.DateTimeField(null=True, blank=True)
     block_reason = models.TextField(blank=True, null=True)
 
+    # NEW: Phone Number
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+
     # Withdrawal Information (Stored as JSON for flexibility: Bank, UPI, etc.)
     withdrawal_info = models.JSONField(default=dict, blank=True, null=True)
 

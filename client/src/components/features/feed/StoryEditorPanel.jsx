@@ -26,6 +26,9 @@ import {
   IoVideocamOutline,
   IoVolumeHighOutline,
   IoVolumeMuteOutline,
+  IoArrowUndo,
+  IoArrowRedo,
+  IoTrashBin,
 } from "react-icons/io5";
 
 // --- Constants & Assets ---
@@ -129,6 +132,7 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   const [isSearchingMusic, setIsSearchingMusic] = useState(false);
 
   const historyRef = useRef([]);
+  const redoStackRef = useRef([]);
   const isRestoringRef = useRef(false);
   const overlayInputRef = useRef(null);
   const [mediaURL] = useState(mediaFile ? URL.createObjectURL(mediaFile) : null);
@@ -198,9 +202,44 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
     try {
       const json = c.toJSON(["selectable", "evented", "_isBackground", "_isVideoBackground", "id", "stroke", "strokeWidth", "shadow"]);
       historyRef.current.push(json);
-      if (historyRef.current.length > 30) historyRef.current.shift();
+      redoStackRef.current = []; // Clear redo on new action
+      if (historyRef.current.length > 50) historyRef.current.shift();
     } catch (e) { console.error("History error", e); }
   }, []);
+
+  const handleUndo = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c || historyRef.current.length <= 1) return;
+    isRestoringRef.current = true;
+    const currentState = c.toJSON(["selectable", "evented", "_isBackground", "_isVideoBackground", "id", "stroke", "strokeWidth", "shadow"]);
+    redoStackRef.current.push(currentState);
+    historyRef.current.pop();
+    const prev = historyRef.current[historyRef.current.length - 1];
+    c.loadFromJSON(prev, () => {
+      if (isVideo) {
+        c.setBackgroundColor('transparent', () => { c.renderAll(); isRestoringRef.current = false; });
+      } else {
+        c.renderAll();
+        isRestoringRef.current = false;
+      }
+    });
+  }, [isVideo]);
+
+  const handleRedo = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c || redoStackRef.current.length === 0) return;
+    isRestoringRef.current = true;
+    const next = redoStackRef.current.pop();
+    historyRef.current.push(next);
+    c.loadFromJSON(next, () => {
+      if (isVideo) {
+        c.setBackgroundColor('transparent', () => { c.renderAll(); isRestoringRef.current = false; });
+      } else {
+        c.renderAll();
+        isRestoringRef.current = false;
+      }
+    });
+  }, [isVideo]);
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -814,10 +853,15 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
   );
 
   const handleBackgroundClick = () => {
-    if (activeTool !== 'none' && activeTool !== 'draw' && activeTool !== 'text') {
+    if (activeTool !== 'none') {
+      // Keep draw mode active (needs canvas clicks)
+      if (activeTool === 'draw') return;
       setActiveTool('none');
-      if (canvasRef.current) canvasRef.current.discardActiveObject().renderAll();
       toggleDrawingMode(false);
+      if (canvasRef.current) {
+        canvasRef.current.discardActiveObject();
+        canvasRef.current.renderAll();
+      }
     }
   };
 
@@ -889,6 +933,9 @@ const FabricStoryEditor = ({ mediaFile, selectedMusic, setSelectedMusic, onPubli
             >
               <IconButton icon={IoGridOutline} label="Menu" onClick={() => setActiveTool('menu')} className="shrink-0 bg-white/20 border-white/30" />
               <div className="w-[1px] h-8 bg-white/20 shrink-0 mx-1" />
+              <IconButton icon={IoArrowUndo} label="Undo" onClick={handleUndo} className="shrink-0" />
+              <IconButton icon={IoArrowRedo} label="Redo" onClick={handleRedo} className="shrink-0" />
+              <IconButton icon={IoTrashBin} label="Delete" onClick={deleteActive} className="shrink-0 hover:!bg-red-500/40 text-red-400" />
             </div>
           )}
         </div>

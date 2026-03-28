@@ -1,9 +1,8 @@
-// frontend/src/components/common/Input.jsx
-
-import React from 'react';
+import React, { useState } from 'react';
+import { BsEye, BsEyeSlash } from 'react-icons/bs';
 
 /**
- * A reusable Input component.
+ * A reusable Input component with optional password visibility toggle.
  *
  * @param {object} props
  * @param {string} props.id - Unique ID for the input, used for the label.
@@ -16,6 +15,7 @@ import React from 'react';
  * @param {boolean} [props.disabled=false] - If the input is disabled.
  * @param {string} [props.className] - Additional classes for the wrapper div.
  * @param {React.ReactNode} [props.icon] - An optional icon to display inside the input.
+ * @param {boolean} [props.showToggle=true] - If password toggle should be shown (only if type='password').
  */
 const Input = ({
   id,
@@ -28,7 +28,14 @@ const Input = ({
   disabled = false,
   className = '',
   icon,
+  showToggle = true,
+  ...rest
 }) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  const isPassword = type === 'password';
+  const inputType = isPassword && showPassword ? 'text' : type;
+
   // Base styles for the input
   const baseInputStyles = `
     w-full appearance-none rounded-lg border 
@@ -43,6 +50,10 @@ const Input = ({
     ? 'border-red-500 focus:ring-red-500' // Error state
     : 'border-border focus:ring-text-accent'; // Default state
 
+  const toggleVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <div className={`w-full ${className}`}>
       {/* --- Label --- */}
@@ -55,9 +66,9 @@ const Input = ({
         </label>
       )}
 
-      {/* --- Input Wrapper (for icon) --- */}
+      {/* --- Input Wrapper --- */}
       <div className="relative">
-        {/* --- Icon (if provided) --- */}
+        {/* --- Left Icon (if provided) --- */}
         {icon && (
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <span className="text-text-secondary">{icon}</span>
@@ -66,7 +77,7 @@ const Input = ({
 
         {/* --- Input Field --- */}
         <input
-          type={type}
+          type={inputType}
           id={id}
           placeholder={placeholder}
           value={value}
@@ -76,9 +87,23 @@ const Input = ({
             ${baseInputStyles} 
             ${stateStyles} 
             ${icon ? 'pl-10' : ''}
+            ${isPassword && showToggle ? 'pr-10' : ''}
             ${disabled ? 'cursor-not-allowed bg-background-accent opacity-60' : ''}
           `}
+          {...rest}
         />
+
+        {/* --- Password Toggle Icon (Right Side) --- */}
+        {isPassword && showToggle && (
+          <button
+            type="button"
+            onClick={toggleVisibility}
+            className="absolute inset-y-0 right-0 flex items-center pr-3 text-text-secondary transition-colors hover:text-text-accent"
+            disabled={disabled}
+          >
+            {showPassword ? <BsEyeSlash className="h-5 w-5" /> : <BsEye className="h-5 w-5" />}
+          </button>
+        )}
       </div>
 
       {/* --- Error Message --- */}

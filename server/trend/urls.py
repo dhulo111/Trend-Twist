@@ -17,11 +17,9 @@ urlpatterns = [
     
     # OTP & Google Auth
     path('auth/google/', views.GoogleLoginView.as_view(), name='google_login'),
-    path('auth/login/request-otp/', views.RequestLoginOTPView.as_view(), name='request_login_otp'),
-    path('auth/login/verify-otp/', views.VerifyLoginOTPView.as_view(), name='verify_login_otp'),
-    path('auth/register/request-otp/', views.RequestRegisterOTPView.as_view(), name='request_register_otp'),
-    path('auth/register/verify-only-otp/', views.VerifyOnlyOTPView.as_view(), name='verify_only_otp'),
-    path('auth/register/complete/', views.CompleteRegistrationView.as_view(), name='complete_registration'),
+    path('auth/check-user/', views.CheckUserView.as_view(), name='check_user'),
+    path('auth/login/password/', views.PasswordLoginView.as_view(), name='password_login'),
+    path('auth/register/password/', views.PasswordRegisterView.as_view(), name='password_register'),
 
 
     # ----------------------------------------------------------------------

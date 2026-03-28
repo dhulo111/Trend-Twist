@@ -3,16 +3,17 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { ThemeContext } from '../context/ThemeContext';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleLogin } from '@react-oauth/google'; // <-- 1. Import this component
-import { jwtDecode } from 'jwt-decode';
+
 // --- Icon Imports from react-icons ---
-import { FcGoogle } from 'react-icons/fc';
 import { IoMdTrendingUp } from 'react-icons/io';
-import { BsMoonStarsFill, BsSunFill } from 'react-icons/bs'; // <-- Added icons
+import { BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
 // --- Animation Variants ---
 const formVariants = {
@@ -24,47 +25,47 @@ const formVariants = {
 const LoginPage = () => {
   // --- States and Context ---
   const [step, setStep] = useState(1);
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpRequestId, setOtpRequestId] = useState(null);
+  const [usernameOrEmail, setUsernameOrEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [blockInfo, setBlockInfo] = useState(null);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'); // <-- Added theme state
-  const { requestLoginOTP, verifyLoginOTP, googleLogin } = useContext(AuthContext);
 
-  // --- Theme Toggle Effect ---
-  // Applies the saved theme on component mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    setTheme(savedTheme);
-    document.documentElement.setAttribute('data-theme', savedTheme);
-  }, []); // Empty array ensures this runs only once on mount
+  const { checkUserExists, loginWithPassword, googleLogin } = useContext(AuthContext);
+  const { theme, toggleTheme } = useContext(ThemeContext);
 
-  // --- Theme Toggle Handler ---
-  const handleThemeToggle = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-  };
-
-  // --- Handlers (Same as before) ---
-  const handleEmailSubmit = async (e) => {
+  // --- Handlers ---
+  const handleUserCheck = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setBlockInfo(null);
     try {
-      const response = await requestLoginOTP(email);
-      setOtpRequestId(response.id);
-      setStep(2);
+      const response = await checkUserExists(usernameOrEmail);
+      if (response.exists) {
+        setStep(2);
+      } else {
+        setError("User not found. Please register first.");
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to check user. Please try again.';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await loginWithPassword(usernameOrEmail, password);
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.error === 'Account Blocked') {
         setBlockInfo(err.response.data);
       } else {
-        const errorMsg =
-          err.response?.data?.error || 'Failed to send OTP. Please check the email.';
+        const errorMsg = err.response?.data?.error || 'Login failed. Please check your password.';
         setError(errorMsg);
       }
     } finally {
@@ -72,49 +73,14 @@ const LoginPage = () => {
     }
   };
 
-  const handleOtpSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      await verifyLoginOTP(otpRequestId, otp);
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.error || 'Login failed. The code may be invalid or expired.';
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setLoading(true);
-    setError(null);
-    setOtp('');
-    try {
-      const response = await requestLoginOTP(email);
-      setOtpRequestId(response.id);
-    } catch (err) {
-      setError('Failed to resend OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGoogleLoginSuccess = async (credentialResponse) => {
-    // credentialResponse contains the ID Token
     const googleToken = credentialResponse.credential;
-
-    // You can decode it to see info (optional)
-    // const decoded = jwtDecode(googleToken);
-
     setLoading(true);
     setError(null);
     setBlockInfo(null);
     try {
-      // Send the token to our backend
       await googleLogin(googleToken);
-      // AuthContext will handle navigation
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.error === 'Account Blocked') {
         setBlockInfo(err.response.data);
@@ -136,7 +102,7 @@ const LoginPage = () => {
 
       {/* --- Theme Toggle Button --- */}
       <button
-        onClick={handleThemeToggle}
+        onClick={toggleTheme}
         className="absolute top-6 right-6 z-10 rounded-full p-2.5 
                    bg-background-secondary/70 border border-border/50
                    text-text-secondary transition-colors hover:text-text-accent"
@@ -173,12 +139,12 @@ const LoginPage = () => {
           <div className="flex flex-col items-center text-center">
             <IoMdTrendingUp className="h-10 w-10 text-text-accent" />
             <h1 className="mt-4 text-3xl font-bold text-text-primary">
-              {step === 1 ? 'Welcome Back' : 'Enter Your Code'}
+              {step === 1 ? 'Welcome Back' : 'Enter Password'}
             </h1>
             <p className="mt-2 text-text-secondary">
               {step === 1
-                ? 'Enter your email to get a login code.'
-                : `We sent a 6-digit code to ${email}`}
+                ? 'Enter your username or email to continue.'
+                : `Enter password for ${usernameOrEmail}`}
             </p>
           </div>
 
@@ -219,7 +185,7 @@ const LoginPage = () => {
           <div className="relative mt-8 h-auto">
             <AnimatePresence mode="wait">
 
-              {/* --- Step 1: Email Form --- */}
+              {/* --- Step 1: User Check Form --- */}
               {step === 1 && (
                 <motion.form
                   key="step1"
@@ -227,20 +193,20 @@ const LoginPage = () => {
                   initial="hidden"
                   animate="visible"
                   exit="exit"
-                  onSubmit={handleEmailSubmit}
+                  onSubmit={handleUserCheck}
                   className="space-y-6"
                 >
                   <Input
-                    id="email"
-                    label="Email Address"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="usernameOrEmail"
+                    label="Username or Email"
+                    type="text"
+                    placeholder="Enter your username or email"
+                    value={usernameOrEmail}
+                    onChange={(e) => setUsernameOrEmail(e.target.value)}
                     disabled={loading}
                   />
                   <Button type="submit" fullWidth disabled={loading}>
-                    {loading ? <Spinner size="sm" /> : 'Send Login Code'}
+                    {loading ? <Spinner size="sm" /> : 'Continue'}
                   </Button>
 
                   <div className="relative my-6">
@@ -259,16 +225,16 @@ const LoginPage = () => {
                     <GoogleLogin
                       onSuccess={handleGoogleLoginSuccess}
                       onError={handleGoogleLoginError}
-                      useOneTap={false} // Use the standard button flow
+                      useOneTap={false}
                       theme="filled_blue"
                       shape="rectangular"
-                      width="320px" // Match the form width
+                      width="320px"
                     />
                   </div>
                 </motion.form>
               )}
 
-              {/* --- Step 2: OTP Form --- */}
+              {/* --- Step 2: Password Form --- */}
               {step === 2 && (
                 <motion.form
                   key="step2"
@@ -276,41 +242,31 @@ const LoginPage = () => {
                   initial="hidden"
                   animate="visible"
                   exit="exit"
-                  onSubmit={handleOtpSubmit}
+                  onSubmit={handleLoginSubmit}
                   className="space-y-6"
                 >
                   <Input
-                    id="otp"
-                    label="6-Digit Code"
-                    type="text"
-                    placeholder="Enter the code"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    id="password"
+                    label="Password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
-                    maxLength={6}
+                    autoFocus
                   />
                   <Button type="submit" fullWidth disabled={loading}>
-                    {loading ? <Spinner size="sm" /> : 'Verify & Log In'}
+                    {loading ? <Spinner size="sm" /> : 'Log In'}
                   </Button>
-                  <div className="text-center text-sm text-text-secondary">
-                    Didn't get a code?{' '}
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      className="font-medium text-text-accent transition-colors hover:underline disabled:text-text-secondary"
-                      disabled={loading}
-                    >
-                      Resend code
-                    </button>
-                  </div>
+                  
                   <Button
                     type="button"
                     variant="secondary"
                     fullWidth
-                    onClick={() => { setStep(1); setError(null); setOtp(''); }}
+                    onClick={() => { setStep(1); setError(null); setPassword(''); }}
                     disabled={loading}
                   >
-                    Back to Email
+                    Back
                   </Button>
                 </motion.form>
               )}

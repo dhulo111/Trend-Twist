@@ -169,26 +169,57 @@ class UserSerializer(serializers.ModelSerializer):
         # We only count active subscriptions
         return obj.subscribers.filter(status='active').count()
 
-# --- 2. Authentication & Security (No major change) ---
+class LoginSerializer(serializers.Serializer):
+    username_or_email = serializers.CharField()
+    password = serializers.CharField(write_only=True)
 
-class OTPRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
 
-class OTPVerifySerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    otp = serializers.CharField(max_length=6, min_length=6)
-
-class CompleteRegistrationSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    otp = serializers.CharField(max_length=6, min_length=6)
-    username = serializers.CharField(max_length=150)
-    first_name = serializers.CharField(max_length=150, allow_blank=True, required=False)
-    last_name = serializers.CharField(max_length=150, allow_blank=True, required=False)
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone_number']
 
     def validate_username(self, value):
         if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("This username is already taken.")
         return value
+
+    def validate_password(self, value):
+        import re
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        if not re.search(r'[A-Z]', value):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter.")
+        if not re.search(r'[a-z]', value):
+            raise serializers.ValidationError("Password must contain at least one lowercase letter.")
+        if not re.search(r'[0-9]', value):
+            raise serializers.ValidationError("Password must contain at least one number.")
+        if not re.search(r'[^A-Za-z0-9]', value):
+            raise serializers.ValidationError("Password must contain at least one special character.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
+
+    def create(self, validated_data):
+        phone_number = validated_data.pop('phone_number', '')
+        # Use create_user to handle password hashing
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
+        # Phone number is stored in Profile
+        profile = user.profile
+        profile.phone_number = phone_number
+        profile.save()
+        return user
 
 # --- 3. Social Graph Serializers (NEW: Follow Request) ---
 

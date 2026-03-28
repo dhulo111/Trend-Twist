@@ -24,7 +24,10 @@ import {
   IoGridOutline,
   IoChevronDown,
   IoCutOutline,
-  IoVideocam
+  IoVideocam,
+  IoArrowUndo,
+  IoArrowRedo,
+  IoTrashBin,
 } from "react-icons/io5";
 
 // --- Constants & Assets ---
@@ -67,9 +70,9 @@ const IconButton = ({ icon: Icon, onClick, className, size = "w-6 h-6", active, 
 const ToolbarContainer = ({ children, className }) => (
   <div 
     onClick={(e) => e.stopPropagation()}
-    className={`absolute left-0 right-0 p-4 z-[100] flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}
+    className={`absolute left-0 right-0 p-3 md:p-4 z-[100] flex flex-col gap-3 md:gap-4 animate-in slide-in-from-bottom-5 duration-300 ${className}`}
   >
-    <div className="bg-black/85 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl">
+    <div className="bg-black/85 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl p-3 md:p-5 shadow-2xl">
       {children}
     </div>
   </div>
@@ -109,6 +112,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   const isImage = mediaFile?.type.startsWith('image/');
 
   const historyRef = useRef([]);
+  const redoStackRef = useRef([]);
   const isRestoringRef = useRef(false);
   const overlayInputRef = useRef(null);
   const [mediaURL] = useState(mediaFile ? URL.createObjectURL(mediaFile) : null);
@@ -202,16 +206,25 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
     return () => { c.dispose(); canvasRef.current = null; };
   }, [initialJson]);
 
-  // Responsive Resize
+  // Responsive Resize — fits canvas into BOTH width AND height of the wrapper
   useEffect(() => {
     const resize = () => {
       const c = canvasRef.current;
       const wrapper = wrapperRef.current;
       if (!c || !wrapper) return;
 
-      const wrapperWidth = wrapper.clientWidth || 360;
-      const width = Math.min(450, wrapperWidth);
-      const height = Math.round((width * 16) / 9); // 9:16 aspect ratio
+      const wrapperW = wrapper.clientWidth || 360;
+      const wrapperH = wrapper.clientHeight || 640;
+
+      // Fit 9:16 aspect ratio into the available space
+      let width = Math.min(450, wrapperW);
+      let height = Math.round((width * 16) / 9);
+
+      // If the calculated height exceeds the wrapper height, scale down from height instead
+      if (height > wrapperH) {
+        height = wrapperH;
+        width = Math.round((height * 9) / 16);
+      }
 
       const scaleX = width / c.getWidth();
 
@@ -237,8 +250,41 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
     try {
       const json = c.toJSON(["selectable", "evented", "id", "stroke", "strokeWidth", "shadow"]);
       historyRef.current.push(json);
-      if (historyRef.current.length > 30) historyRef.current.shift();
+      redoStackRef.current = []; // Clear redo when a new action is taken
+      if (historyRef.current.length > 50) historyRef.current.shift();
     } catch (e) { console.error("History error", e); }
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c || historyRef.current.length <= 1) return;
+    isRestoringRef.current = true;
+    // Save current state to redo stack
+    const currentState = c.toJSON(["selectable", "evented", "id", "stroke", "strokeWidth", "shadow"]);
+    redoStackRef.current.push(currentState);
+    // Pop the current and restore the previous
+    historyRef.current.pop();
+    const prev = historyRef.current[historyRef.current.length - 1];
+    c.loadFromJSON(prev, () => {
+      c.setBackgroundColor('transparent', () => {
+        c.renderAll();
+        isRestoringRef.current = false;
+      });
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c || redoStackRef.current.length === 0) return;
+    isRestoringRef.current = true;
+    const next = redoStackRef.current.pop();
+    historyRef.current.push(next);
+    c.loadFromJSON(next, () => {
+      c.setBackgroundColor('transparent', () => {
+        c.renderAll();
+        isRestoringRef.current = false;
+      });
+    });
   }, []);
 
   // Video Load Metadata
@@ -465,10 +511,16 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   };
 
   const handleBackgroundClick = (e) => {
-    // Only close if we're not in a drawing/text editing mode where clicks are needed on canvas
-    if (activeTool !== 'none' && activeTool !== 'draw' && activeTool !== 'text' && activeTool !== 'sticker_edit') {
+    // Close ANY open modal/drawer when clicking the background area
+    if (activeTool !== 'none') {
+      // Keep canvas interaction tools (draw needs clicks on canvas)
+      if (activeTool === 'draw') return;
       setActiveTool('none');
-      if (canvasRef.current) canvasRef.current.discardActiveObject().requestRenderAll();
+      toggleDrawingMode(false);
+      if (canvasRef.current) {
+        canvasRef.current.discardActiveObject();
+        canvasRef.current.requestRenderAll();
+      }
     }
   };
 
@@ -478,7 +530,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
       <div 
         ref={wrapperRef} 
         onClick={handleBackgroundClick}
-        className="relative w-full h-full md:max-w-[420px] md:h-auto md:aspect-[9/16] bg-black overflow-hidden md:shadow-2xl md:rounded-3xl md:border border-white/10 shrink-0"
+        className="relative w-full h-[100dvh] md:max-w-[420px] md:h-auto md:aspect-[9/16] bg-black overflow-hidden md:shadow-2xl md:rounded-3xl md:border border-white/10 shrink-0 flex items-center justify-center"
       >
 
         {/* Layer 1: Background */}
@@ -507,19 +559,17 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Layer 3: UI Controls */}
 
-        {/* Top Bar */}
-        {/* Top Bar */}
         {/* Top Bar (Contextual Tools Only) */}
         {["text", "draw", "filter", "sticker_edit"].includes(activeTool) && (
-          <div className="absolute top-0 inset-x-0 p-4 pt-12 md:pt-6 flex justify-between items-start z-[100] bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+          <div className="absolute top-0 inset-x-0 p-3 md:p-4 pt-[env(safe-area-inset-top,12px)] md:pt-6 flex justify-between items-start z-[100] bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
             <div className="w-full flex justify-between items-center">
               <button
                 onClick={handleDeleteObject}
                 className="bg-red-500/80 p-2 rounded-full text-white backdrop-blur-md hover:bg-red-600 transition shadow-lg pointer-events-auto"
               >
-                <IoTrash size={20} />
+                <IoTrash size={18} />
               </button>
-              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full font-bold shadow-lg pointer-events-auto">
+              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 bg-white text-black rounded-full font-bold text-sm shadow-lg pointer-events-auto">
                 <IoCheckmark /> Done
               </button>
             </div>
@@ -528,11 +578,11 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Bottom Navigation Bar (Main View) */}
         {activeTool === 'none' && (
-          <div className="absolute bottom-0 inset-x-0 p-6 pb-20 md:pb-8 flex justify-between items-center z-[100] bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
-            <button onClick={onCancel} className="bg-white/10 p-3 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition pointer-events-auto border border-white/10">
-              <IoCloseOutline size={28} />
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-5 md:pb-8 flex justify-between items-center z-[100] bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
+            <button onClick={onCancel} className="bg-white/10 p-2.5 md:p-3 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition pointer-events-auto border border-white/10">
+              <IoCloseOutline size={24} />
             </button>
-            <button onClick={handleFinish} className="px-8 py-3 bg-cyan-500 text-black font-bold text-lg rounded-full shadow-lg hover:brightness-110 pointer-events-auto active:scale-95 transition-transform">
+            <button onClick={handleFinish} className="px-6 py-2.5 md:px-8 md:py-3 bg-cyan-500 text-black font-bold text-base md:text-lg rounded-full shadow-lg hover:brightness-110 pointer-events-auto active:scale-95 transition-transform">
               Next
             </button>
           </div>
@@ -540,36 +590,48 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Side Menu Tools */}
         {activeTool === 'none' && (
-          <div className="absolute right-4 top-20 flex flex-col gap-4 z-[100] animate-in slide-in-from-right-10">
+          <div className="absolute right-2 md:right-4 top-3 md:top-20 bottom-16 md:bottom-auto flex flex-col gap-1.5 md:gap-3 z-[100] animate-in slide-in-from-right-10 justify-center md:justify-start overflow-y-auto no-scrollbar py-1">
             {[
+              { id: 'undo', icon: IoArrowUndo, action: handleUndo, label: 'Undo' },
+              { id: 'redo', icon: IoArrowRedo, action: handleRedo, label: 'Redo' },
+              { id: 'delete', icon: IoTrashBin, action: handleDeleteObject, label: 'Delete', danger: true },
+              null, // spacer
               { id: 'music', icon: IoMusicalNotes, action: () => setActiveTool('music'), label: 'Audio' },
               { id: 'text', icon: IoTextOutline, action: handleAddText, label: 'Text' },
               { id: 'draw', icon: IoBrushOutline, action: () => { setActiveTool('draw'); toggleDrawingMode(true); }, label: 'Draw' },
               { id: 'sticker', icon: IoHappyOutline, action: () => setActiveTool('sticker_menu'), label: 'Sticker' },
               { id: 'filter', icon: IoContrastOutline, action: () => setActiveTool('filter'), label: 'Effects' },
               { id: 'trim', icon: isVideo ? IoCutOutline : IoTimeOutline, action: () => setActiveTool('trim'), label: isVideo ? 'Trim' : 'Duration' },
-            ].map(t => (
-              <div key={t.id} className="flex flex-col items-center gap-1 group">
-                <button onClick={t.action} className="p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/20 hover:scale-110 transition-all shadow-lg">
-                  <t.icon size={24} />
-                </button>
-                <span className="text-[10px] font-bold text-white drop-shadow-md opacity-0 group-hover:opacity-100 transition-opacity absolute right-14 bg-black/80 px-2 py-1 rounded">{t.label}</span>
-              </div>
-            ))}
+            ].map((t, i) => {
+              if (!t) return <div key={`spacer-${i}`} className="w-full h-[1px] bg-white/10 my-0.5" />;
+              return (
+                <div key={t.id} className="flex flex-col items-center gap-0.5 group">
+                  <button
+                    onClick={t.action}
+                    className={`p-2 md:p-3 backdrop-blur-md rounded-full text-white border hover:scale-110 transition-all shadow-lg ${
+                      t.danger
+                        ? 'bg-red-500/20 border-red-500/30 hover:bg-red-500/40 text-red-400'
+                        : 'bg-black/40 border-white/10 hover:bg-white/20'
+                    }`}
+                  >
+                    <t.icon size={18} className="md:w-[22px] md:h-[22px]" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* Trimming / Duration UI */}
         {activeTool === 'trim' && (
           <ToolbarContainer className="bottom-0">
-            <h3 className="text-white mb-3 text-center font-bold text-sm uppercase tracking-wider">
+            <h3 className="text-white mb-2 text-center font-bold text-xs md:text-sm uppercase tracking-wider">
               {isVideo ? 'Trim Video' : 'Set Duration'}
             </h3>
             
             {isVideo ? (
-              <div className="relative h-16 w-full bg-gray-800 rounded-lg overflow-hidden border border-white/20 select-none">
+              <div className="relative h-14 md:h-16 w-full bg-gray-800 rounded-lg overflow-hidden border border-white/20 select-none">
                 <div className="absolute inset-0 flex opacity-50 pointer-events-none">
-                  <div className="w-full h-full bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-30"></div>
                   <div className="w-full h-full bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 opacity-50"></div>
                 </div>
                 <div
@@ -605,7 +667,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 <span className="absolute right-2 bottom-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded pointer-events-none z-30">{trimRange.end.toFixed(1)}s</span>
               </div>
             ) : (
-              <div className="flex justify-center gap-4">
+              <div className="flex justify-center gap-3 md:gap-4">
                 {[5, 15, 30, 60].map(d => (
                   <button
                     key={d}
@@ -613,14 +675,14 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                       setVideoDuration(d);
                       setTrimRange({ start: 0, end: d });
                     }}
-                    className={`w-12 h-12 rounded-full border-2 font-bold transition-all ${videoDuration === d ? 'border-yellow-400 bg-yellow-400 text-black scale-110' : 'border-white/20 text-white hover:bg-white/10'}`}
+                    className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 font-bold text-sm transition-all ${videoDuration === d ? 'border-yellow-400 bg-yellow-400 text-black scale-110' : 'border-white/20 text-white hover:bg-white/10'}`}
                   >
                     {d}s
                   </button>
                 ))}
               </div>
             )}
-            <p className="text-center text-xs text-white/50 mt-2">
+            <p className="text-center text-[10px] md:text-xs text-white/50 mt-1">
               {isVideo ? 'Drag ends to trim' : 'Select reel length'}
             </p>
           </ToolbarContainer>
@@ -628,8 +690,8 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Text Toolbar */}
         {activeTool === 'text' && (
-          <ToolbarContainer className="bottom-24 md:bottom-28">
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2">
+          <ToolbarContainer className="bottom-14 md:bottom-28">
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-1">
               {EDITOR_FONTS.map((font) => (
                 <button
                   key={font.name}
@@ -637,7 +699,7 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                     setTextOptions(prev => ({ ...prev, font: font.name }));
                     updateTextProp('fontFamily', font.value);
                   }}
-                  className={`px-3 py-1.5 rounded-full whitespace-nowrap text-xs border transition-all ${textOptions.font === font.name
+                  className={`px-3 py-1 rounded-full whitespace-nowrap text-xs border transition-all ${textOptions.font === font.name
                     ? "bg-white text-black border-white"
                     : "bg-black/40 text-white border-white/20 hover:bg-black/60"}`}
                 >
@@ -645,14 +707,14 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 </button>
               ))}
             </div>
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-1.5 md:gap-2 justify-center">
               {COLORS.slice(0, 7).map(c => (
-                <button key={c} onClick={() => { setTextOptions(p => ({ ...p, color: c })); updateTextProp('fill', c); }} className={`w-8 h-8 rounded-full border-2 ${textOptions.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                <button key={c} onClick={() => { setTextOptions(p => ({ ...p, color: c })); updateTextProp('fill', c); }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 ${textOptions.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
               ))}
               <button onClick={() => {
                 const n = !textOptions.neon; setTextOptions(p => ({ ...p, neon: n })); updateTextProp('neon', n);
-              }} className={`w-8 h-8 rounded-full border border-white/20 flex items-center justify-center ${textOptions.neon ? 'bg-fuchsia-500 text-white' : 'bg-black/50 text-white'}`}>
-                <IoFlash size={14} />
+              }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border border-white/20 flex items-center justify-center ${textOptions.neon ? 'bg-fuchsia-500 text-white' : 'bg-black/50 text-white'}`}>
+                <IoFlash size={12} />
               </button>
             </div>
           </ToolbarContainer>
@@ -660,16 +722,15 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
         {/* Draw Toolbar */}
         {activeTool === 'draw' && (
-          <ToolbarContainer className="bottom-24 md:bottom-28">
-            <div className="flex justify-between items-center mb-4">
+          <ToolbarContainer className="bottom-14 md:bottom-28">
+            <div className="flex justify-between items-center mb-2 md:mb-4">
               <span className="text-white text-xs font-bold uppercase">Brush Tools</span>
               <button onClick={() => {
                 const c = canvasRef.current;
-                // Simple clear or clear logic
                 if (c) { c.isDrawingMode = false; c.getObjects().forEach(o => { if (o.type === 'path') c.remove(o) }); c.isDrawingMode = true; }
               }} className="text-xs text-red-400 uppercase font-bold hover:underline">Clear Ink</button>
             </div>
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-3 md:gap-4 mb-2 md:mb-4">
               <span className="text-white text-xs font-bold uppercase">Size</span>
               <input type="range" min="1" max="40" value={drawOptions.width} onChange={e => {
                 const w = Number(e.target.value);
@@ -679,14 +740,14 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 }
               }} className="flex-1 accent-white" />
             </div>
-            <div className="flex gap-2 justify-center flex-wrap">
+            <div className="flex gap-1.5 md:gap-2 justify-center flex-wrap">
               {COLORS.map(c => (
                 <button key={c} onClick={() => {
                   setDrawOptions(p => ({ ...p, color: c }));
                   if (canvasRef.current && canvasRef.current.freeDrawingBrush) {
                     canvasRef.current.freeDrawingBrush.color = c;
                   }
-                }} className={`w-8 h-8 rounded-full border-2 ${drawOptions.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 ${drawOptions.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
               ))}
               <button onClick={() => {
                 const n = !drawOptions.neon;
@@ -694,26 +755,26 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 if (canvasRef.current && canvasRef.current.freeDrawingBrush) {
                   canvasRef.current.freeDrawingBrush.shadow = n ? new fabric.Shadow({ blur: 15, color: drawOptions.color }) : null;
                 }
-              }} className={`w-8 h-8 rounded-full border border-white/20 flex items-center justify-center ${drawOptions.neon ? 'bg-fuchsia-500 text-white' : 'bg-black/50 text-white'}`}>
-                <IoFlash size={14} />
+              }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border border-white/20 flex items-center justify-center ${drawOptions.neon ? 'bg-fuchsia-500 text-white' : 'bg-black/50 text-white'}`}>
+                <IoFlash size={12} />
               </button>
             </div>
           </ToolbarContainer>
         )}
 
-        {/* Sticker Menu (New) */}
+        {/* Sticker Menu */}
         {activeTool === 'sticker_menu' && (
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="absolute inset-x-0 bottom-0 top-1/2 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300"
+            className="absolute inset-x-0 bottom-0 bg-black/95 backdrop-blur-xl z-[100] p-4 md:p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300 max-h-[50dvh]"
           >
-            <div className="flex justify-between mb-6">
-              <h3 className="text-white font-bold text-xl">Stickers</h3>
+            <div className="flex justify-between mb-4">
+              <h3 className="text-white font-bold text-lg">Stickers</h3>
               <button onClick={() => setActiveTool('none')} className="bg-white/10 p-2 rounded-full text-white"><IoChevronDown /></button>
             </div>
-            <div className="grid grid-cols-5 gap-4 overflow-y-auto max-h-60 no-scrollbar">
+            <div className="grid grid-cols-6 gap-3 overflow-y-auto max-h-[35dvh] no-scrollbar">
               {STICKERS.map((s, i) => (
-                <button key={i} onClick={() => handleAddSticker(s)} className="text-4xl hover:scale-125 transition-transform">
+                <button key={i} onClick={() => handleAddSticker(s)} className="text-3xl md:text-4xl hover:scale-125 transition-transform text-center">
                   {s}
                 </button>
               ))}
@@ -725,36 +786,36 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
         {activeTool === 'music' && (
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="absolute inset-x-0 bottom-0 top-20 bg-black/95 backdrop-blur-xl z-[100] p-6 rounded-t-3xl animate-in slide-in-from-bottom-full duration-300"
+            className="absolute inset-x-0 bottom-0 top-0 bg-black/95 backdrop-blur-xl z-[100] p-4 md:p-6 pt-[env(safe-area-inset-top,16px)] rounded-t-3xl animate-in slide-in-from-bottom-full duration-300 flex flex-col"
           >
-            <div className="flex justify-between mb-6">
-              <h3 className="text-white font-bold text-xl">Select Audio</h3>
+            <div className="flex justify-between mb-4">
+              <h3 className="text-white font-bold text-lg">Select Audio</h3>
               <button onClick={() => setActiveTool('none')} className="bg-white/10 p-2 rounded-full text-white"><IoChevronDown /></button>
             </div>
-            <form onSubmit={handleSearchMusic} className="relative mb-6">
-              <IoSearchOutline className="absolute left-4 top-3.5 text-gray-400" size={20} />
+            <form onSubmit={handleSearchMusic} className="relative mb-4">
+              <IoSearchOutline className="absolute left-4 top-3 text-gray-400" size={18} />
               <input
-                className="w-full bg-white/10 rounded-2xl pl-12 pr-4 py-3 text-white placeholder-gray-500 font-medium focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
+                className="w-full bg-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-white text-sm placeholder-gray-500 font-medium focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
                 placeholder="Search for songs, artists..."
                 value={musicQuery}
                 onChange={e => setMusicQuery(e.target.value)}
                 autoFocus
               />
             </form>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar pb-10">
+            <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar pb-6">
               {musicResults.map(track => (
-                <div key={track.id} onClick={() => { selectMusicTrack(track); applyMusicSticker('card'); setActiveTool('none'); }} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
-                  <img src={track.coverUrl} className="w-14 h-14 rounded-xl shadow-lg group-hover:scale-105 transition-transform" />
+                <div key={track.id} onClick={() => { selectMusicTrack(track); applyMusicSticker('card'); setActiveTool('none'); }} className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
+                  <img src={track.coverUrl} className="w-12 h-12 rounded-xl shadow-lg group-hover:scale-105 transition-transform" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-bold truncate">{track.title}</p>
-                    <p className="text-white/60 text-sm truncate">{track.artist}</p>
+                    <p className="text-white font-bold text-sm truncate">{track.title}</p>
+                    <p className="text-white/60 text-xs truncate">{track.artist}</p>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-black opacity-0 group-hover:opacity-100 transition-opacity">
-                    <IoPlay className="ml-0.5" />
+                  <div className="w-9 h-9 rounded-full bg-cyan-500 flex items-center justify-center text-black opacity-0 group-hover:opacity-100 transition-opacity">
+                    <IoPlay className="ml-0.5" size={14} />
                   </div>
                 </div>
               ))}
-              {musicResults.length === 0 && !isSearchingMusic && <div className="text-center text-gray-500 mt-10">Search for your favorite music</div>}
+              {musicResults.length === 0 && !isSearchingMusic && <div className="text-center text-gray-500 mt-10 text-sm">Search for your favorite music</div>}
             </div>
           </div>
         )}
@@ -763,15 +824,14 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
         {activeTool === 'filter' && (
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-24 md:bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-4 flex gap-4 pb-4 z-[100]"
+            className="absolute bottom-14 md:bottom-28 left-0 right-0 overflow-x-auto no-scrollbar px-3 md:px-4 flex gap-3 pb-3 z-[100]"
           >
             {FILTER_TYPES.map(f => (
-              <button key={f} onClick={() => setFilterType(f)} className={`flex-shrink-0 w-20 h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-[0_0_15px_#facc15]' : 'border-white/20'}`}>
+              <button key={f} onClick={() => setFilterType(f)} className={`flex-shrink-0 w-16 h-24 md:w-20 md:h-28 rounded-xl overflow-hidden border-2 relative group transition-all transform hover:scale-105 ${filterType === f ? 'border-yellow-400 shadow-[0_0_15px_#facc15]' : 'border-white/20'}`}>
                 <div className={`w-full h-full bg-gray-800 ${getFilterClass(f)}`}>
-                  {/* We use checking pattern or simple color to represent filter, since we can't easily snapshot video in button */}
                   <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${mediaURL})` }} />
                 </div>
-                <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white text-[9px] py-1.5 text-center font-bold uppercase tracking-widest">
+                <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white text-[8px] md:text-[9px] py-1 text-center font-bold uppercase tracking-widest">
                   {f}
                 </div>
               </button>

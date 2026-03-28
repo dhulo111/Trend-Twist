@@ -145,7 +145,7 @@ const CreateReel = ({ onSuccess, initialDraft = null }) => {
 
       {/* Step 2: Editor */}
       {step === 2 && file && (
-        <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <div className="fixed inset-0 bg-black flex items-center justify-center z-[999]">
           <ReelEditor
             mediaFile={file}
             initialJson={editorJson}

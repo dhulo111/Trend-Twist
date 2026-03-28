@@ -35,7 +35,7 @@ from asgiref.sync import async_to_sync
 from .serializers import (
     UserSerializer, ProfileSerializer, PostSerializer, CommentSerializer, TwistSerializer,
     FollowerSerializer, FollowingSerializer, HashtagSerializer,
-    OTPRequestSerializer, OTPVerifySerializer, CompleteRegistrationSerializer,
+    LoginSerializer, RegisterSerializer,
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
     ReelSerializer, ReelCommentSerializer, TwistCommentSerializer, ChatGroupSerializer,
     NotificationSerializer, SavedItemSerializer, has_subscription_access,
@@ -143,16 +143,33 @@ class GoogleLoginView(APIView):
             # Catch-all
             return Response({"error": f"Authentication failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class RequestLoginOTPView(APIView):
-    """Sends an OTP *only* if the user already exists (Login Flow)."""
+class CheckUserView(APIView):
+    """Checks if a user exists with the given email or username."""
     permission_classes = [AllowAny]
     def post(self, request):
-        serializer = OTPRequestSerializer(data=request.data)
+        query = request.data.get('username_or_email')
+        if not query:
+            return Response({"error": "username_or_email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = User.objects.filter(Q(username__iexact=query) | Q(email__iexact=query)).first()
+        if user:
+            return Response({"exists": True}, status=status.HTTP_200_OK)
+        return Response({"exists": False}, status=status.HTTP_200_OK)
+
+class PasswordLoginView(APIView):
+    """Standard username/email and password login."""
+    permission_classes = [AllowAny]
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        email = serializer.validated_data['email']
-        try:
-            user = User.objects.get(email=email)
+        
+        query = serializer.validated_data['username_or_email']
+        password = serializer.validated_data['password']
+
+        user = User.objects.filter(Q(username__iexact=query) | Q(email__iexact=query)).first()
+        
+        if user and user.check_password(password):
             if hasattr(user, 'profile') and user.profile.blocked_until and user.profile.blocked_until > timezone.now():
                 duration_str = user.profile.blocked_until.strftime("%B %d, %Y at %I:%M %p")
                 return Response({
@@ -161,189 +178,30 @@ class RequestLoginOTPView(APIView):
                     "blocked_until": duration_str,
                     "contact_email": "support@trendtwist.com"
                 }, status=status.HTTP_403_FORBIDDEN)
-        except User.DoesNotExist:
-            return Response({"error": "Account not found. Please register first."}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Validate Email Settings before creating DB record
-        if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
-            print("CRITICAL: EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is NOT set.")
-            return Response({"error": "Server Email Misconfiguration: EMAIL_HOST_USER/PASSWORD missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        try:
-            old_otp = OTPRequest.objects.filter(email=email, is_verified=False)
-            old_otp.delete() # Cleanup old requests
             
-            otp_code = str(random.randint(100000, 999999))
-            otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
-        except Exception as e:
-            print(f"Error creating OTP record: {e}")
-            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        try:
-            print(f"Attempting to send OTP to {email} using {settings.EMAIL_HOST_USER}...")
-            send_mail(
-                subject='Your TrendTwist Login OTP', 
-                message=f'Your One-Time Password is: {otp_code}', 
-                from_email=settings.DEFAULT_FROM_EMAIL, 
-                recipient_list=[email],
-                fail_silently=False
-            )
-            print("Email sent successfully.")
-        except Exception as e:
-            print(f"SMTP Error: {e}") 
-            # Delete the OTP request since it wasn't sent
-            otp_request.delete()
-            return Response({"error": f"Failed to send email. Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
-
-class VerifyLoginOTPView(APIView):
-    """Verifies the OTP and returns JWT tokens for an *existing* user."""
-    permission_classes = [AllowAny]
-    def post(self, request):
-        serializer = OTPVerifySerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        request_id = serializer.validated_data['id']
-        otp_code = serializer.validated_data['otp']
-
-        try:
-            otp_request = OTPRequest.objects.get(id=request_id)
-        except OTPRequest.DoesNotExist:
-            return Response({"error": "Invalid request."}, status=status.HTTP_404_NOT_FOUND)
-
-        if otp_request.is_verified or otp_request.is_expired() or otp_request.otp != otp_code:
-            return Response({"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
-
-        otp_request.is_verified = True
-        otp_request.save()
-        user = User.objects.get(email=otp_request.email)
-
-        if hasattr(user, 'profile') and user.profile.blocked_until and user.profile.blocked_until > timezone.now():
-            duration_str = user.profile.blocked_until.strftime("%B %d, %Y at %I:%M %p")
+            refresh = RefreshToken.for_user(user)
             return Response({
-                "error": "Account Blocked", 
-                "block_reason": user.profile.block_reason,
-                "blocked_until": duration_str,
-                "contact_email": "support@trendtwist.com"
-            }, status=status.HTTP_403_FORBIDDEN)
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': UserSerializer(user, context={'request': request}).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
+class PasswordRegisterView(APIView):
+    """Password-based registration with optional phone number."""
+    permission_classes = [AllowAny]
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
         refresh = RefreshToken.for_user(user)
-        user_serializer = UserSerializer(user, context={'request': request})
         return Response({
-            'refresh': str(refresh), 'access': str(refresh.access_token), 'user': user_serializer.data
-        }, status=status.HTTP_200_OK)
-
-class RequestRegisterOTPView(APIView):
-    """Sends an OTP *only* if the email is NOT already in use (Registration Flow)."""
-    permission_classes = [AllowAny]
-    def post(self, request):
-        serializer = OTPRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        email = serializer.validated_data['email']
-        if User.objects.filter(email=email).exists():
-            return Response({"error": "This email is already in use. Please log in."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
-             print("CRITICAL: EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is NOT set.")
-             return Response({"error": "Server Email Misconfiguration: EMAIL_HOST_USER/PASSWORD missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        try:
-            # Clean up old unverified requests
-            OTPRequest.objects.filter(email=email, is_verified=False).delete()
-            
-            otp_code = str(random.randint(100000, 999999))
-            otp_request = OTPRequest.objects.create(email=email, otp=otp_code)
-        except Exception as e:
-            print(f"Error creating OTP record: {e}")
-            return Response({"error": f"Database error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        try:
-            print(f"Attempting to send OTP to {email}...")
-            send_mail(
-                subject='Verify Your Email for TrendTwist', 
-                message=f'Your email verification code is: {otp_code}', 
-                from_email=settings.DEFAULT_FROM_EMAIL, 
-                recipient_list=[email],
-                fail_silently=False
-            )
-        except Exception as e:
-            print(f"SMTP Error: {e}") # Debug print
-            otp_request.delete()
-            return Response({"error": f"SMTP Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response({"id": otp_request.id}, status=status.HTTP_201_CREATED)
-
-class VerifyOnlyOTPView(APIView):
-    """Verifies the OTP for registration without logging in (Step 2 check)."""
-    permission_classes = [AllowAny]
-    def post(self, request):
-        serializer = OTPVerifySerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        request_id = serializer.validated_data['id']
-        otp_code = serializer.validated_data['otp']
-
-        try:
-            otp_request = OTPRequest.objects.get(id=request_id)
-        except OTPRequest.DoesNotExist:
-            return Response({"error": "Invalid request ID."}, status=status.HTTP_404_NOT_FOUND)
-
-        if otp_request.is_verified:
-            return Response({"error": "This OTP has already been verified."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if otp_request.is_expired():
-            return Response({"error": "This OTP has expired. Please resend the code."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if otp_request.otp != otp_code:
-            return Response({"error": "Invalid OTP code."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # OTP is VALID: Mark it as verified so it cannot be used again
-        otp_request.is_verified = True
-        otp_request.save()
-
-        return Response({"status": "OTP verified"}, status=status.HTTP_200_OK)
-
-class CompleteRegistrationView(APIView):
-    """Verifies OTP request status and creates the new user."""
-    permission_classes = [AllowAny]
-    def post(self, request):
-        serializer = CompleteRegistrationSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = serializer.validated_data
-        request_id = data['id']
-        username = data['username']
-
-        # 1. Check if a VERIFIED OTP request exists for this ID
-        try:
-            otp_request = OTPRequest.objects.get(id=request_id, is_verified=True)
-        except OTPRequest.DoesNotExist:
-            return Response({"error": "Email verification required or OTP expired."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 2. Check if username is taken
-        if User.objects.filter(username=username).exists():
-            return Response({"error": "This username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 3. Create user and delete OTP request
-        otp_request.delete() # Consume the request
-
-        user = User.objects.create_user(
-            username=username,
-            email=otp_request.email,
-            first_name=data.get('first_name', ''),
-            last_name=data.get('last_name', '')
-        )
-
-        # 4. Log the new user in (Generate JWT tokens)
-        refresh = RefreshToken.for_user(user)
-        user_serializer = UserSerializer(user, context={'request': request})
-        return Response({
-            'refresh': str(refresh), 'access': str(refresh.access_token), 'user': user_serializer.data
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user, context={'request': request}).data
         }, status=status.HTTP_201_CREATED)
 
 

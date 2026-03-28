@@ -4,15 +4,37 @@ import axiosInstance from "./axiosInstance";
 
 // --- 1. Login Flow ---
 
-export const requestLoginOTP = async (email) => {
+export const checkUserExists = async (usernameOrEmail) => {
   try {
-    const response = await axiosInstance.post("/auth/login/request-otp/", {
-      email: email,
+    const response = await axiosInstance.post("/auth/check-user/", {
+      username_or_email: usernameOrEmail,
     });
-    return response.data; // Returns { id: "..." }
+    return response.data; // Returns { exists: true/false }
   } catch (error) {
-    console.error("Request Login OTP API error:", error);
-    throw error; // Re-throw to be handled by the component
+    console.error("Check User API error:", error);
+    throw error;
+  }
+};
+
+export const loginWithPassword = async (usernameOrEmail, password) => {
+  try {
+    const response = await axiosInstance.post("/auth/login/password/", {
+      username_or_email: usernameOrEmail,
+      password: password,
+    });
+
+    if (response.status === 200) {
+      const authToken = {
+        access: response.data.access,
+        refresh: response.data.refresh,
+      };
+      const user = response.data.user;
+      localStorage.setItem("authToken", JSON.stringify(authToken));
+      return { authToken, user };
+    }
+  } catch (error) {
+    console.error("Login with Password API error:", error);
+    throw error;
   }
 };
 
@@ -39,67 +61,12 @@ export const googleLogin = async (googleToken) => {
   }
 };
 
-export const verifyRegistrationOTP = async (id, otp) => {
-  try {
-    // New endpoint created in views.py
-    const response = await axiosInstance.post(
-      "/auth/register/verify-only-otp/",
-      {
-        id: id,
-        otp: otp,
-      }
-    );
-    return response.data; // Should return {"status": "OTP verified"}
-  } catch (error) {
-    console.error("Verify Registration OTP API error:", error);
-    throw error;
-  }
-};
-
-export const verifyLoginOTP = async (id, otp) => {
-  try {
-    const response = await axiosInstance.post("/auth/login/verify-otp/", {
-      id: id,
-      otp: otp,
-    });
-
-    if (response.status === 200) {
-      // Backend returns { access, refresh, user }
-      const authToken = {
-        access: response.data.access,
-        refresh: response.data.refresh,
-      };
-      const user = response.data.user;
-
-      // Store tokens in localStorage
-      localStorage.setItem("authToken", JSON.stringify(authToken));
-
-      return { authToken, user };
-    }
-  } catch (error) {
-    console.error("Verify Login OTP API error:", error);
-    throw error;
-  }
-};
-
 // --- 2. Registration Flow ---
 
-export const requestRegisterOTP = async (email) => {
-  try {
-    const response = await axiosInstance.post("/auth/register/request-otp/", {
-      email: email,
-    });
-    return response.data; // Returns { id: "..." }
-  } catch (error) {
-    console.error("Request Register OTP API error:", error);
-    throw error;
-  }
-};
-
-export const completeRegistration = async (registrationData) => {
+export const registerWithPassword = async (registrationData) => {
   try {
     const response = await axiosInstance.post(
-      "/auth/register/complete/",
+      "/auth/register/password/",
       registrationData
     );
 
@@ -109,14 +76,11 @@ export const completeRegistration = async (registrationData) => {
         refresh: response.data.refresh,
       };
       const user = response.data.user;
-
-      // Store tokens in localStorage
       localStorage.setItem("authToken", JSON.stringify(authToken));
-
       return { authToken, user };
     }
   } catch (error) {
-    console.error("Complete Registration API error:", error);
+    console.error("Register with Password API error:", error);
     throw error;
   }
 };

@@ -4,10 +4,9 @@ import React, { createContext, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import {
-  requestLoginOTP as apiRequestLoginOTP,
-  verifyLoginOTP as apiVerifyLoginOTP,
-  requestRegisterOTP as apiRequestRegisterOTP,
-  completeRegistration as apiCompleteRegistration,
+  checkUserExists as apiCheckUserExists,
+  loginWithPassword as apiLoginWithPassword,
+  registerWithPassword as apiRegisterWithPassword,
   logout as apiLogout,
   googleLogin as apiGoogleLogin,
 } from '../api/authApi';
@@ -177,9 +176,17 @@ export const AuthProvider = ({ children }) => {
 
   // 5. --- Login/Register Handlers (Set AuthToken and Navigate) ---
 
-  const verifyLoginOTP = async (id, otp) => {
+  const checkUserExists = async (usernameOrEmail) => {
     try {
-      const { authToken: newAuthToken } = await apiVerifyLoginOTP(id, otp);
+      return await apiCheckUserExists(usernameOrEmail);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const loginWithPassword = async (usernameOrEmail, password) => {
+    try {
+      const { authToken: newAuthToken } = await apiLoginWithPassword(usernameOrEmail, password);
       setAuthToken(newAuthToken);
 
       if (await setFullUserState(newAuthToken, setUser)) {
@@ -190,34 +197,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const completeRegistration = async (registrationData) => {
+  const registerWithPassword = async (registrationData) => {
     try {
-      const { authToken: newAuthToken } =
-        await apiCompleteRegistration(registrationData);
-
+      const { authToken: newAuthToken } = await apiRegisterWithPassword(registrationData);
       setAuthToken(newAuthToken);
 
       if (await setFullUserState(newAuthToken, setUser)) {
         navigate('/');
       }
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const requestRegisterOTP = async (email) => {
-    try {
-      const response = await apiRequestRegisterOTP(email);
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const requestLoginOTP = async (email) => {
-    try {
-      const response = await apiRequestLoginOTP(email);
-      return response;
     } catch (error) {
       throw error;
     }
@@ -251,10 +238,9 @@ export const AuthProvider = ({ children }) => {
     user,
     authToken,
     loading,
-    requestLoginOTP,
-    verifyLoginOTP,
-    requestRegisterOTP,
-    completeRegistration,
+    checkUserExists,
+    loginWithPassword,
+    registerWithPassword,
     googleLogin,
     logoutUser,
     refreshUserProfile,
