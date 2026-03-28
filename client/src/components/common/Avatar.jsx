@@ -30,7 +30,13 @@ const Avatar = ({ src, alt = 'avatar', size = 'md', className = '', onClick }) =
 
 
   // --- 2. Define Classes ---
-  const sizeClasses = { sm: 'h-8 w-8', md: 'h-10 w-10', lg: 'h-16 w-16', xl: 'h-24 w-24' };
+  const sizeClasses = { 
+    xs: 'h-7 w-7', 
+    sm: 'h-8 w-8', 
+    md: 'h-10 w-10', 
+    lg: 'h-16 w-16', 
+    xl: 'h-24 w-24' 
+  };
   const finalSizeClass = sizeClasses[size];
   const finalClassName = `
     ${finalSizeClass} 
