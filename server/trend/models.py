@@ -22,6 +22,13 @@ def get_story_expiry_time():
 # --- 1. User Account & Profile Models (UPDATED for Privacy) ---
 
 class Profile(models.Model):
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+        ('prefer_not_to_say', 'Prefer not to say'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profiles/', blank=True, null=True, default='profiles/default_avatar.png')
@@ -42,6 +49,9 @@ class Profile(models.Model):
 
     # NEW: Phone Number
     phone_number = models.CharField(max_length=15, blank=True, null=True)
+
+    # NEW: Gender
+    gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True, null=True)
 
     # Withdrawal Information (Stored as JSON for flexibility: Bank, UPI, etc.)
     withdrawal_info = models.JSONField(default=dict, blank=True, null=True)

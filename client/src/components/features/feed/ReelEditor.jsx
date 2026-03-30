@@ -671,9 +671,11 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 {[5, 15, 30, 60].map(d => (
                   <button
                     key={d}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setVideoDuration(d);
                       setTrimRange({ start: 0, end: d });
+                      setActiveTool('none');
                     }}
                     className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 font-bold text-sm transition-all ${videoDuration === d ? 'border-yellow-400 bg-yellow-400 text-black scale-110' : 'border-white/20 text-white hover:bg-white/10'}`}
                   >

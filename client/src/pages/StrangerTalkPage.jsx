@@ -12,7 +12,8 @@ import {
   IoVideocam, IoVideocamOff, IoMicOff, IoMic,
   IoArrowBack, IoStop, IoWarning,
   IoPeople, IoWifi, IoPersonOutline,
-  IoSend, IoChatboxOutline, IoClose
+  IoSend, IoChatboxOutline, IoClose,
+  IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline
 } from 'react-icons/io5';
 import { FaRandom, FaUserSecret } from 'react-icons/fa';
 import { HiSwitchHorizontal } from 'react-icons/hi';
@@ -70,6 +71,9 @@ const StrangerTalkPage = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isChatOpenMobile, setIsChatOpenMobile] = useState(false);
   const [floatingMessages, setFloatingMessages] = useState([]);
+  
+  // Gender filter state
+  const [preferredGender, setPreferredGender] = useState('any');
 
   // Floating messages helper
   const addFloatingMessage = useCallback((sender, content, isMine) => {
@@ -124,7 +128,13 @@ const StrangerTalkPage = () => {
   }, []);
 
   const createPeerConnection = useCallback((ws) => {
-    if (pcRef.current) pcRef.current.close();
+    if (pcRef.current) {
+      pcRef.current.ontrack = null;
+      pcRef.current.onicecandidate = null;
+      pcRef.current.onconnectionstatechange = null;
+      pcRef.current.oniceconnectionstatechange = null;
+      pcRef.current.close();
+    }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
@@ -138,11 +148,26 @@ const StrangerTalkPage = () => {
       if (remoteVideoRef.current && event.streams[0]) remoteVideoRef.current.srcObject = event.streams[0];
     };
     pc.onconnectionstatechange = () => {
+      console.log('WebRTC connectionState:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         setStatus(STATUS.MATCHED);
         setConnectionTime(0);
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => setConnectionTime(t => t + 1), 1000);
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        // Automatically switch if it drops
+        handleSwitch();
+      }
+    };
+    pc.oniceconnectionstatechange = () => {
+      console.log('WebRTC iceConnectionState:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setStatus(STATUS.MATCHED);
+        setConnectionTime(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => setConnectionTime(t => t + 1), 1000);
+      } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+        handleSwitch();
       }
     };
     pcRef.current = pc;
@@ -177,7 +202,13 @@ const StrangerTalkPage = () => {
       return;
     }
 
-    const ws = new WebSocket(`${wsUrl}?token=${token}`);
+    // Build WebSocket URL with gender preference
+    let wsConnUrl = `${wsUrl}?token=${token}`;
+    if (preferredGender && preferredGender !== 'any') {
+      wsConnUrl += `&preferred_gender=${preferredGender}`;
+    }
+
+    const ws = new WebSocket(wsConnUrl);
     wsRef.current = ws;
 
     ws.onmessage = async (event) => {
@@ -190,6 +221,7 @@ const StrangerTalkPage = () => {
           setStrangerInfo(null);
           setSwitchLoading(false);
           closePeerConnection();
+          pendingIceCandidates.current = [];
           break;
 
         case 'matched':
@@ -197,33 +229,55 @@ const StrangerTalkPage = () => {
           setStrangerInfo(data.stranger);
           roleRef.current = data.role;
           setStatus(STATUS.CALLING);
+          pendingIceCandidates.current = []; // Clear for NEW match
           if (data.role === 'offerer') await makeOffer(ws);
           break;
 
         case 'offer':
           if (roleRef.current === 'answerer') {
             const pc = createPeerConnection(ws);
-            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            for (const c of pendingIceCandidates.current) pc.addIceCandidate(new RTCIceCandidate(c));
-            pendingIceCandidates.current = [];
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
-            setStatus(STATUS.CALLING);
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+              for (const c of pendingIceCandidates.current) {
+                pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.error);
+              }
+              pendingIceCandidates.current = [];
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
+              setStatus(STATUS.CALLING);
+            } catch (err) {
+              console.error('Error handling offer:', err);
+              handleSwitch();
+            }
           }
           break;
 
         case 'answer':
           if (pcRef.current) {
-            await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            for (const c of pendingIceCandidates.current) pcRef.current.addIceCandidate(new RTCIceCandidate(c));
-            pendingIceCandidates.current = [];
+            try {
+              await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
+              for (const c of pendingIceCandidates.current) {
+                pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(console.error);
+              }
+              pendingIceCandidates.current = [];
+            } catch (err) {
+              console.error('Error handling answer:', err);
+              handleSwitch();
+            }
           }
           break;
 
         case 'ice_candidate':
-          if (pcRef.current?.remoteDescription) pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-          else pendingIceCandidates.current.push(data.candidate);
+          try {
+            if (pcRef.current && pcRef.current.remoteDescription && pcRef.current.remoteDescription.type) {
+              pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(console.error);
+            } else {
+              pendingIceCandidates.current.push(data.candidate);
+            }
+          } catch (err) {
+            console.error('Error adding ICE candidate:', err);
+          }
           break;
 
         case 'chat_message':
@@ -254,7 +308,7 @@ const StrangerTalkPage = () => {
       setStatus(STATUS.ERROR);
     };
     ws.onclose = () => { if (pcRef.current) closePeerConnection(); };
-  }, [closePeerConnection, createPeerConnection, getLocalStream, makeOffer]);
+  }, [closePeerConnection, createPeerConnection, getLocalStream, makeOffer, preferredGender]);
 
   const sendMessage = () => {
     if (!inputMessage.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -381,8 +435,48 @@ const StrangerTalkPage = () => {
                 <div className="max-w-xs sm:max-w-md animate-in slide-in-from-bottom-4 duration-500">
                    <FaRandom className="text-5xl text-text-secondary/20 mx-auto mb-6" />
                    <h1 className="text-2xl sm:text-3xl font-black italic tracking-tighter uppercase mb-2">Meet New People</h1>
-                   <p className="text-text-secondary text-xs sm:text-sm mb-8 leading-relaxed">Connect anonymously with random TrendTwist users globally.</p>
+                   <p className="text-text-secondary text-xs sm:text-sm mb-6 leading-relaxed">Connect anonymously with random TrendTwist users globally.</p>
+                   
+                   {/* Start Talking Button */}
                    <button onClick={startSession} className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-600 text-white font-black text-base shadow-2xl hover:scale-105 active:scale-95 transition-all uppercase tracking-widest">Start Talking</button>
+
+                   {/* Gender Filter Section */}
+                   <div className="mt-6 w-full">
+                     <div className="flex items-center justify-center gap-2 mb-3">
+                       <div className="h-px flex-1 bg-white/10" />
+                       <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60">Filter by Gender</span>
+                       <div className="h-px flex-1 bg-white/10" />
+                     </div>
+                     <div className="grid grid-cols-4 gap-2 max-w-sm mx-auto">
+                       {[
+                         { value: 'any', label: 'Anyone', icon: <IoPeople className="text-base" />, gradient: 'from-gray-500 to-gray-600' },
+                         { value: 'male', label: 'Male', icon: <IoMaleOutline className="text-base" />, gradient: 'from-blue-500 to-cyan-500' },
+                         { value: 'female', label: 'Female', icon: <IoFemaleOutline className="text-base" />, gradient: 'from-pink-500 to-rose-500' },
+                         { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="text-base" />, gradient: 'from-purple-500 to-violet-500' },
+                       ].map((opt) => (
+                         <button
+                           key={opt.value}
+                           onClick={(e) => { e.stopPropagation(); setPreferredGender(opt.value); }}
+                           className={`flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl border-2 transition-all duration-300
+                             ${
+                               preferredGender === opt.value
+                                 ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg shadow-purple-500/10 scale-105`
+                                 : 'border-white/10 bg-white/5 text-text-secondary hover:border-white/20 hover:bg-white/10'
+                             }
+                           `}
+                         >
+                           {opt.icon}
+                           <span className="text-[9px] font-bold uppercase tracking-wide">{opt.label}</span>
+                         </button>
+                       ))}
+                     </div>
+                     <p className="text-[10px] text-text-secondary/50 text-center mt-2 italic">
+                       {preferredGender === 'any' 
+                         ? 'You will be matched with anyone randomly'
+                         : `You will only be matched with ${preferredGender} users`
+                       }
+                     </p>
+                   </div>
                 </div>
               )}
               {status === STATUS.ERROR && <div className="text-red-400 font-bold"><IoWarning size={40} className="mx-auto mb-3"/>{error || 'Connection Failed'}</div>}

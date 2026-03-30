@@ -22,14 +22,32 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
 
+from django.db import connection
+
 def home(request):
     return JsonResponse({"message": "Trend Twist API is running successfully!"})
+
+def health_check(request):
+    """
+    Dedicated health check endpoint for UptimeRobot/Render.
+    Also verifies database connection to ensure full application health.
+    """
+    try:
+        # Ping the database
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse({"status": "ok", "message": "Service is healthy, DB connected."}, status=200)
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=503)
 
 urlpatterns = [
     # 0. Home Page
     path('', home, name='home'),
+    
+    # 1. Health Check for Render/UptimeRobot
+    path('health/', health_check, name='health_check'),
 
-    # 1. Django Admin Panel
+    # 2. Django Admin Panel
     path('admin/', admin.site.urls),
 
     # 2. Include all URLs from our 'api' app

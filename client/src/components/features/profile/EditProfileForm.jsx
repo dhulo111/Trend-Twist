@@ -6,7 +6,7 @@ import { AuthContext } from '../../../context/AuthContext';
 import Input from '../../common/Input';
 import Button from '../../common/Button';
 import Avatar from '../../common/Avatar';
-import { IoCameraOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
+import { IoCameraOutline, IoCheckmarkCircleOutline, IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline } from 'react-icons/io5';
 
 /**
  * The core form logic for updating a user's profile and privacy settings.
@@ -24,6 +24,7 @@ const EditProfileForm = ({ onSuccess }) => {
   const [bio, setBio] = useState(user?.profile?.bio || '');
   const [websiteUrl, setWebsiteUrl] = useState(user?.profile?.website_url || '');
   const [isPrivate, setIsPrivate] = useState(user?.profile?.is_private || false);
+  const [gender, setGender] = useState(user?.profile?.gender || '');
 
   const [profilePicture, setProfilePicture] = useState(null); // File object
   const [previewImage, setPreviewImage] = useState(user?.profile?.profile_picture || null); // URL for preview
@@ -72,6 +73,9 @@ const EditProfileForm = ({ onSuccess }) => {
       }
       if (isPrivate !== (user?.profile?.is_private || false)) {
         formData.append('is_private', isPrivate);
+      }
+      if (gender !== (user?.profile?.gender || '')) {
+        formData.append('gender', gender);
       }
       if (profilePicture) {
         formData.append('profile_picture', profilePicture);
@@ -194,6 +198,42 @@ const EditProfileForm = ({ onSuccess }) => {
                 onChange={(e) => setWebsiteUrl(e.target.value)}
                 disabled={loading}
               />
+            </div>
+
+            {/* --- Gender Selection --- */}
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">Gender</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { value: 'male', label: 'Male', icon: <IoMaleOutline className="h-5 w-5" />, color: 'from-blue-500 to-cyan-500' },
+                  { value: 'female', label: 'Female', icon: <IoFemaleOutline className="h-5 w-5" />, color: 'from-pink-500 to-rose-500' },
+                  { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="h-5 w-5" />, color: 'from-purple-500 to-violet-500' },
+                  { value: 'prefer_not_to_say', label: 'Prefer not to say', icon: null, color: 'from-gray-500 to-gray-600' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setGender(opt.value)}
+                    disabled={loading}
+                    className={`relative flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-300 cursor-pointer
+                      ${
+                        gender === opt.value
+                          ? `border-transparent bg-gradient-to-br ${opt.color} text-white shadow-lg scale-[1.02]`
+                          : 'border-border bg-bg-primary/40 text-text-secondary hover:border-text-accent/40 hover:bg-bg-primary/70'
+                      }
+                    `}
+                  >
+                    {opt.icon && <span className={gender === opt.value ? 'text-white' : 'text-text-secondary'}>{opt.icon}</span>}
+                    <span className="text-xs font-semibold text-center leading-tight">{opt.label}</span>
+                    {gender === opt.value && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-md">
+                        <IoCheckmarkCircleOutline className="text-green-600 text-xs" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-text-secondary mt-2">This is used for gender-based matching in Talk with Stranger.</p>
             </div>
           </div>
 

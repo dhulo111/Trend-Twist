@@ -62,7 +62,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         # Added is_private and is_creator fields, and User fields
         # Added is_private, is_creator, and withdrawal_info
-        fields = ['username', 'email', 'first_name', 'last_name', 'bio', 'profile_picture', 'website_url', 'is_trendsetter', 'is_private', 'is_creator', 'withdrawal_info']
+        fields = ['username', 'email', 'first_name', 'last_name', 'bio', 'profile_picture', 'website_url', 'is_trendsetter', 'is_private', 'is_creator', 'gender', 'withdrawal_info']
         read_only_fields = ['is_trendsetter']
 
     def update(self, instance, validated_data):
@@ -176,10 +176,14 @@ class LoginSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     phone_number = serializers.CharField(required=False, allow_blank=True)
+    gender = serializers.ChoiceField(
+        choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other'), ('prefer_not_to_say', 'Prefer not to say')],
+        required=False, allow_blank=True
+    )
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone_number']
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone_number', 'gender']
 
     def validate_username(self, value):
         if User.objects.filter(username__iexact=value).exists():
@@ -207,6 +211,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         phone_number = validated_data.pop('phone_number', '')
+        gender = validated_data.pop('gender', '')
         # Use create_user to handle password hashing
         user = User.objects.create_user(
             username=validated_data['username'],
@@ -215,9 +220,11 @@ class RegisterSerializer(serializers.ModelSerializer):
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', '')
         )
-        # Phone number is stored in Profile
+        # Phone number and gender are stored in Profile
         profile = user.profile
         profile.phone_number = phone_number
+        if gender:
+            profile.gender = gender
         profile.save()
         return user
 

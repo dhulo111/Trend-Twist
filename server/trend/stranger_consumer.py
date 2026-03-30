@@ -1,34 +1,46 @@
 # backend/trend/stranger_consumer.py
 # "Talk with Stranger" WebRTC Signaling & Matchmaking Consumer
+# Supports optional gender-based filtering for connections.
 
 import json
 import asyncio
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Global in-memory waiting queue (module-level singleton)
-# Maps:  channel_name -> { 'username': str, 'display_name': str }
+# Maps:  channel_name -> { 'username': str, 'display_name': str, 'gender': str|None, 'preferred_gender': str|None }
 # ---------------------------------------------------------------------------
 _waiting_queue: list[str] = []          # ordered list of channel_names
 _peer_map: dict[str, str] = {}         # channel_name -> partner's channel_name
-_user_info: dict[str, dict] = {}       # channel_name -> {username, display_name}
+_user_info: dict[str, dict] = {}       # channel_name -> {username, display_name, gender, preferred_gender}
 _queue_lock = asyncio.Lock()
+
+
+@database_sync_to_async
+def get_user_gender(user):
+    """Fetch the gender from the user's profile (database)."""
+    try:
+        return user.profile.gender or None
+    except Exception:
+        return None
 
 
 class StrangerConsumer(AsyncWebsocketConsumer):
     """
     Handles random video-chat pairing (Omegle-style) over WebRTC.
-    Protocol:
-      - Client connects  →  consumer adds user to waiting queue or pairs immediately.
-      - When paired      →  sends 'matched' to both; the lower channel_name becomes the
-                            WebRTC *offerer*, the other the *answerer*.
-      - Signaling        →  offer / answer / ice_candidate forwarded transparently.
-      - 'switch'         →  un-pair, put back in queue.
-      - 'stop'           →  close connection cleanly.
-      - Disconnect       →  notify partner, remove from all structures.
+    
+    Gender filtering:
+      - Client sends `preferred_gender` via query param or in a 'set_preference' message.
+      - When matching, the system checks:
+        1. If the searching user has a preferred_gender, only match with users whose
+           profile gender matches that preference.
+        2. The candidate must also accept the searcher (i.e., if the candidate has a
+           preferred_gender, the searcher's gender must match it).
+      - If no preference is set, the user is matched with anyone (random mode).
     """
 
     async def connect(self):
@@ -38,16 +50,30 @@ class StrangerConsumer(AsyncWebsocketConsumer):
             return
 
         self.partner_channel = None
-        self.pair_group = None
+        self.last_partner = None
 
         # Store display info
         first = getattr(self.user, "first_name", "") or ""
         last = getattr(self.user, "last_name", "") or ""
         display = f"{first} {last}".strip() or self.user.username
 
+        # Fetch gender from DB
+        user_gender = await get_user_gender(self.user)
+
+        # Check query string for preferred_gender
+        query_string = self.scope.get("query_string", b"").decode("utf-8")
+        preferred_gender = None
+        for param in query_string.split("&"):
+            if param.startswith("preferred_gender="):
+                val = param.split("=", 1)[1].strip()
+                if val and val != "any":
+                    preferred_gender = val
+
         _user_info[self.channel_name] = {
             "username": self.user.username,
             "display_name": display,
+            "gender": user_gender,
+            "preferred_gender": preferred_gender,
         }
 
         await self.accept()
@@ -68,7 +94,15 @@ class StrangerConsumer(AsyncWebsocketConsumer):
 
         msg_type = data.get("type")
 
-        if msg_type == "switch":
+        if msg_type == "set_preference":
+            # Allow client to update gender preference on-the-fly
+            preferred = data.get("preferred_gender")
+            if self.channel_name in _user_info:
+                _user_info[self.channel_name]["preferred_gender"] = (
+                    preferred if preferred and preferred != "any" else None
+                )
+
+        elif msg_type == "switch":
             await self._switch()
 
         elif msg_type == "stop":
@@ -107,33 +141,72 @@ class StrangerConsumer(AsyncWebsocketConsumer):
     async def stranger_matched(self, event):
         """Notify this client that a match was found (or put in queue)."""
         self.partner_channel = event.get("partner_channel") # Might be None for 'waiting'
-        self.pair_group = event.get("pair_group")           # Might be None for 'waiting'
         await self.send(text_data=json.dumps(event["payload"]))
 
     async def stranger_disconnected(self, event):
         """Notify this client that the partner disconnected/switched."""
         # Clear local partner refs if partner is gone
         self.partner_channel = None
-        self.pair_group = None
         await self.send(text_data=json.dumps(event["payload"]))
+
+    async def stranger_re_enter_queue(self, event):
+        """Instruct this consumer to re-evaluate the queue actively."""
+        await self._enter_queue()
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _is_compatible(self, my_channel: str, candidate_channel: str) -> bool:
+        """
+        Check if two users are gender-compatible for matching.
+        Rules:
+          - If user A has a preferred_gender, candidate B's actual gender must match it.
+          - If user B has a preferred_gender, user A's actual gender must match it.
+          - If neither has a preference, they're always compatible (random mode).
+        """
+        my_info = _user_info.get(my_channel, {})
+        candidate_info = _user_info.get(candidate_channel, {})
+
+        my_pref = my_info.get("preferred_gender")
+        candidate_pref = candidate_info.get("preferred_gender")
+
+        my_gender = my_info.get("gender")
+        candidate_gender = candidate_info.get("gender")
+
+        # Check if I accept the candidate
+        if my_pref and candidate_gender != my_pref:
+            return False
+
+        # Check if the candidate accepts me
+        if candidate_pref and my_gender != candidate_pref:
+            return False
+
+        return True
+
     async def _enter_queue(self):
-        """Try to match with a waiting user, or add self to the queue."""
+        """Try to match with a compatible waiting user, or add self to the queue."""
         async with _queue_lock:
             # Remove dead entries (safety)
             _waiting_queue[:] = [
                 ch for ch in _waiting_queue if ch != self.channel_name
             ]
 
-            if _waiting_queue:
-                # Pop the first waiting user
-                partner_channel = _waiting_queue.pop(0)
-                await self._pair_with(partner_channel)
+            # Try to find a compatible partner
+            matched_partner = None
+            for ch in _waiting_queue:
+                # Don't match with the person we JUST switched from
+                if ch == getattr(self, "last_partner", None):
+                    continue
+                if self._is_compatible(self.channel_name, ch):
+                    matched_partner = ch
+                    break
+
+            if matched_partner:
+                _waiting_queue.remove(matched_partner)
+                await self._pair_with(matched_partner)
             else:
                 _waiting_queue.append(self.channel_name)
+                # Ensure they know they are waiting
                 await self.send(text_data=json.dumps({"type": "waiting"}))
 
     async def _pair_with(self, partner_channel: str):
@@ -143,13 +216,6 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         # Update peer map (bidirectional)
         _peer_map[self.channel_name] = partner_channel
         _peer_map[partner_channel] = self.channel_name
-
-        # Create a unique group for this pair
-        pair_names = sorted([self.channel_name, partner_channel])
-        self.pair_group = f"stranger_pair_{hash(tuple(pair_names)) & 0xFFFFFFFF}"
-
-        await self.channel_layer.group_add(self.pair_group, self.channel_name)
-        await self.channel_layer.group_add(self.pair_group, partner_channel)
 
         my_info = _user_info.get(self.channel_name, {})
         partner_info = _user_info.get(partner_channel, {})
@@ -171,7 +237,6 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.send(partner_channel, {
             "type": "stranger_matched",
             "partner_channel": self.channel_name,
-            "pair_group": self.pair_group,
             "payload": {
                 "type": "matched",
                 "role": "answerer" if i_am_offerer else "offerer",
@@ -198,8 +263,8 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         """
         old_partner = self.partner_channel
 
-        # Notify current partner first (before cleanup clears pair_group)
-        if old_partner and self.pair_group:
+        # Notify current partner first
+        if old_partner:
             await self.channel_layer.send(old_partner, {
                 "type": "stranger_disconnected",
                 "payload": {"type": "partner_left", "reason": "switched"},
@@ -208,17 +273,16 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         # Clean up pair structures (but NOT closing this connection)
         await self._cleanup_pair()
 
+        # Set last partner to avoid immediate rematch
+        self.last_partner = old_partner
+
         # Re-enter queue
         await self._enter_queue()
 
         # Re-queue the old partner too
         if old_partner:
-            async with _queue_lock:
-                if old_partner not in _waiting_queue:
-                    _waiting_queue.append(old_partner)
             await self.channel_layer.send(old_partner, {
-                "type": "stranger_matched",   # Reuse handler to push waiting message
-                "payload": {"type": "waiting"},
+                "type": "stranger_re_enter_queue",
             })
 
     async def _cleanup_pair(self):
@@ -232,19 +296,11 @@ class StrangerConsumer(AsyncWebsocketConsumer):
             if self.channel_name in _waiting_queue:
                 _waiting_queue.remove(self.channel_name)
 
-        if self.pair_group:
-            try:
-                await self.channel_layer.group_discard(self.pair_group, self.channel_name)
-            except Exception:
-                pass
-            self.pair_group = None
-
         self.partner_channel = None
 
     async def _cleanup(self, notify_partner: bool = False):
         """Full cleanup on disconnect or stop."""
         old_partner = self.partner_channel
-        old_pair_group = self.pair_group
 
         if notify_partner and old_partner:
             try:
@@ -252,13 +308,9 @@ class StrangerConsumer(AsyncWebsocketConsumer):
                     "type": "stranger_disconnected",
                     "payload": {"type": "partner_left", "reason": "disconnected"},
                 })
-                # Put partner back in queue
-                async with _queue_lock:
-                    if old_partner not in _waiting_queue:
-                        _waiting_queue.append(old_partner)
+                # Trigger partner to actively search the queue again
                 await self.channel_layer.send(old_partner, {
-                    "type": "stranger_matched",
-                    "payload": {"type": "waiting"},
+                    "type": "stranger_re_enter_queue",
                 })
             except Exception as e:
                 logger.warning(f"StrangerConsumer: error notifying partner: {e}")
@@ -272,11 +324,4 @@ class StrangerConsumer(AsyncWebsocketConsumer):
 
         _user_info.pop(self.channel_name, None)
 
-        if old_pair_group:
-            try:
-                await self.channel_layer.group_discard(old_pair_group, self.channel_name)
-            except Exception:
-                pass
-
         self.partner_channel = None
-        self.pair_group = None

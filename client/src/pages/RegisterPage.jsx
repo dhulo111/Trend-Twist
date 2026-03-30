@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // --- Icon Imports ---
 import { IoMdTrendingUp, IoMdCheckmarkCircleOutline } from 'react-icons/io';
 import { BsMoonStarsFill, BsSunFill, BsCheck2, BsX } from 'react-icons/bs';
+import { IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 
@@ -28,6 +29,7 @@ const RegisterPage = () => {
     confirmPassword: '',
     first_name: '',
     last_name: '',
+    gender: '',
     google_token: null,
   });
 
@@ -351,6 +353,41 @@ const RegisterPage = () => {
                     onChange={handleDetailsChange}
                     disabled={loading}
                   />
+                </div>
+
+                {/* Gender Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">Gender <span className="text-text-secondary font-normal">(Optional)</span></label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { value: 'male', label: 'Male', icon: <IoMaleOutline className="h-4 w-4" />, gradient: 'from-blue-500 to-cyan-500' },
+                      { value: 'female', label: 'Female', icon: <IoFemaleOutline className="h-4 w-4" />, gradient: 'from-pink-500 to-rose-500' },
+                      { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="h-4 w-4" />, gradient: 'from-purple-500 to-violet-500' },
+                      { value: 'prefer_not_to_say', label: 'Skip', icon: null, gradient: 'from-gray-500 to-gray-600' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setUserDetails({ ...userDetails, gender: opt.value })}
+                        disabled={loading}
+                        className={`relative flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 transition-all duration-300 cursor-pointer
+                          ${
+                            userDetails.gender === opt.value
+                              ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg scale-[1.03]`
+                              : 'border-border/50 bg-background-primary/30 text-text-secondary hover:border-text-accent/30'
+                          }
+                        `}
+                      >
+                        {opt.icon && <span>{opt.icon}</span>}
+                        <span className="text-[10px] font-bold leading-tight">{opt.label}</span>
+                        {userDetails.gender === opt.value && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
+                            <IoCheckmarkCircleOutline className="text-green-600" style={{ fontSize: '10px' }} />
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               
