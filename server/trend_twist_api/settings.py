@@ -143,6 +143,13 @@ DATABASES = {
 }
 
 
+
+#  'default': dj_database_url.config(
+#         default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+#         conn_max_age=600
+#     )
+
+
 # --- Password validation (No change) ---
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},

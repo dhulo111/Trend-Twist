@@ -1,6 +1,7 @@
 # backend/api/consumers.py (NEW FILE)
 
 import json
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -382,15 +383,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
         # Mark user as online globally
-        # Mark user as online globally and broadcast
-        await self.update_user_status(True)
-        await self.broadcast_status(True)
+        # We run this in a background task to prevent blocking the WebSocket handshake
+        asyncio.create_task(self._handle_user_status_change(True))
 
     async def disconnect(self, close_code):
         # Mark user as offline globally and broadcast
-        if self.user.is_authenticated:
-            await self.update_user_status(False)
-            await self.broadcast_status(False)
+        if getattr(self, 'user', None) and self.user.is_authenticated:
+            # We run this in a background task so it doesn't delay proper channel shutdown
+            asyncio.create_task(self._handle_user_status_change(False))
 
         # Leave user group
         if hasattr(self, 'group_name'):
@@ -398,6 +398,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
+
+    async def _handle_user_status_change(self, is_online):
+        try:
+            await self.update_user_status(is_online)
+            await self.broadcast_status(is_online)
+        except Exception as e:
+            print(f"Error handling user status change: {e}")
 
     # Receive message from group
     async def notification_message(self, event):
@@ -425,38 +432,35 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def broadcast_status(self, is_online):
         """
         Broadcasts the user's new status to any active chat rooms where this user is a participant.
-        This relies on a convention that ChatConsumers join a group named 'user_chats_<user_id>'
-        OR we can iterate through active chats (expensive).
-        
-        BETTER APPROACH for this scale:
-        Since ChatConsumer groups are 'chat_ID1_ID2', we don't know all of them easily without DB query.
-        However, to keep it simple and effective as requested:
-        We will send a message to a "global_updates" group or iterate known friends.
-        
-        OPTIMIZED:
-        We will iterate over the user's active ChatRooms and send a message to those specific groups.
         """
         active_chat_groups = await self.get_user_active_chat_groups()
         
+        tasks = []
         for group in active_chat_groups:
-             await self.channel_layer.group_send(
-                group,
-                {
-                    'type': 'global_user_status_change',
-                    'user_id': self.user.id,
-                    'username': self.user.username,
-                    'is_online': is_online,
-                    'last_seen': timezone.now().isoformat()
-                }
+             tasks.append(
+                 self.channel_layer.group_send(
+                    group,
+                    {
+                        'type': 'global_user_status_change',
+                        'user_id': self.user.id,
+                        'username': self.user.username,
+                        'is_online': is_online,
+                        'last_seen': timezone.now().isoformat()
+                    }
+                )
             )
+        
+        if tasks:
+            await asyncio.gather(*tasks)
 
     @database_sync_to_async
     def get_user_active_chat_groups(self):
         # Return list of channel group names for all chat rooms this user belongs to
         # Group name format is 'chat_minID_maxID'
-        rooms = ChatRoom.objects.filter(Q(user1=self.user) | Q(user2=self.user))
+        # Optimize by getting only values instead of loading whole models
+        rooms_data = ChatRoom.objects.filter(Q(user1=self.user) | Q(user2=self.user)).values_list('user1_id', 'user2_id')
         groups = []
-        for room in rooms:
-             user_ids = sorted([str(room.user1.id), str(room.user2.id)])
+        for user1_id, user2_id in rooms_data:
+             user_ids = sorted([str(user1_id), str(user2_id)])
              groups.append(f'chat_{user_ids[0]}_{user_ids[1]}')
         return groups
