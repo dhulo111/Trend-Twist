@@ -129,17 +129,10 @@ WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 
 # --- Database (Postgres for Render, SQLite for local) ---
 DATABASES = {
-      'default': {
-         'ENGINE': 'django.db.backends.postgresql',
-         'NAME': 'postgres',
-         'USER': 'postgres.kvdnvtnxxesaldwacejv',
-         'PASSWORD': os.environ.get('DB_PASSWORD'),
-         'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-         'PORT': '6543',
-         'OPTIONS': {
-             'sslmode': 'require',
-         },
-   }
+  'default': dj_database_url.config(
+         default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+         conn_max_age=600
+     )
 }
 
 #   'default': {

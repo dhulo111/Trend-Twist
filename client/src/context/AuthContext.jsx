@@ -1,8 +1,7 @@
-// frontend/src/context/AuthContext.jsx (FINAL FIX for Refresh Issue)
+// frontend/src/context/AuthContext.jsx
 
-import React, { createContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
 import {
   checkUserExists as apiCheckUserExists,
   loginWithPassword as apiLoginWithPassword,
@@ -12,7 +11,6 @@ import {
 } from '../api/authApi';
 import axiosInstance from '../api/axiosInstance';
 import { getCurrentUser } from '../api/userApi';
-import config from '../config';
 
 export const AuthContext = createContext();
 
@@ -47,7 +45,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const authTokenRef = useRef(authToken);
-  const notificationSocketRef = useRef(null);
 
   // --- 2. useEffect for axios Header Management (CRITICAL FIX) ---
   // This ensures axios always uses the current token from the state/ref.
@@ -65,56 +62,15 @@ export const AuthProvider = ({ children }) => {
   }, [authToken]); // Runs every time authToken state changes
 
   // 3. --- Logout Function ---
-  const logoutUser = () => {
-    // Disconnect socket
-    if (notificationSocketRef.current) {
-      notificationSocketRef.current.close();
-      notificationSocketRef.current = null;
-    }
-
+  const logoutUser = useCallback(() => {
     apiLogout();
     setAuthToken(null);
     setUser(null);
     navigate('/login');
-  };
+  }, [navigate]);
 
-  // --- 3a. Global Notification (Presence) Socket ---
-  useEffect(() => {
-    if (authToken?.access && user) {
-      if (!notificationSocketRef.current) {
-        // Determine WS Host dynamically
-        let wsProtocol = 'ws:';
-        let wsHost = '127.0.0.1:8000';
-        try {
-          const url = new URL(config.API_BASE_URL);
-          wsHost = url.host;
-          wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        } catch (e) {
-          if (window.location.hostname !== 'localhost') {
-            wsHost = window.location.host;
-            wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          }
-        }
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/notifications/?token=${authToken.access}`;
-
-        const ws = new WebSocket(wsUrl);
-        notificationSocketRef.current = ws;
-
-        ws.onopen = () => {
-          console.log("Global Notification Socket Connected (Presence Active)");
-        };
-
-        ws.onclose = () => {
-          notificationSocketRef.current = null;
-        };
-      }
-    } else {
-      if (notificationSocketRef.current) {
-        notificationSocketRef.current.close();
-        notificationSocketRef.current = null;
-      }
-    }
-  }, [authToken, user]);
+  // NOTE: The global notification WebSocket is managed by SocketContext.
+  //       AuthContext only handles auth state and token refresh.
 
   // 4. --- Token Refresh and Initial User Fetch (Runs on Mount) ---
   // The dependencies are clean to avoid the infinite loop issue.
@@ -142,12 +98,18 @@ export const AuthProvider = ({ children }) => {
           // Fetch full user profile
           await setFullUserState(newAuthToken, setUser);
         } else if (isMounted) {
-          logoutUser();
+          apiLogout();
+          setAuthToken(null);
+          setUser(null);
+          navigate('/login');
         }
       } catch (error) {
         if (isMounted) {
           // Token refresh failed or expired, log out
-          logoutUser();
+          apiLogout();
+          setAuthToken(null);
+          setUser(null);
+          navigate('/login');
         }
       }
 
@@ -172,7 +134,7 @@ export const AuthProvider = ({ children }) => {
       isMounted = false;
     };
 
-  }, [navigate]);
+  }, [navigate, logoutUser]);
 
   // 5. --- Login/Register Handlers (Set AuthToken and Navigate) ---
 

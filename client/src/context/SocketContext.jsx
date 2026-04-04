@@ -18,11 +18,14 @@ export const SocketProvider = ({ children }) => {
 
   // Connect to WebSocket
   useEffect(() => {
+    if (!user || !authToken?.access) return;
+
     let reconnectTimeout;
+    let isMounted = true;
     let newSocket;
 
     const connect = () => {
-      if (!user || !authToken?.access) return;
+      if (!isMounted) return; // Prevent connecting after cleanup
 
       let wsProtocol = 'ws:';
       let wsHost = '127.0.0.1:8000';
@@ -42,7 +45,7 @@ export const SocketProvider = ({ children }) => {
       newSocket = new WebSocket(wsUrl);
 
       newSocket.onopen = () => {
-        console.log("Notification Socket Connected");
+        console.log('[SocketContext] Notification Socket Connected');
       };
 
       newSocket.onmessage = (event) => {
@@ -65,16 +68,20 @@ export const SocketProvider = ({ children }) => {
             setToasts(prev => [...prev, { id: Date.now(), ...message.data }]);
           }
         } catch (e) {
-          console.error("Socket message error", e);
+          console.error('[SocketContext] Message parse error:', e);
         }
       };
 
+      newSocket.onerror = (e) => {
+        console.warn('[SocketContext] WebSocket error:', e);
+        // onclose will fire automatically after onerror — reconnect handled there
+      };
+
       newSocket.onclose = (e) => {
-        console.log("Notification Socket Disconnected", e.code, e.reason);
-        // Attempt to reconnect if still logged in
-        if (user && authToken?.access) {
-          reconnectTimeout = setTimeout(connect, 3000);
-        }
+        // code 1000 = normal closure (intentional), don't reconnect
+        if (!isMounted || e.code === 1000) return;
+        console.log(`[SocketContext] Socket closed (code: ${e.code}), reconnecting in 3s...`);
+        reconnectTimeout = setTimeout(connect, 3000);
       };
 
       setSocket(newSocket);
@@ -84,8 +91,13 @@ export const SocketProvider = ({ children }) => {
     fetchNotifications();
 
     return () => {
-      if (newSocket) newSocket.close();
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      isMounted = false;
+      clearTimeout(reconnectTimeout);
+      if (newSocket && newSocket.readyState !== WebSocket.CLOSED) {
+        newSocket.onclose = null; // disable handler before intentional close
+        newSocket.close(1000, 'Component unmounted');
+      }
+      setSocket(null);
     };
   }, [user, authToken]);
 

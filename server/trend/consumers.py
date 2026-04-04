@@ -104,26 +104,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return None, None
         else:
             # Existing 1-on-1 Logic
-            user1 = self.current_user
-            user2 = User.objects.get(id=self.user_id_param)
-            
-            # Enforce consistent user1/user2 order for ChatRoom lookup
-            room, created = ChatRoom.objects.get_or_create(
-                user1=min(user1, user2, key=lambda u: u.id),
-                user2=max(user1, user2, key=lambda u: u.id),
-            )
-            
-            # Update last_message_at for sorting the inbox
-            room.last_message_at = timezone.now()
-            room.save()
+            try:
+                user1 = self.current_user
+                user2 = User.objects.get(id=self.user_id_param)
+                
+                # Enforce consistent user1/user2 order for ChatRoom lookup
+                room, created = ChatRoom.objects.get_or_create(
+                    user1=min(user1, user2, key=lambda u: u.id),
+                    user2=max(user1, user2, key=lambda u: u.id),
+                )
+                
+                # Update last_message_at for sorting the inbox
+                room.last_message_at = timezone.now()
+                room.save()
 
-            # Create and save the message
-            msg = ChatMessage.objects.create(
-                room=room,
-                author=self.current_user,
-                content=content
-            )
-            return msg.id, msg.timestamp
+                # Create and save the message
+                msg = ChatMessage.objects.create(
+                    room=room,
+                    author=self.current_user,
+                    content=content
+                )
+                return msg.id, msg.timestamp
+            except User.DoesNotExist:
+                return None, None
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -218,6 +221,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         msg_id, timestamp = await self.save_message(message)
 
         # Send message to room group (Standardizing keys to match ChatMessageSerializer)
+        # Guard: if save_message returned None (e.g. user deleted), abort broadcast
+        if msg_id is None:
+            return
+
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -258,6 +265,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
     async def global_user_status_change(self, event):
         """Receive global status update and forward to chat client if relevant."""
+        # Only applicable in 1-on-1 chats — group chats don't track per-user presence
+        if not hasattr(self, 'other_user_id'):
+            return
         # Only forward if the update is about the OTHER user in this chat
         if str(event['user_id']) == self.other_user_id:
              await self.send(text_data=json.dumps({

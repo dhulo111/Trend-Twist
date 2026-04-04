@@ -29,10 +29,14 @@ from django.db import close_old_connections
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from channels.db import database_sync_to_async
+from asgiref.sync import sync_to_async
 from rest_framework_simplejwt.tokens import AccessToken, TokenError
 import jwt
 
 User = get_user_model()
+
+# Wrap close_old_connections so it can be safely called in async context
+_close_old_connections = sync_to_async(close_old_connections, thread_sensitive=True)
 
 @database_sync_to_async
 def get_user(user_id):
@@ -43,7 +47,8 @@ def get_user(user_id):
 
 class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
-        close_old_connections()
+        # Safely close old DB connections from the thread pool
+        await _close_old_connections()
         
         try:
             query_string = parse_qs(scope['query_string'].decode())

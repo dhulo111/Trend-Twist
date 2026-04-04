@@ -56,6 +56,7 @@ const StrangerTalkPage = () => {
   const roleRef = useRef(null);
   const timerRef = useRef(null);
   const chatEndRef = useRef(null);
+  const handleSwitchRef = useRef(null); // Ref to avoid stale closures in WebRTC callbacks
 
   // State
   const [status, setStatus] = useState(STATUS.IDLE);
@@ -155,8 +156,8 @@ const StrangerTalkPage = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => setConnectionTime(t => t + 1), 1000);
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        // Automatically switch if it drops
-        handleSwitch();
+        // Use ref to avoid stale closure
+        if (handleSwitchRef.current) handleSwitchRef.current();
       }
     };
     pc.oniceconnectionstatechange = () => {
@@ -167,12 +168,12 @@ const StrangerTalkPage = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => setConnectionTime(t => t + 1), 1000);
       } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        handleSwitch();
+        if (handleSwitchRef.current) handleSwitchRef.current();
       }
     };
     pcRef.current = pc;
     return pc;
-  }, []);
+  }, []);  // No deps needed since we use refs for callbacks
 
   const makeOffer = useCallback(async (ws) => {
     const pc = createPeerConnection(ws);
@@ -325,6 +326,11 @@ const StrangerTalkPage = () => {
     closePeerConnection();
     wsRef.current.send(JSON.stringify({ type: 'switch' }));
   }, [closePeerConnection]);
+
+  // Keep the ref in sync so WebRTC callbacks always call the latest version
+  useEffect(() => {
+    handleSwitchRef.current = handleSwitch;
+  }, [handleSwitch]);
 
   const handleStop = useCallback(() => {
     setStatus(STATUS.STOPPED);
