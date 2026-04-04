@@ -126,7 +126,9 @@ TEMPLATES = [
 
 # --- Database (Postgres for Render, SQLite for local) ---
 if 'RENDER' in os.environ:
-    # Use Supabase Proxy (Session Mode @ 5432)
+    # Supabase Transaction Mode (port 6543)
+    # - Supports many more concurrent connections than Session mode (5432)
+    # - CONN_MAX_AGE=0 is REQUIRED: release connections back to pool after each request
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -134,12 +136,11 @@ if 'RENDER' in os.environ:
             'USER': 'postgres.kvdnvtnxxesaldwacejv',
             'PASSWORD': os.environ.get('DB_PASSWORD'),
             'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-            'PORT': '5432',
-            'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
-            'CONN_HEALTH_CHECKS': True,  # Django 5+ : verify before reuse
+            'PORT': '6543',
+            'CONN_MAX_AGE': 0,  # Close after each request (required for transaction pooling)
             'OPTIONS': {
                 'sslmode': 'require',
-                'connect_timeout': 5,  # Fail fast if Supabase is unreachable
+                'connect_timeout': 5,
             },
         }
     }
