@@ -129,10 +129,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return None, None
 
     async def disconnect(self, close_code):
-        # Leave room group
+        # Leave room group — wrap DB/channel ops in timeout to prevent Daphne kill warnings
         if hasattr(self, 'room_group_name'):
-             # Notify room that user is offline
-            await self.update_user_status(False)
+            try:
+                await asyncio.wait_for(self._safe_disconnect(), timeout=3.0)
+            except (asyncio.TimeoutError, Exception):
+                pass  # Don't let a slow DB kill the shutdown
+
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+
+    async def _safe_disconnect(self):
+        """Database and broadcast operations during disconnect, with timeout protection."""
+        await self.update_user_status(False)
+        if hasattr(self, 'user_id_param') and self.user_id_param:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -141,11 +153,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'is_online': False,
                     'last_seen': timezone.now().isoformat()
                 }
-            )
-
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
             )
 
     # --- 2. Receive Message from WebSocket ---
@@ -392,37 +399,45 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Track the status change task so we can cancel it if needed
-        self.status_update_task = asyncio.create_task(self._handle_user_status_change(True))
+        # Mark user as online — fire and forget, but track the task
+        self._status_task = asyncio.ensure_future(self._safe_status_update(True))
 
     async def disconnect(self, close_code):
-        # Cancel any pending status update task to avoid Daphne "took too long to shut down" warnings
-        if hasattr(self, 'status_update_task') and not self.status_update_task.done():
-            self.status_update_task.cancel()
+        # Cancel any in-flight connect status task
+        task = getattr(self, '_status_task', None)
+        if task and not task.done():
+            task.cancel()
             try:
-                await self.status_update_task
-            except asyncio.CancelledError:
+                await task
+            except (asyncio.CancelledError, Exception):
                 pass
 
-        # Mark user as offline globally and broadcast
-        if getattr(self, 'user', None) and self.user.is_authenticated:
-            # We run this synchronously (await) during disconnect to ensure it finishes 
-            # or is handled before Daphne kills the instance.
-            await self._handle_user_status_change(False)
+        # All disconnect work under a strict timeout so Daphne never kills us
+        try:
+            await asyncio.wait_for(self._safe_status_update(False), timeout=3.0)
+        except (asyncio.TimeoutError, Exception):
+            pass  # Supabase slow? Skip it — don't block shutdown.
 
         # Leave user group
         if hasattr(self, 'group_name'):
-            await self.channel_layer.group_discard(
-                self.group_name,
-                self.channel_name
-            )
+            try:
+                await self.channel_layer.group_discard(
+                    self.group_name,
+                    self.channel_name
+                )
+            except Exception:
+                pass
 
-    async def _handle_user_status_change(self, is_online):
+    async def _safe_status_update(self, is_online):
+        """Update DB status and broadcast to chat rooms, with error handling."""
         try:
             await self.update_user_status(is_online)
+        except Exception:
+            return  # DB down? Don't crash.
+        try:
             await self.broadcast_status(is_online)
-        except Exception as e:
-            print(f"Error handling user status change: {e}")
+        except Exception:
+            pass  # Channel layer issue? Don't crash.
 
     # Receive message from group
     async def notification_message(self, event):
@@ -441,7 +456,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def update_user_status(self, is_online):
-        # Re-fetch user profile to ensure we have the latest or create if missing
+        from django.db import close_old_connections
+        close_old_connections()  # Prevent stale connections from blocking
         profile, _ = Profile.objects.get_or_create(user=self.user)
         profile.is_online = is_online
         profile.last_seen = timezone.now()
@@ -451,7 +467,10 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         """
         Broadcasts the user's new status to any active chat rooms where this user is a participant.
         """
-        active_chat_groups = await self.get_user_active_chat_groups()
+        try:
+            active_chat_groups = await self.get_user_active_chat_groups()
+        except Exception:
+            return
         
         tasks = []
         for group in active_chat_groups:
@@ -469,16 +488,19 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             )
         
         if tasks:
-            await asyncio.gather(*tasks)
+            # Also timeout the broadcast itself
+            try:
+                await asyncio.wait_for(asyncio.gather(*tasks), timeout=2.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
 
     @database_sync_to_async
     def get_user_active_chat_groups(self):
-        # Return list of channel group names for all chat rooms this user belongs to
-        # Group name format is 'chat_minID_maxID'
-        # Optimize by getting only values instead of loading whole models
+        from django.db import close_old_connections
+        close_old_connections()  # Prevent stale connections from blocking
         rooms_data = ChatRoom.objects.filter(Q(user1=self.user) | Q(user2=self.user)).values_list('user1_id', 'user2_id')
         groups = []
         for user1_id, user2_id in rooms_data:
              user_ids = sorted([str(user1_id), str(user2_id)])
              groups.append(f'chat_{user_ids[0]}_{user_ids[1]}')
-        return groups
+        return groups

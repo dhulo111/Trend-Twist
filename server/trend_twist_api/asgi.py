@@ -10,20 +10,14 @@ django_asgi_app = get_asgi_application()
 
 # 3. Now it's safe to import our custom consumers and middleware
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
 from trend.middleware import JwtAuthMiddleware
 import trend.routing
 
 application = ProtocolTypeRouter({
-    "http": django_asgi_app, # Standard HTTP calls
-    
-    # WebSocket handling for live features using JWT
-    # AllowedHostsOriginValidator ensures the connection comes from a valid host
-    "websocket": AllowedHostsOriginValidator(
-        JwtAuthMiddleware(
-            URLRouter(
-                trend.routing.websocket_urlpatterns
-            )
+    "http": django_asgi_app,
+    "websocket": JwtAuthMiddleware(
+        URLRouter(
+            trend.routing.websocket_urlpatterns
         )
     ),
 })

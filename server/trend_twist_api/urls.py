@@ -29,16 +29,11 @@ def home(request):
 
 def health_check(request):
     """
-    Dedicated health check endpoint for UptimeRobot/Render.
-    Also verifies database connection to ensure full application health.
+    Lightweight health check for UptimeRobot/Render.
+    Does NOT hit the database — avoids hanging connections that cause
+    'took too long to shut down' warnings under Daphne/Uvicorn.
     """
-    try:
-        # Ping the database
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-        return JsonResponse({"status": "ok", "message": "Service is healthy, DB connected."}, status=200)
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=503)
+    return JsonResponse({"status": "ok"}, status=200)
 
 urlpatterns = [
     # 0. Home Page

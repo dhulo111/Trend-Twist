@@ -124,27 +124,27 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
-
-
 # --- Database (Postgres for Render, SQLite for local) ---
 if 'RENDER' in os.environ:
-    # Use Supabase Connection Pooling (Transaction Mode recommended for Render)
+    # Use Supabase Proxy (Session Mode @ 5432)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'postgres',
-            'USER': f'postgres.kvdnvtnxxesaldwacejv', # Project Ref is required by Supabase pooler
+            'USER': 'postgres.kvdnvtnxxesaldwacejv',
             'PASSWORD': os.environ.get('DB_PASSWORD'),
             'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-            'PORT': '5432', # Session/Direct mode (more stable for handshakes)
+            'PORT': '5432',
+            'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
+            'CONN_HEALTH_CHECKS': True,  # Django 5+ : verify before reuse
             'OPTIONS': {
                 'sslmode': 'require',
+                'connect_timeout': 5,  # Fail fast if Supabase is unreachable
             },
         }
     }
 else:
-    # Local Development
+    # Local Development (SQLite)
     DATABASES = {
         'default': dj_database_url.config(
             default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
