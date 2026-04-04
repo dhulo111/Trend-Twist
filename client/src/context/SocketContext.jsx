@@ -81,7 +81,9 @@ export const SocketProvider = ({ children }) => {
     };
 
     connect();
-    fetchNotifications();
+    if (user && authToken?.access) {
+      fetchNotifications();
+    }
 
     return () => {
       if (newSocket) newSocket.close();

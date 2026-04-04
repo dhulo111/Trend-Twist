@@ -1416,16 +1416,22 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # Base queryset ordered by newest first
         qs = Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
         
-        # Self-healing: Advanced Deduplication
+        # Self-healing: Advanced Deduplication (Optimized)
+        # We only perform dedupe on the most recent 100 notifications to ensure speed and prevent hangs.
         from collections import defaultdict
         grouped = defaultdict(list)
         
-        all_notifs = list(qs)
+        # Limit the initial list for deduplication processing
+        target_for_dedupe = list(qs[:100])
         
-        for notif in all_notifs:
-            # Key generation
+        if not target_for_dedupe:
+            return qs
+            
+        for notif in target_for_dedupe:
+            # Key generation for identifying duplicate/conflicting notifications
             if notif.notification_type in ['follow_request', 'req_approved', 'req_rejected']:
                 key = (notif.sender_id, 'inbound_follow_workflow')
             else:
@@ -1444,34 +1450,31 @@ class NotificationListView(generics.ListAPIView):
         
         for key, notifs in grouped.items():
             if len(notifs) > 1:
-                # Resolve conflict: Prioritize Handled > Pending
-                # Sort by: 
-                # 1. Is Handled (Approved/Rejected) - True first
-                # 2. Created At - Newest first
-                
+                # Resolve conflict: Prioritize Handled > Pending, then newest first
                 def sort_key(n):
                     is_handled = n.notification_type in ['req_approved', 'req_rejected']
                     return (is_handled, n.created_at)
 
-                # Python sort is stable. We want Best Last? No, we want Best at index 0?
-                # reverse=True -> True (Handled) comes before False. Newest comes before Oldest.
                 notifs.sort(key=sort_key, reverse=True)
                 
-                # Keep first, delete rest
-                keep = notifs[0]
+                # Keep the "best" one, delete the rest
                 for junk in notifs[1:]:
                     duplicates_to_delete.append(junk.id)
                     
         if duplicates_to_delete:
             from django.db import transaction
             try:
+                # Perform the deletion in a batch
                 with transaction.atomic():
                     Notification.objects.filter(id__in=duplicates_to_delete).delete()
             except Exception as e:
+                # Log but don't fail the request
                 print(f"Dedupe error: {e}")
             
-            # Refetch to ensure clean list return
-            return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
+            # Since we modified the DB, we might want to refetch, 
+            # but since we only deduped the top 100, we don't need to refetch the whole thing if not necessary.
+            # However, for consistency with the serializer, returning the updated queryset is best.
+            return qs
             
         return qs
 

@@ -47,7 +47,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const authTokenRef = useRef(authToken);
-  const notificationSocketRef = useRef(null);
 
   // --- 2. useEffect for axios Header Management (CRITICAL FIX) ---
   // This ensures axios always uses the current token from the state/ref.
@@ -66,11 +65,6 @@ export const AuthProvider = ({ children }) => {
 
   // 3. --- Logout Function ---
   const logoutUser = () => {
-    // Disconnect socket
-    if (notificationSocketRef.current) {
-      notificationSocketRef.current.close();
-      notificationSocketRef.current = null;
-    }
 
     apiLogout();
     setAuthToken(null);
@@ -78,43 +72,6 @@ export const AuthProvider = ({ children }) => {
     navigate('/login');
   };
 
-  // --- 3a. Global Notification (Presence) Socket ---
-  useEffect(() => {
-    if (authToken?.access && user) {
-      if (!notificationSocketRef.current) {
-        // Determine WS Host dynamically
-        let wsProtocol = 'ws:';
-        let wsHost = '127.0.0.1:8000';
-        try {
-          const url = new URL(config.API_BASE_URL);
-          wsHost = url.host;
-          wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        } catch (e) {
-          if (window.location.hostname !== 'localhost') {
-            wsHost = window.location.host;
-            wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          }
-        }
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/notifications/?token=${authToken.access}`;
-
-        const ws = new WebSocket(wsUrl);
-        notificationSocketRef.current = ws;
-
-        ws.onopen = () => {
-          console.log("Global Notification Socket Connected (Presence Active)");
-        };
-
-        ws.onclose = () => {
-          notificationSocketRef.current = null;
-        };
-      }
-    } else {
-      if (notificationSocketRef.current) {
-        notificationSocketRef.current.close();
-        notificationSocketRef.current = null;
-      }
-    }
-  }, [authToken, user]);
 
   // 4. --- Token Refresh and Initial User Fetch (Runs on Mount) ---
   // The dependencies are clean to avoid the infinite loop issue.
