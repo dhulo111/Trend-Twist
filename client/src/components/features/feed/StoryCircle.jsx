@@ -14,7 +14,7 @@ const StoryCircle = ({
 
   if (!storyGroup) return null;
 
-  const { username, profile_picture, hasUnseen, stories, is_live } = storyGroup;
+  const { username, profile_picture, hasUnseen, stories } = storyGroup;
 
   // Logic: Show add icon if it's the current user AND (no stories OR explicitly requested contextual logic)
   // Here we stick to showing it if no stories exist for clarity, or if it's the dedicated 'Your Story' bubble.
@@ -29,13 +29,13 @@ const StoryCircle = ({
     >
       {/* Ring Container */}
       <div className="relative p-[3px]">
-        {/* Animated Gradient Ring for Unseen or LIVE */}
-        {(hasUnseen || is_live) && (
-          <div className={`absolute inset-0 rounded-full bg-gradient-to-tr ${is_live ? 'from-red-600 via-pink-600 to-red-500' : 'from-yellow-400 via-pink-500 to-purple-600'} animate-spin opacity-90 group-hover:opacity-100 transition-opacity`} style={{ animationDuration: is_live ? '1.5s' : '3s' }} />
+        {/* Animated Gradient Ring for Unseen */}
+        {hasUnseen && (
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 animate-spin opacity-90 group-hover:opacity-100 transition-opacity" style={{ animationDuration: '3s' }} />
         )}
 
         {/* Grey Ring for Seen */}
-        {(!hasUnseen && !is_live) && (
+        {!hasUnseen && (
           <div className="absolute inset-0 rounded-full border border-border group-hover:border-text-secondary transition-colors" />
         )}
 
@@ -52,13 +52,6 @@ const StoryCircle = ({
           {showAddIcon && (
             <div className="absolute bottom-0 right-0 translate-x-1 translate-y-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-bg-primary shadow-sm flex items-center justify-center">
               <IoAdd className="h-4 w-4 stroke-2" />
-            </div>
-          )}
-
-          {/* LIVE Badge Overlay */}
-          {is_live && (
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-600 text-[10px] text-white font-bold px-1.5 py-0.5 rounded-md border-2 border-bg-primary shadow-lg z-20 flex items-center justify-center animate-pulse">
-              LIVE
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-# backend/api/routing.py
+# backend/api/routing.py (NEW FILE)
 
 from django.urls import re_path
 from . import consumers
@@ -15,7 +15,4 @@ websocket_urlpatterns = [
 
     # Talk with Stranger — random video chat matchmaking
     re_path(r'ws/stranger/$', StrangerConsumer.as_asgi()),
-
-    # Live Streaming Signaling
-    re_path(r'ws/live/(?P<stream_id>[\w-]+)/$', consumers.LiveStreamConsumer.as_asgi()),
-]
+]

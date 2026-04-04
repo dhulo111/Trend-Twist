@@ -6,8 +6,7 @@ from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest, TwistLike, TwistComment, 
     # NEW MODELS
     FollowRequest, ChatRoom, ChatMessage, Story, StoryView,
-    Reel, ReelLike, ReelComment, ChatGroup, # NEW MODEL
-    LiveStream, LiveStreamViewer # NEW MODELS
+    Reel, ReelLike, ReelComment, ChatGroup # NEW MODEL
 )
 from django.db.models import Q # Used for efficient chat room lookup
 from django.utils import timezone
@@ -96,7 +95,6 @@ class UserSerializer(serializers.ModelSerializer):
     following_count = serializers.SerializerMethodField()
     subscribers_count = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
-    is_live = serializers.SerializerMethodField()
     creator_balance = serializers.SerializerMethodField()
     creator_pending_withdrawals = serializers.SerializerMethodField()
 
@@ -105,17 +103,13 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 
                   'is_following', 'has_pending_request', 'is_subscribed', 'has_active_plans',
-                  'posts_count', 'followers_count', 'following_count', 'subscribers_count', 
-                  'is_creator', 'is_live', 'creator_balance', 'creator_pending_withdrawals']
+                  'posts_count', 'followers_count', 'following_count', 'subscribers_count', 'is_creator', 'creator_balance', 'creator_pending_withdrawals']
 
     def get_is_creator(self, obj):
         try:
             return obj.profile.is_creator
         except:
             return False
-
-    def get_is_live(self, obj):
-        return LiveStream.objects.filter(host=obj, is_live=True).exists()
 
     def get_creator_balance(self, obj):
         try:
@@ -324,7 +318,7 @@ class StorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Story
-        fields = ['id', 'author', 'author_username', 'media_file', 'media_type', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration', 'likes_count', 'is_liked', 'is_exclusive', 'required_tier', 'story_type']
+        fields = ['id', 'author', 'author_username', 'media_file', 'media_type', 'caption', 'created_at', 'is_viewed', 'author_profile_picture', 'music_title', 'music_file', 'editor_json', 'duration', 'likes_count', 'is_liked', 'is_exclusive', 'required_tier']
         read_only_fields = ['author']
         
     def get_is_viewed(self, obj):
@@ -341,37 +335,6 @@ class StorySerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.likes.filter(user=request.user).exists()
         return False
-
-
-# --- 5.5 Live Stream Serializers ---
-
-class LiveStreamSerializer(serializers.ModelSerializer):
-    host_username = serializers.ReadOnlyField(source='host.username')
-    host_profile_picture = serializers.ImageField(source='host.profile.profile_picture', read_only=True)
-    is_following_host = serializers.SerializerMethodField()
-    has_access = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LiveStream
-        fields = [
-            'id', 'stream_id', 'host', 'host_username', 'host_profile_picture', 
-            'title', 'is_live', 'started_at', 'preview_image', 'viewer_count',
-            'is_exclusive', 'required_tier', 'is_following_host', 'has_access'
-        ]
-
-    def get_is_following_host(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return Follow.objects.filter(follower=request.user, following=obj.host).exists()
-        return False
-
-    def get_has_access(self, obj):
-        if not obj.is_exclusive:
-            return True
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-        return has_subscription_access(request.user, obj.host, obj.required_tier)
 
 # --- 6. Live Chat Serializers (NEW) ---
 
@@ -689,7 +652,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = ['id', 'recipient', 'sender', 'sender_username', 'sender_profile_picture', 
-                  'notification_type', 'post', 'reel', 'follow_request_ref', 'live_stream',
+                  'notification_type', 'post', 'reel', 'follow_request_ref', 
                   'post_image', 'reel_thumbnail', 'is_read', 'created_at']
         read_only_fields = ['recipient', 'sender', 'created_at'] 
 

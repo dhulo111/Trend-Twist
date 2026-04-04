@@ -100,14 +100,8 @@ export const AuthProvider = ({ children }) => {
         const ws = new WebSocket(wsUrl);
         notificationSocketRef.current = ws;
 
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'notification_message') {
-               // Dispatch a custom event so other components can listen
-               window.dispatchEvent(new CustomEvent('trendtwist_notification', { detail: data.data }));
-            }
-          } catch(e) { console.error("Socket msg error", e); }
+        ws.onopen = () => {
+          console.log("Global Notification Socket Connected (Presence Active)");
         };
 
         ws.onclose = () => {

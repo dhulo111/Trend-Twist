@@ -39,10 +39,9 @@ const HomePage = () => {
   const fetchStories = useCallback(async () => {
     setLoadingStories(true);
     try {
-      const { stories: storyData, live_streams: liveStreams } = await getStories();
+      const storyData = await getStories();
 
-      // 1. Group normal stories by user
-      const storyGroups = storyData.reduce((acc, story) => {
+      const grouped = storyData.reduce((acc, story) => {
         const username = story.author_username;
         if (!acc[username]) {
           acc[username] = {
@@ -50,7 +49,6 @@ const HomePage = () => {
             profile_picture: story.author_profile_picture,
             stories: [],
             hasUnseen: false,
-            is_live: false,
           };
         }
         acc[username].stories.push(story);
@@ -60,37 +58,15 @@ const HomePage = () => {
         return acc;
       }, {});
 
-      // 2. Add Live Stream status to groups or create new ones
-      liveStreams.forEach(stream => {
-        const username = stream.host_username;
-        if (storyGroups[username]) {
-          storyGroups[username].is_live = true;
-          storyGroups[username].stream_id = stream.stream_id;
-        } else {
-          storyGroups[username] = {
-            username: username,
-            profile_picture: stream.host_profile_picture,
-            stories: [],
-            hasUnseen: false,
-            is_live: true,
-            stream_id: stream.stream_id,
-          };
-        }
-      });
-
-      // 3. Sorting logic: LIVE first, then Unseen, then Seen
-      const sortedGroups = Object.values(storyGroups).sort((a, b) => {
-        // High priority to LIVE
-        if (a.is_live && !b.is_live) return -1;
-        if (!a.is_live && b.is_live) return 1;
-
-        // Next priority: Unseen stories (if not live)
+      // Apply the user's requested sorting: unwatched first, followed by watched
+      const sortedGroups = Object.values(grouped).sort((a, b) => {
+        // 1. Prioritize Unseen groups (true > false)
         if (a.hasUnseen && !b.hasUnseen) return -1;
         if (!a.hasUnseen && b.hasUnseen) return 1;
         
-        // Finally: Chronological
-        const aTime = a.stories.length > 0 ? Math.max(...a.stories.map(s => new Date(s.created_at).getTime())) : 0;
-        const bTime = b.stories.length > 0 ? Math.max(...b.stories.map(s => new Date(s.created_at).getTime())) : 0;
+        // 2. Chronological within those categories (newest first)
+        const aTime = Math.max(...a.stories.map(s => new Date(s.created_at).getTime()));
+        const bTime = Math.max(...b.stories.map(s => new Date(s.created_at).getTime()));
         return bTime - aTime;
       });
 
@@ -135,24 +111,14 @@ const HomePage = () => {
   const feedStoryGroups = allStoryGroups.filter((group) => group.username !== currentUserUsername);
 
   // --- Story Handlers ---
-  const handleOpenStoryViewer = (group, index) => {
-     if (group.is_live) {
-       // Deep link or navigate to Live stream
-       navigate(`/live/${group.stream_id}`);
-       return;
-     }
-
+  const handleOpenStoryViewer = (feedIndex) => {
      const includeYourStory = yourStoryData.stories.length > 0;
-     const feedGroupsOnly = feedStoryGroups.filter(g => !g.is_live);
-     const yourStoryGroup = yourStoryData.stories.length > 0 ? [yourStoryData] : [];
-     
-     let groups = [...yourStoryGroup, ...feedGroupsOnly];
-     
-     // Find the index of the clicked group in the final viewer list
-     let initialIndex = groups.findIndex(g => g.username === group.username);
-     if (initialIndex === -1) initialIndex = 0;
+     let groups = includeYourStory ? [yourStoryData, ...feedStoryGroups] : feedStoryGroups;
+     let initialIndex = includeYourStory ? feedIndex + 1 : feedIndex;
 
-     const firstUnwatched = group.stories.findIndex(s => !s.is_viewed);
+     // Calculate where to start: first unwatched story
+     const targetGroup = feedStoryGroups[feedIndex];
+     const firstUnwatched = targetGroup.stories.findIndex(s => !s.is_viewed);
      const storyIdx = firstUnwatched !== -1 ? firstUnwatched : 0;
 
      setViewerGroups(groups);
@@ -162,10 +128,6 @@ const HomePage = () => {
   };
 
   const handleYourStoryClick = () => {
-    if (yourStoryData.is_live) {
-      navigate(`/live/${yourStoryData.stream_id}`);
-      return;
-    }
     if (yourStoryData.stories.length > 0) {
       const firstUnwatched = yourStoryData.stories.findIndex(s => !s.is_viewed);
       const storyIdx = firstUnwatched !== -1 ? firstUnwatched : 0;
@@ -187,24 +149,6 @@ const HomePage = () => {
     fetchStories();
   };
 
-  // --- Real-time Live Updates ---
-  useEffect(() => {
-    // We can rely on the global notification socket from AuthContext if we expose it,
-    // but for now, let's fetchStories when we get a live notification if possible.
-    // However, since HomePage doesn't have direct access to the socket ref, 
-    // we should ideally add a listener in a way that triggers fetchStories.
-    
-    const handleGlobalNotification = (e) => {
-       const data = e.detail;
-       if (data?.notification_type === 'live_start' || data?.notification_type === 'live_end') {
-          fetchStories();
-       }
-    };
-
-    window.addEventListener('trendtwist_notification', handleGlobalNotification);
-    return () => window.removeEventListener('trendtwist_notification', handleGlobalNotification);
-  }, [fetchStories]);
-
 
   return (
     <>
@@ -221,11 +165,11 @@ const HomePage = () => {
                     isCurrentUser={true}
                     onClick={handleYourStoryClick}
                   />
-                  {feedStoryGroups.map((group) => (
+                  {feedStoryGroups.map((group, index) => (
                     <StoryCircle
                       key={group.username}
                       storyGroup={group}
-                      onClick={() => handleOpenStoryViewer(group)}
+                      onClick={() => handleOpenStoryViewer(index)}
                     />
                   ))}
                   {feedStoryGroups.length === 0 && yourStoryData.stories.length === 0 && !loadingStories && (

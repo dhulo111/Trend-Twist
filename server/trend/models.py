@@ -7,7 +7,6 @@ from django.dispatch import receiver
 from django.utils import timezone
 from datetime import timedelta
 import uuid # Required for OTP ID field
-import secrets # For stream ID generation
 
 # --- Utility Functions ---
 
@@ -309,13 +308,6 @@ class Story(models.Model):
     is_exclusive = models.BooleanField(default=False)
     required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
 
-    # NEW: Live Stream integration
-    STORY_TYPE_CHOICES = [
-        ('normal', 'Normal Story'),
-        ('live', 'Live Stream Record'), # For future replay support
-    ]
-    story_type = models.CharField(max_length=10, choices=STORY_TYPE_CHOICES, default='normal')
-
     def __str__(self):
         return f"Story by {self.author.username} at {self.created_at.strftime('%H:%M')}"
 
@@ -407,43 +399,6 @@ class ChatMessage(models.Model):
         return f"Message {self.id}"
 
 
-# --- 6.5 Live Streaming Models ---
-
-class LiveStream(models.Model):
-    """
-    Represents an active or ended live broadcast.
-    """
-    host = models.ForeignKey(User, on_delete=models.CASCADE, related_name='live_streams')
-    stream_id = models.CharField(max_length=100, unique=True, default=secrets.token_urlsafe)
-    title = models.CharField(max_length=255, blank=True, null=True)
-    is_live = models.BooleanField(default=True)
-    started_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
-    
-    # Metadata for discovery
-    preview_image = models.ImageField(upload_to='live_previews/', blank=True, null=True)
-    viewer_count = models.IntegerField(default=0)
-    
-    # Gating
-    is_exclusive = models.BooleanField(default=False)
-    required_tier = models.CharField(max_length=10, choices=SubscriptionPlan.TIER_CHOICES, blank=True, null=True)
-
-    def __str__(self):
-        status = "LIVE" if self.is_live else "ENDED"
-        return f"{self.host.username} - {status} ({self.started_at.strftime('%H:%M')})"
-
-class LiveStreamViewer(models.Model):
-    """
-    Tracks who is currently watching which live stream.
-    """
-    stream = models.ForeignKey(LiveStream, on_delete=models.CASCADE, related_name='viewers')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    joined_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('stream', 'user')
-
-
 # --- 7. Reel Models (Instagram Reels Clone) ---
 
 class Reel(models.Model):
@@ -502,7 +457,6 @@ class Notification(models.Model):
         ('comment_reel', 'Comment Reel'),
         ('comment_twist', 'Comment Twist'),
         ('story_like', 'Story Like'),
-        ('live_start', 'User is Live'),
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
@@ -514,7 +468,6 @@ class Notification(models.Model):
     reel = models.ForeignKey(Reel, on_delete=models.CASCADE, null=True, blank=True)
     story = models.ForeignKey(Story, on_delete=models.CASCADE, null=True, blank=True)
     twist = models.ForeignKey(Twist, on_delete=models.CASCADE, null=True, blank=True)
-    live_stream = models.ForeignKey(LiveStream, on_delete=models.CASCADE, null=True, blank=True)
     
     # For Follow Requests specifically (so we can accept/reject from notification)
     follow_request_ref = models.ForeignKey(FollowRequest, on_delete=models.SET_NULL, null=True, blank=True)

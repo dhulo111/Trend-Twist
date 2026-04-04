@@ -22,7 +22,6 @@ import StrangerTalkPage from '../pages/StrangerTalkPage'; // Talk with Stranger
 // --- Import Full-Screen Creation Pages ---
 import CreatePostPage from '../pages/CreatePostPage'; // Full page for post creation
 import StoryCreatePage from '../pages/StoryCreatePage'; // Full page for story creation
-import LiveStreamPage from '../pages/LiveStreamPage'; // NEW: Live Streaming
 import SearchPage from '../pages/SearchPage'; // Full page for User Search
 import ReelsPage from '../pages/ReelsPage';
 import ReelCreatePage from '../pages/ReelCreatePage';
@@ -110,16 +109,6 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <StrangerTalkPage />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* 5. Live Streaming Standalone (No sidebar/navbar) */}
-      <Route
-        path="/live/:streamId"
-        element={
-          <ProtectedRoute>
-            <LiveStreamPage />
           </ProtectedRoute>
         }
       />

@@ -6,8 +6,7 @@ import { createStory } from '../api/storyApi';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import FabricStoryEditor from '../components/features/feed/StoryEditorPanel';
-import { IoArrowBackOutline, IoCameraOutline, IoCloseOutline, IoVideocamOutline, IoImageOutline, IoRadioOutline } from 'react-icons/io5';
-import { FaBroadcastTower } from 'react-icons/fa';
+import { IoArrowBackOutline, IoCameraOutline, IoCloseOutline, IoVideocamOutline, IoImageOutline } from 'react-icons/io5';
 
 // Mock Data for Music System
 const MOCK_MUSIC_TRACKS = [
@@ -176,19 +175,6 @@ const StoryCreatePage = () => {
               <div className="h-20 w-20 bg-purple-500/10 rounded-2xl flex flex-col items-center justify-center text-purple-400 border border-purple-500/20">
                 <IoVideocamOutline className="h-8 w-8" />
                 <span className="text-xs font-bold mt-1 uppercase tracking-wider">Video</span>
-              </div>
-              <div 
-                onClick={() => navigate('/live/new')}
-                className="h-20 w-20 bg-red-500/10 rounded-2xl flex flex-col items-center justify-center text-red-500 border border-red-500/20 cursor-pointer hover:bg-red-500 hover:text-white transition-all group shadow-sm hover:shadow-red-500/20"
-              >
-                <div className="relative">
-                   <FaBroadcastTower className="h-8 w-8 mb-0.5" />
-                   <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                   </span>
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-tighter">Go Live</span>
               </div>
             </div>
             <h2 className='text-2xl font-bold text-text-primary'>Create a Story</h2>
