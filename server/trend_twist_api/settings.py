@@ -137,7 +137,7 @@ if 'RENDER' in os.environ:
             'USER': f'postgres.kvdnvtnxxesaldwacejv', # Project Ref is required by Supabase pooler
             'PASSWORD': os.environ.get('DB_PASSWORD'),
             'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-            'PORT': '6543', # Transaction mode port
+            'PORT': '5432', # Session/Direct mode (more stable for handshakes)
             'OPTIONS': {
                 'sslmode': 'require',
             },

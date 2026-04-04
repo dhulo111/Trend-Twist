@@ -392,15 +392,23 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Mark user as online globally
-        # We run this in a background task to prevent blocking the WebSocket handshake
-        asyncio.create_task(self._handle_user_status_change(True))
+        # Track the status change task so we can cancel it if needed
+        self.status_update_task = asyncio.create_task(self._handle_user_status_change(True))
 
     async def disconnect(self, close_code):
+        # Cancel any pending status update task to avoid Daphne "took too long to shut down" warnings
+        if hasattr(self, 'status_update_task') and not self.status_update_task.done():
+            self.status_update_task.cancel()
+            try:
+                await self.status_update_task
+            except asyncio.CancelledError:
+                pass
+
         # Mark user as offline globally and broadcast
         if getattr(self, 'user', None) and self.user.is_authenticated:
-            # We run this in a background task so it doesn't delay proper channel shutdown
-            asyncio.create_task(self._handle_user_status_change(False))
+            # We run this synchronously (await) during disconnect to ensure it finishes 
+            # or is handled before Daphne kills the instance.
+            await self._handle_user_status_change(False)
 
         # Leave user group
         if hasattr(self, 'group_name'):
