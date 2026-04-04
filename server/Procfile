@@ -1,0 +1,2 @@
+web: daphne -b 0.0.0.0 -p $PORT trend_twist_api.asgi:application
+worker: celery -A trend_twist_api worker --loglevel=info

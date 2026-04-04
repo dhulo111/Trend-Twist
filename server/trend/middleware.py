@@ -56,11 +56,21 @@ class JwtAuthMiddleware(BaseMiddleware):
             
             if token:
                 # Verify token using SimpleJWT
-                access_token = AccessToken(token)
-                scope['user'] = await get_user(access_token['user_id'])
+                try:
+                    access_token = AccessToken(token)
+                    scope['user'] = await get_user(access_token['user_id'])
+                    # print(f"[WS Auth] User {scope['user']} authenticated")
+                except TokenError as e:
+                    print(f"[WS Auth] Token error: {e}")
+                    scope['user'] = AnonymousUser()
+                except Exception as e:
+                    print(f"[WS Auth] Error retrieving user: {e}")
+                    scope['user'] = AnonymousUser()
             else:
+                # print("[WS Auth] No token provided")
                 scope['user'] = AnonymousUser()
-        except (TokenError, jwt.DecodeError, Exception) as e:
+        except Exception as e:
+            print(f"[WS Auth] Unexpected error: {e}")
             scope['user'] = AnonymousUser()
 
         return await super().__call__(scope, receive, send)
