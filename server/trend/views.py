@@ -27,7 +27,7 @@ from .models import (
     Profile, Post, Comment, Like, Twist, Hashtag, Follow, OTPRequest,
     Story, StoryView, FollowRequest, ChatRoom, ChatMessage,
     Reel, ReelLike, ReelComment, StoryLike, TwistComment, TwistLike, ChatGroup,
-    SavedItem, WithdrawalRequest
+    SavedItem, WithdrawalRequest, LiveStream, LiveStreamViewer
 )
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -39,7 +39,7 @@ from .serializers import (
     StorySerializer, FollowRequestSerializer, ChatRoomSerializer, ChatMessageSerializer,
     ReelSerializer, ReelCommentSerializer, TwistCommentSerializer, ChatGroupSerializer,
     NotificationSerializer, SavedItemSerializer, has_subscription_access,
-    WithdrawalRequestSerializer, AdminWithdrawalActionSerializer
+    WithdrawalRequestSerializer, AdminWithdrawalActionSerializer, LiveStreamSerializer
 )
 from channels.db import database_sync_to_async
 # --- Permissions ---
@@ -1017,7 +1017,13 @@ class StoryListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         following_ids = list(Follow.objects.filter(follower=user).values_list('following_id', flat=True))
         following_ids.append(user.id)
-        return Story.objects.filter(author_id__in=following_ids, expires_at__gt=timezone.now()).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        
+        # Get active stories
+        stories = Story.objects.filter(author_id__in=following_ids, expires_at__gt=timezone.now()).exclude(author__profile__blocked_until__gt=timezone.now()).order_by('-created_at')
+        
+        # NOTE: Fetching live streams is usually handled separately or merged in the list() method
+        # for complex discovery. For now, let's keep this as standard story fetch.
+        return stories
 
     def perform_create(self, serializer):
         # Use frontend-provided media_type if valid, otherwise auto-detect from file MIME type
@@ -1049,6 +1055,25 @@ class StoryListCreateView(generics.ListCreateAPIView):
         
         serializer.save(author=self.request.user, media_type=media_type)
 
+
+    def list(self, request, *args, **kwargs):
+        """
+        Include active live streams at the beginning of the discovery list.
+        """
+        user = self.request.user
+        following_ids = list(Follow.objects.filter(follower=user).values_list('following_id', flat=True))
+        following_ids.append(user.id)
+        
+        active_lives = LiveStream.objects.filter(host_id__in=following_ids, is_live=True).exclude(host__profile__blocked_until__gt=timezone.now()).order_by('-started_at')
+        queryset = self.get_queryset()
+        
+        live_serializer = LiveStreamSerializer(active_lives, many=True, context={'request': request})
+        story_serializer = StorySerializer(queryset, many=True, context={'request': request})
+        
+        return Response({
+            'live_streams': live_serializer.data,
+            'stories': story_serializer.data
+        }, status=status.HTTP_200_OK)
 
     def get_serializer_context(self): return {'request': self.request}
 
@@ -1099,6 +1124,94 @@ class StoryLikeToggleView(APIView):
             )
             
         return Response({"status": "liked"}, status=status.HTTP_201_CREATED)
+
+
+class StartLiveStreamView(APIView):
+    """POST /api/live/start/ - Host starts a new live stream."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        LiveStream.objects.filter(host=request.user, is_live=True).update(is_live=False, ended_at=timezone.now())
+        title = request.data.get('title', f"{request.user.username}'s Live")
+        stream = LiveStream.objects.create(
+            host=request.user,
+            title=title,
+            is_exclusive=request.data.get('is_exclusive', False),
+            required_tier=request.data.get('required_tier', None)
+        )
+        
+        # Broadcast to followers via Socket
+        followers = Follow.objects.filter(following=request.user).values_list('follower_id', flat=True)
+        channel_layer = get_channel_layer()
+        for f_id in followers:
+            Notification.objects.create(
+                recipient_id=f_id,
+                sender=request.user,
+                notification_type='live_start',
+                live_stream=stream
+            )
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{f_id}",
+                    {
+                        'type': 'notification_message',
+                        'data': {
+                            'notification_type': 'live_start',
+                            'sender_username': request.user.username,
+                            'live_stream_id': stream.stream_id,
+                            'created_at': timezone.now().isoformat()
+                        }
+                    }
+                )
+            except: pass
+
+        return Response(LiveStreamSerializer(stream, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+class EndLiveStreamView(APIView):
+    """POST /api/live/end/ - Host ends the live stream."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        stream = LiveStream.objects.filter(host=request.user, is_live=True).first()
+        if not stream:
+            return Response({"error": "No active stream found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        stream.is_live = False
+        stream.ended_at = timezone.now()
+        stream.save()
+
+        # Broadcast end to followers for real-time badge removal
+        followers = Follow.objects.filter(following=request.user).values_list('follower_id', flat=True)
+        channel_layer = get_channel_layer()
+        for f_id in followers:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{f_id}",
+                    {
+                        'type': 'notification_message',
+                        'data': {
+                            'notification_type': 'live_end',
+                            'sender_username': request.user.username,
+                        }
+                    }
+                )
+            except: pass
+            
+        return Response({"status": "ended"}, status=status.HTTP_200_OK)
+
+class JoinLiveStreamView(APIView):
+    """POST /api/live/join/<stream_id>/ - Viewer joins a live stream."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, stream_id):
+        stream = get_object_or_404(LiveStream, stream_id=stream_id, is_live=True)
+        if stream.is_exclusive and not has_subscription_access(request.user, stream.host, stream.required_tier):
+             return Response({"error": "Subscription required."}, status=status.HTTP_403_FORBIDDEN)
+        LiveStreamViewer.objects.get_or_create(stream=stream, user=request.user)
+        stream.viewer_count = stream.viewers.count()
+        stream.save()
+        return Response(LiveStreamSerializer(stream, context={'request': request}).data, status=status.HTTP_200_OK)
+
 
     
 class StoryArchiveView(generics.ListAPIView):
@@ -1987,4 +2100,22 @@ class WithdrawalTAndCView(APIView):
             "5. Any fraudulent activity will lead to permanent account suspension and forfeiture of earnings."
         ]
         return Response({"terms": content})
+
+class DeleteAccountView(APIView):
+    """
+    Deletes the authenticated user account and all associated data.
+    Because User relies on models.CASCADE across the DB structurally,
+    this securely nukes their profile, posts, history, etc.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        try:
+            if user.is_superuser:
+                return Response({"error": "Superusers cannot delete their account from the client."}, status=status.HTTP_400_BAD_REQUEST)
+            user.delete()
+            return Response({"status": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

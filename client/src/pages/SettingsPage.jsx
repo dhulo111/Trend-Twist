@@ -52,13 +52,18 @@ const SettingsPage = () => {
         </p>
         <Button
           variant="danger"
-          onClick={() => {
-            if (window.confirm('Are you absolutely sure you want to delete your account?')) {
+          onClick={async () => {
+            if (window.confirm('Are you absolutely sure you want to delete your account? All your data will be permanently wiped.')) {
               setIsDeleting(true);
-              setTimeout(() => {
-                setIsDeleting(false);
+              try {
+                await api.delete('/auth/delete-account/');
                 logoutUser();
-              }, 2000);
+              } catch (err) {
+                console.error("Account deletion failed:", err);
+                alert(err.response?.data?.error || 'Failed to delete account. Please try again.');
+              } finally {
+                setIsDeleting(false);
+              }
             }
           }}
           disabled={isDeleting}

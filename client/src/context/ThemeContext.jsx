@@ -15,8 +15,14 @@ export const ThemeProvider = ({ children }) => {
 
   // --- Core Theme Application Effect ---
   useEffect(() => {
-    // Apply the current theme state to the <html> tag
-    document.documentElement.setAttribute('data-theme', theme);
+    // Apply standard tailwind class and fallback attribute
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.removeAttribute('data-theme');
+    }
     // Save the theme preference to localStorage
     localStorage.setItem('theme', theme);
   }, [theme]); // Reruns whenever the 'theme' state changes

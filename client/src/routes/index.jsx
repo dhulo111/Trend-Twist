@@ -22,6 +22,7 @@ import StrangerTalkPage from '../pages/StrangerTalkPage'; // Talk with Stranger
 // --- Import Full-Screen Creation Pages ---
 import CreatePostPage from '../pages/CreatePostPage'; // Full page for post creation
 import StoryCreatePage from '../pages/StoryCreatePage'; // Full page for story creation
+import LiveStreamPage from '../pages/LiveStreamPage'; // NEW: Live Streaming
 import SearchPage from '../pages/SearchPage'; // Full page for User Search
 import ReelsPage from '../pages/ReelsPage';
 import ReelCreatePage from '../pages/ReelCreatePage';
@@ -31,6 +32,7 @@ import PaymentSuccessPage from '../pages/PaymentSuccessPage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import VisitorPage from '../pages/VisitorPage'; // The new Splash/Landing Page
 
 // --- Import Route Protection ---
 import ProtectedRoute from './ProtectedRoute';
@@ -44,7 +46,8 @@ import AdminLogin from '../pages/admin/AdminLogin';
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* 1. Unprotected Routes (Login and Register) */}
+      {/* 1. Unprotected Routes (Login, Register, Landing) */}
+      <Route path="/welcome" element={<VisitorPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
@@ -107,6 +110,16 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <StrangerTalkPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 5. Live Streaming Standalone (No sidebar/navbar) */}
+      <Route
+        path="/live/:streamId"
+        element={
+          <ProtectedRoute>
+            <LiveStreamPage />
           </ProtectedRoute>
         }
       />

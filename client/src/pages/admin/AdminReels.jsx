@@ -124,13 +124,21 @@ const AdminReels = () => {
                 reels.map(reel => (
                   <tr key={reel.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
                     <td className="p-4">
-                      {reel.media_url ? (
-                        <a href={reel.media_url.startsWith('http') ? reel.media_url : `http://localhost:8000${reel.media_url}`} target="_blank" rel="noopener noreferrer">
-                          <div className="h-16 w-12 rounded-md bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-700 relative hover:opacity-80 transition cursor-pointer">
-                            <video src={reel.media_url.startsWith('http') ? reel.media_url : `http://localhost:8000${reel.media_url}`} className="w-full h-full object-cover" controls={false} muted />
-                          </div>
-                        </a>
-                      ) : (
+                      {reel.media_url ? (() => {
+                        const mUrl = reel.media_url.startsWith('http') ? reel.media_url : `http://localhost:8000${reel.media_url}`;
+                        const isImage = reel.media_type === 'image' || mUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i);
+                        return (
+                          <a href={mUrl} target="_blank" rel="noopener noreferrer">
+                            <div className="h-16 w-12 rounded-md bg-gray-900 overflow-hidden border border-gray-200 dark:border-gray-700 relative hover:opacity-80 transition cursor-pointer">
+                              {isImage ? (
+                                <img src={mUrl} alt="Reel media" className="w-full h-full object-cover" />
+                              ) : (
+                                <video src={mUrl} className="w-full h-full object-cover" autoPlay loop muted playsInline controls={false} />
+                              )}
+                            </div>
+                          </a>
+                        );
+                      })() : (
                         <div className="h-16 w-12 rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center border border-gray-200 dark:border-gray-700 text-gray-400">
                           <Video size={20} />
                         </div>

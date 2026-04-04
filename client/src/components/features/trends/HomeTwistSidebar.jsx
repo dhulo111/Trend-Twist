@@ -4,7 +4,7 @@ import { getPublicTwists } from '../../../api/postApi';
 import TwistCard from '../feed/TwistCard';
 import Spinner from '../../common/Spinner';
 import { Link } from 'react-router-dom';
-import { IoArrowForward, IoPlanetOutline } from 'react-icons/io5';
+import { IoArrowForward, IoTrendingUpSharp } from 'react-icons/io5';
 
 const HomeTwistSidebar = () => {
   const [twists, setTwists] = useState([]);
@@ -31,8 +31,8 @@ const HomeTwistSidebar = () => {
       {/* Header Card */}
       <div className="bg-background-secondary border border-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
-          <IoPlanetOutline className="text-accent" size={20} />
-          <h2 className="text-lg font-bold text-text-primary">Top Twists</h2>
+          <IoTrendingUpSharp className="text-accent" size={20} />
+          <h2 className="text-lg font-bold text-text-primary">Trending Twists</h2>
         </div>
         <Link to="/trending" className="p-2 hover:bg-background-accent/10 rounded-full text-text-secondary hover:text-text-primary transition-colors">
           <IoArrowForward size={18} />

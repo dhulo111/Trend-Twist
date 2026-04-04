@@ -20,6 +20,7 @@ urlpatterns = [
     path('auth/check-user/', views.CheckUserView.as_view(), name='check_user'),
     path('auth/login/password/', views.PasswordLoginView.as_view(), name='password_login'),
     path('auth/register/password/', views.PasswordRegisterView.as_view(), name='password_register'),
+    path('auth/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
 
 
     # ----------------------------------------------------------------------
@@ -104,6 +105,13 @@ urlpatterns = [
     path('stories/archive/', views.StoryArchiveView.as_view(), name='story_archive'),
     path('stories/user/<int:user_id>/', views.UserStoryListView.as_view(), name='user_story_list'),
     path('stories/<int:pk>/like/', views.StoryLikeToggleView.as_view(), name='story_like_toggle'),
+    path('stories/analytics/<int:story_id>/', views.StoryAnalyticsView.as_view(), name='story_analytics_alt'),
+    
+    # Live Streaming
+    path('live/start/', views.StartLiveStreamView.as_view(), name='live-start'),
+    path('live/end/', views.EndLiveStreamView.as_view(), name='live-end'),
+    path('live/join/<str:stream_id>/', views.JoinLiveStreamView.as_view(), name='live-join'),
+
     path('messages/send/', views.SendMessageView.as_view(), name='send_message'),
 
 path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), name='story_analytics'),

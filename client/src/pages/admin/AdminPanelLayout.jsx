@@ -17,7 +17,9 @@ import {
   ShieldAlert,
   Ban,
   Award,
-  IndianRupee
+  IndianRupee,
+  Sun,
+  Moon
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import AdminUsers from './AdminUsers';
@@ -38,6 +40,17 @@ const AdminPanelLayout = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -101,9 +114,11 @@ const AdminPanelLayout = () => {
       >
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
           {isSidebarOpen && (
-            <div className="flex items-center gap-2 font-bold text-xl text-purple-600 dark:text-purple-400">
-              <TrendingUp size={24} />
-              <span>TrendTwist</span>
+            <div className="flex items-center gap-2">
+              <img src="/logo1.png" alt="TrendTwist Logo" className="h-10 w-10 object-contain drop-shadow-md rounded-xl" />
+              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-purple-400 dark:from-purple-400 dark:to-purple-300 tracking-tight">
+                TrendTwist
+              </span>
             </div>
           )}
           <button
@@ -154,6 +169,14 @@ const AdminPanelLayout = () => {
           </h1>
 
           <div className="flex items-center gap-4">
+            
+            <button
+               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+               className="p-2 rounded-full bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+               title="Toggle Theme"
+            >
+               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
 
             <div className="flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-gray-700">
               <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">

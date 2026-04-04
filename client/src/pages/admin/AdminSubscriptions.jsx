@@ -128,30 +128,30 @@ const AdminSubscriptions = () => {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-black text-white flex items-center">
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center">
                 <FaCrown className="mr-3 text-pink-500" /> Premium Subscriptions
             </h1>
 
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-gray-800/80 p-6 rounded-2xl border border-white/10 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10"><FaCrown className="text-6xl text-white" /></div>
+                <div className="bg-white dark:bg-gray-800/80 p-6 rounded-2xl border border-gray-200 dark:border-white/10 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10"><FaCrown className="text-6xl text-gray-900 dark:text-white" /></div>
                     <p className="text-gray-400 font-semibold mb-1">Active Subscriptions</p>
-                    <h3 className="text-4xl font-black text-white">{stats.total_active}</h3>
+                    <h3 className="text-4xl font-black text-gray-900 dark:text-white">{stats.total_active}</h3>
                 </div>
-                <div className="bg-gray-800/80 p-6 rounded-2xl border border-white/10 relative overflow-hidden">
+                <div className="bg-white dark:bg-gray-800/80 p-6 rounded-2xl border border-gray-200 dark:border-white/10 relative overflow-hidden">
                     <p className="text-gray-400 font-semibold mb-1">Pro Tier</p>
-                    <h3 className="text-4xl font-black text-white">{stats.total_pro}</h3>
+                    <h3 className="text-4xl font-black text-gray-900 dark:text-white">{stats.total_pro}</h3>
                 </div>
-                <div className="bg-gray-800/80 p-6 rounded-2xl border border-purple-500/30 relative overflow-hidden">
+                <div className="bg-white dark:bg-gray-800/80 p-6 rounded-2xl border border-purple-500/30 relative overflow-hidden">
                     <p className="text-purple-400 font-semibold mb-1">Elite Tier</p>
-                    <h3 className="text-4xl font-black text-white">{stats.total_elite}</h3>
+                    <h3 className="text-4xl font-black text-gray-900 dark:text-white">{stats.total_elite}</h3>
                 </div>
             </div>
 
             {/* Global Tiers Management */}
-            <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-                <h2 className="text-xl font-bold text-white mb-4">Manage Global Subscription Tiers</h2>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Manage Global Subscription Tiers</h2>
                 <p className="text-sm text-gray-400 mb-6">Configure the base pricing and features for the 3 global subscription tiers that users can select to support their favorite creators.</p>
                 {successMsg && (
                     <div className="mb-4 bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-4 py-3 rounded-xl">{successMsg}</div>
@@ -159,10 +159,10 @@ const AdminSubscriptions = () => {
                 {loadingPlans ? <div className="text-gray-500 py-4">Loading plans...</div> : (
                     <div className="space-y-4">
                         {TIERS.map(tier => (
-                            <div key={tier} className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+                            <div key={tier} className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl p-5">
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
-                                        <p className="font-bold text-white text-base">{TIER_LABELS[tier]}</p>
+                                        <p className="font-bold text-gray-900 dark:text-white text-base">{TIER_LABELS[tier]}</p>
                                         <p className="text-xs text-gray-400 capitalize">{tier} Tier Pricing</p>
                                     </div>
                                     {plans[tier] ? (
@@ -174,11 +174,11 @@ const AdminSubscriptions = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs text-gray-400 block mb-1">Monthly Price (INR)</label>
-                                        <input type="number" step="0.01" value={form[tier].price} onChange={e => setForm(prev => ({ ...prev, [tier]: { ...prev[tier], price: e.target.value } }))} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-pink-500 focus:outline-none" />
+                                        <input type="number" step="0.01" value={form[tier].price} onChange={e => setForm(prev => ({ ...prev, [tier]: { ...prev[tier], price: e.target.value } }))} className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm focus:border-pink-500 focus:outline-none" />
                                     </div>
                                     <div>
                                         <label className="text-xs text-gray-400 block mb-1">Global Features (comma-separated)</label>
-                                        <input type="text" value={form[tier].features} onChange={e => setForm(prev => ({ ...prev, [tier]: { ...prev[tier], features: e.target.value } }))} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-pink-500 focus:outline-none" />
+                                        <input type="text" value={form[tier].features} onChange={e => setForm(prev => ({ ...prev, [tier]: { ...prev[tier], features: e.target.value } }))} className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm focus:border-pink-500 focus:outline-none" />
                                     </div>
                                 </div>
                                 <div className="flex gap-2 justify-end mt-4">
@@ -187,7 +187,7 @@ const AdminSubscriptions = () => {
                                             {deleting === tier ? 'Deactivating...' : 'Deactivate'}
                                         </button>
                                     )}
-                                    <button onClick={() => handleSavePlan(tier)} disabled={saving === tier} className="px-5 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg transition-colors">
+                                    <button onClick={() => handleSavePlan(tier)} disabled={saving === tier} className="px-5 py-2 bg-pink-600 hover:bg-pink-500 text-gray-900 dark:text-white text-xs font-bold rounded-lg transition-colors">
                                         {saving === tier ? 'Saving...' : plans[tier] ? 'Update Tier' : 'Create Tier'}
                                     </button>
                                 </div>
@@ -197,7 +197,7 @@ const AdminSubscriptions = () => {
                 )}
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-800">
+            <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
                 <div className="relative w-full md:w-96 mb-4 md:mb-0">
                     <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
                     <input
@@ -205,15 +205,15 @@ const AdminSubscriptions = () => {
                         placeholder="Search by username..."
                         value={searchQuery}
                         onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                        className="w-full bg-gray-800 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-pink-500"
+                        className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-pink-500"
                     />
                 </div>
             </div>
 
-            <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-gray-300">
-                        <thead className="bg-gray-800 text-gray-400 font-semibold uppercase text-xs">
+                    <table className="w-full text-left text-gray-700 dark:text-gray-300">
+                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-semibold uppercase text-xs">
                             <tr>
                                 <th className="px-6 py-4">Subscriber</th>
                                 <th className="px-6 py-4">Creator</th>
@@ -223,7 +223,7 @@ const AdminSubscriptions = () => {
                                 <th className="px-6 py-4">Expiry Date</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                             {loading ? (
                                 <tr>
                                     <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
@@ -238,7 +238,7 @@ const AdminSubscriptions = () => {
                                 </tr>
                             ) : (
                                 subscriptions.map(sub => (
-                                    <tr key={sub.id} className="hover:bg-gray-800/50 transition-colors">
+                                    <tr key={sub.id} className="hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors">
                                         <td className="px-6 py-4 font-semibold">{sub.subscriber}</td>
                                         <td className="px-6 py-4 font-semibold text-pink-400">@{sub.creator}</td>
                                         <td className="px-6 py-4 capitalize font-bold">
@@ -256,11 +256,11 @@ const AdminSubscriptions = () => {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="px-6 py-4 bg-gray-800/30 flex justify-between items-center border-t border-gray-800">
+                    <div className="px-6 py-4 bg-gray-100 dark:bg-gray-800/30 flex justify-between items-center border-t border-gray-200 dark:border-gray-800">
                         <button
                             disabled={page === 1}
                             onClick={() => setPage(page - 1)}
-                            className="px-4 py-2 bg-gray-800 rounded-lg text-white disabled:opacity-50"
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-white disabled:opacity-50"
                         >
                             Previous
                         </button>
@@ -268,7 +268,7 @@ const AdminSubscriptions = () => {
                         <button
                             disabled={page === totalPages}
                             onClick={() => setPage(page + 1)}
-                            className="px-4 py-2 bg-gray-800 rounded-lg text-white disabled:opacity-50"
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-800 rounded-lg text-gray-900 dark:text-white disabled:opacity-50"
                         >
                             Next
                         </button>

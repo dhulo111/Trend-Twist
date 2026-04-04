@@ -107,12 +107,10 @@ const Navbar = () => {
           {/* Logo */}
           <Link
             to="/"
-            className="mb-10 flex items-center space-x-3 px-3 group"
+            className="mb-4 flex items-center space-x-2 px-2 group"
           >
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-tr from-text-accent to-purple-400 text-white font-bold text-xl shadow-lg transition-transform group-hover:rotate-6">
-              TT
-            </div>
-            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary">
+            <img src="/logo1.png" alt="TrendTwist Logo" className="h-14 w-14 object-contain drop-shadow-xl rounded-2xl transition-transform duration-300 group-hover:scale-105" />
+            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary tracking-tight">
               TrendTwist
             </span>
           </Link>
@@ -202,12 +200,10 @@ const Navbar = () => {
       {/* =================================================================================
           MOBILE TOP BAR (Visible < md)
           ================================================================================= */}
-      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-glass-bg glass border-b border-glass-border z-40 flex items-center justify-between px-4">
+      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-glass-bg glass border-b border-glass-border z-40 flex items-center justify-between px-3">
         <Link to="/" className="flex items-center space-x-2">
-          <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-gradient-to-tr from-text-accent to-purple-400 text-white font-bold text-sm shadow-lg">
-            TT
-          </div>
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary">
+          <img src="/logo1.png" alt="TrendTwist Logo" className="h-11 w-11 object-contain drop-shadow-lg rounded-xl" />
+          <span className="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-text-primary to-text-secondary">
             TrendTwist
           </span>
         </Link>

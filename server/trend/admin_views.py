@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from rest_framework import views, permissions, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Post, Twist, Reel, Comment, Hashtag, Profile, CreatorEarning, WithdrawalRequest
+from .models import Post, Twist, Reel, Comment, Hashtag, Profile, CreatorEarning, WithdrawalRequest, Story
 from decimal import Decimal
 
 class IsAdminUser(permissions.BasePermission):
@@ -25,21 +25,108 @@ class AdminDashboardStatsView(views.APIView):
         total_revenue = CreatorEarning.objects.aggregate(Sum('gross_amount'))['gross_amount__sum'] or Decimal('0.00')
         total_fees = CreatorEarning.objects.aggregate(Sum('platform_fee'))['platform_fee__sum'] or Decimal('0.00')
         
+        from django.utils import timezone
+        import datetime
+        from django.utils.dateparse import parse_date
+        
         # New Withdrawal Stats for Dashboard
         pending_withdrawal_sum = WithdrawalRequest.objects.filter(status='pending').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
         pending_withdrawal_count = WithdrawalRequest.objects.filter(status='pending').count()
         
+        # Date filtering
+        from_date_str = request.query_params.get('from_date')
+        to_date_str = request.query_params.get('to_date')
+        
+        today = timezone.now().date()
+        if from_date_str and to_date_str:
+            from_date = parse_date(from_date_str)
+            to_date = parse_date(to_date_str)
+            if not from_date or not to_date or to_date < from_date:
+                from_date = today - datetime.timedelta(days=6)
+                to_date = today
+        else:
+            from_date = today - datetime.timedelta(days=6)
+            to_date = today
+
+        u_date_filter = Q(date_joined__date__gte=from_date, date_joined__date__lte=to_date)
+        c_date_filter = Q(created_at__date__gte=from_date, created_at__date__lte=to_date)
+
+        # Chart Data: Growth over selected period
+        chart_data = []
+        delta = (to_date - from_date).days
+        for i in range(delta + 1):
+            date_obj = from_date + datetime.timedelta(days=i)
+            day_users = User.objects.filter(date_joined__date=date_obj).count()
+            day_posts = Post.objects.filter(created_at__date=date_obj).count()
+            day_reels = Reel.objects.filter(created_at__date=date_obj).count()
+            day_stories = Story.objects.filter(created_at__date=date_obj).count()
+            
+            chart_data.append({
+                'name': date_obj.strftime('%b %d'),
+                'users': day_users,
+                'posts': day_posts,
+                'reels': day_reels,
+                'stories': day_stories,
+            })
+            
+        # Recent Activities
+        recent_activities = []
+        
+        for u in User.objects.filter(u_date_filter).order_by('-date_joined')[:5]:
+            recent_activities.append({
+                'id': f"user_{u.id}",
+                'type': 'user',
+                'action': f"New user registered: @{u.username}",
+                'time': u.date_joined.isoformat(),
+                'timestamp': u.date_joined.timestamp()
+            })
+            
+        for p in Post.objects.select_related('author').filter(c_date_filter).order_by('-created_at')[:5]:
+            recent_activities.append({
+                'id': f"post_{p.id}",
+                'type': 'post',
+                'action': f"New post published by @{p.author.username}",
+                'time': p.created_at.isoformat(),
+                'timestamp': p.created_at.timestamp()
+            })
+            
+        for r in Reel.objects.select_related('author').filter(c_date_filter).order_by('-created_at')[:5]:
+            recent_activities.append({
+                'id': f"reel_{r.id}",
+                'type': 'reel',
+                'action': f"New reel shared by @{r.author.username}",
+                'time': r.created_at.isoformat(),
+                'timestamp': r.created_at.timestamp()
+            })
+            
+        for s in Story.objects.select_related('author').filter(c_date_filter).order_by('-created_at')[:5]:
+            recent_activities.append({
+                'id': f"story_{s.id}",
+                'type': 'story',
+                'action': f"New story added by @{s.author.username}",
+                'time': s.created_at.isoformat(),
+                'timestamp': s.created_at.timestamp()
+            })
+            
+        recent_activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        recent_activities = recent_activities[:10]
+        
         stats = {
-            'users': User.objects.count(),
-            'posts': Post.objects.count(),
-            'twists': Twist.objects.count(),
-            'reels': Reel.objects.count(),
-            'comments': Comment.objects.count(),
+            'users': User.objects.filter(u_date_filter).count(),
+            'posts': Post.objects.filter(c_date_filter).count(),
+            'twists': Twist.objects.filter(c_date_filter).count(),
+            'reels': Reel.objects.filter(c_date_filter).count(),
+            'stories': Story.objects.filter(c_date_filter).count(),
+            'comments': Comment.objects.filter(c_date_filter).count(),
             'hashtags': Hashtag.objects.count(),
             'total_revenue': float(total_revenue),
             'total_fees': float(total_fees),
             'pending_withdrawals_total': float(pending_withdrawal_sum),
             'pending_withdrawals_count': pending_withdrawal_count,
+            'chart_data': chart_data,
+            'recent_activities': recent_activities,
+            'filtered_from': from_date.isoformat(),
+            'filtered_to': to_date.isoformat(),
         }
         return Response(stats)
 

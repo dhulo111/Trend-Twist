@@ -103,3 +103,37 @@ export const getStoryArchive = async () => {
     throw error;
   }
 };
+
+/**
+ * --- Live Streaming Endpoints ---
+ */
+
+export const startLiveStream = async (data) => {
+  try {
+    const response = await axiosInstance.post("/live/start/", data);
+    return response.data;
+  } catch (error) {
+    console.error("Error starting live stream:", error);
+    throw error;
+  }
+};
+
+export const endLiveStream = async () => {
+  try {
+    const response = await axiosInstance.post("/live/end/");
+    return response.data;
+  } catch (error) {
+    console.error("Error ending live stream:", error);
+    throw error;
+  }
+};
+
+export const joinLiveStream = async (streamId) => {
+  try {
+    const response = await axiosInstance.post(`/live/join/${streamId}/`);
+    return response.data;
+  } catch (error) {
+    console.error("Error joining live stream:", error);
+    throw error;
+  }
+};

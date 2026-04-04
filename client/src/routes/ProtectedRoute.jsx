@@ -24,7 +24,7 @@ const ProtectedRoute = ({ children }) => {
   if (!user) {
     // We save the 'location' they were trying to go to.
     // This allows us to redirect them back after they log in.
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/welcome" state={{ from: location }} replace />;
   }
 
   // 3. If user is logged in, render the page they requested

@@ -59,8 +59,8 @@ const AdminLogin = () => {
         className="w-full max-w-md p-8 relative z-10"
       >
         <div className="text-center mb-10 pb-6 border-b border-gray-800">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-blue-500 mb-6 shadow-lg shadow-purple-500/30">
-            <ShieldCheck size={32} className="text-white" />
+          <div className="inline-flex items-center justify-center mb-6">
+            <img src="/logo1.png" alt="TrendTwist Admin Logo" className="w-24 h-24 object-contain drop-shadow-2xl rounded-3xl" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">Admin Portal</h1>
           <p className="text-gray-400">Secure access to Trend Twist management</p>

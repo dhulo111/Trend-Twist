@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   --color-bg-primary: hsl(var(--bg-primary));
@@ -34,7 +35,7 @@
     --glass-border: rgba(255, 255, 255, 0.5);
   }
 
-  [data-theme="dark"] {
+  .dark {
     /* Premium Dark Mode (Deep Blue/Purple hints) */
     --bg-primary: 230 25% 10%; /* Deep dark blue */
     --bg-secondary: 230 20% 14%;
