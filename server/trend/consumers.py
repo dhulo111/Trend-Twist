@@ -427,7 +427,7 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
             data = json.loads(text_data)
         except: return
         msg_type = data.get('type')
-        if msg_type in ['offer', 'answer', 'candidate', 'request_offer']:
+        if msg_type in ['offer', 'answer', 'candidate']:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
