@@ -129,30 +129,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return None, None
 
     async def disconnect(self, close_code):
-        # Leave room group — wrap DB/channel ops in timeout to prevent Daphne kill warnings
         if hasattr(self, 'room_group_name'):
-            try:
-                await asyncio.wait_for(self._safe_disconnect(), timeout=3.0)
-            except (asyncio.TimeoutError, Exception):
-                pass  # Don't let a slow DB kill the shutdown
-
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
-            )
-
-    async def _safe_disconnect(self):
-        """Database and broadcast operations during disconnect, with timeout protection."""
-        await self.update_user_status(False)
-        if hasattr(self, 'user_id_param') and self.user_id_param:
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'user_status',
-                    'username': self.current_user.username,
-                    'is_online': False,
-                    'last_seen': timezone.now().isoformat()
-                }
             )
 
     # --- 2. Receive Message from WebSocket ---
@@ -391,7 +371,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         self.group_name = f"user_{self.user.id}"
 
-        # Join user group
         await self.channel_layer.group_add(
             self.group_name,
             self.channel_name
@@ -399,108 +378,54 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Mark user as online — fire and forget, but track the task
-        self._status_task = asyncio.ensure_future(self._safe_status_update(True))
+        # Mark user as online — fire and forget (non-blocking)
+        asyncio.ensure_future(self._mark_online())
 
     async def disconnect(self, close_code):
-        # Cancel any in-flight connect status task
-        task = getattr(self, '_status_task', None)
-        if task and not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
-
-        # All disconnect work under a strict timeout so Daphne never kills us
-        try:
-            await asyncio.wait_for(self._safe_status_update(False), timeout=3.0)
-        except (asyncio.TimeoutError, Exception):
-            pass  # Supabase slow? Skip it — don't block shutdown.
-
-        # Leave user group
+        # ONLY do group_discard. No DB calls, no broadcasts.
+        # DB calls during disconnect are what cause Daphne's "took too long" kills.
         if hasattr(self, 'group_name'):
-            try:
-                await self.channel_layer.group_discard(
-                    self.group_name,
-                    self.channel_name
-                )
-            except Exception:
-                pass
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
 
-    async def _safe_status_update(self, is_online):
-        """Update DB status and broadcast to chat rooms, with error handling."""
+    async def _mark_online(self):
+        """Fire-and-forget task to mark user online after connect."""
         try:
-            await self.update_user_status(is_online)
+            await self.update_user_status(True)
         except Exception:
-            return  # DB down? Don't crash.
-        try:
-            await self.broadcast_status(is_online)
-        except Exception:
-            pass  # Channel layer issue? Don't crash.
+            pass
 
-    # Receive message from group
+    # --- Channel layer message handlers ---
+
     async def notification_message(self, event):
-        # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'type': event['type'], # 'notification'
-            'data': event['data']  # The serializer data
+            'type': event['type'],
+            'data': event['data']
         }))
         
     async def chat_alert(self, event):
-        # Broadcast chat alert (Toast)
         await self.send(text_data=json.dumps({
             'type': 'chat_alert',
             'data': event['data']
         }))
 
+    async def global_user_status_change(self, event):
+        """Forward status change if received via channel layer."""
+        await self.send(text_data=json.dumps({
+            'type': 'user_status',
+            'username': event['username'],
+            'is_online': event['is_online'],
+            'last_seen': event['last_seen']
+        }))
+
     @database_sync_to_async
     def update_user_status(self, is_online):
         from django.db import close_old_connections
-        close_old_connections()  # Prevent stale connections from blocking
+        close_old_connections()
         profile, _ = Profile.objects.get_or_create(user=self.user)
         profile.is_online = is_online
         profile.last_seen = timezone.now()
         profile.save()
-
-    async def broadcast_status(self, is_online):
-        """
-        Broadcasts the user's new status to any active chat rooms where this user is a participant.
-        """
-        try:
-            active_chat_groups = await self.get_user_active_chat_groups()
-        except Exception:
-            return
-        
-        tasks = []
-        for group in active_chat_groups:
-             tasks.append(
-                 self.channel_layer.group_send(
-                    group,
-                    {
-                        'type': 'global_user_status_change',
-                        'user_id': self.user.id,
-                        'username': self.user.username,
-                        'is_online': is_online,
-                        'last_seen': timezone.now().isoformat()
-                    }
-                )
-            )
-        
-        if tasks:
-            # Also timeout the broadcast itself
-            try:
-                await asyncio.wait_for(asyncio.gather(*tasks), timeout=2.0)
-            except (asyncio.TimeoutError, Exception):
-                pass
-
-    @database_sync_to_async
-    def get_user_active_chat_groups(self):
-        from django.db import close_old_connections
-        close_old_connections()  # Prevent stale connections from blocking
-        rooms_data = ChatRoom.objects.filter(Q(user1=self.user) | Q(user2=self.user)).values_list('user1_id', 'user2_id')
-        groups = []
-        for user1_id, user2_id in rooms_data:
-             user_ids = sorted([str(user1_id), str(user2_id)])
-             groups.append(f'chat_{user_ids[0]}_{user_ids[1]}')
-        return groups
+
