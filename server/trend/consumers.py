@@ -1,13 +1,15 @@
-# backend/api/consumers.py (NEW FILE)
+# backend/api/consumers.py
 
 import json
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.utils import timezone
 from .models import ChatRoom, ChatMessage, Profile, ChatGroup
 from channels.db import database_sync_to_async
+from .middleware import get_user_from_scope
 
 class ChatConsumer(AsyncWebsocketConsumer):
     # --- 1. Connection Handlers ---
@@ -15,7 +17,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user_id_param = self.scope['url_route']['kwargs'].get('user_id')
         self.group_id_param = self.scope['url_route']['kwargs'].get('group_id')
-        self.current_user = self.scope['user']
+
+        # Upgrade from LazyTokenUser to real DB User (one DB call, only on connect)
+        self.current_user = await get_user_from_scope(self.scope)
 
         if not self.current_user.is_authenticated:
             await self.close()
@@ -364,7 +368,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.user = self.scope["user"]
+        # Upgrade from LazyTokenUser to real DB User (one DB call, only on connect)
+        self.user = await get_user_from_scope(self.scope)
+
         if not self.user.is_authenticated:
             await self.close()
             return
@@ -378,7 +384,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Mark user as online — fire and forget (non-blocking)
+        # Mark user as online — fire and forget (non-blocking, never blocks shutdown)
         asyncio.ensure_future(self._mark_online())
 
     async def disconnect(self, close_code):

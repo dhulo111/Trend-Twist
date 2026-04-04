@@ -7,6 +7,7 @@ import asyncio
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from .middleware import get_user_from_scope
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,8 @@ _queue_lock = asyncio.Lock()
 def get_user_gender(user):
     """Fetch the gender from the user's profile (database)."""
     try:
+        from django.db import close_old_connections
+        close_old_connections()
         return user.profile.gender or None
     except Exception:
         return None
@@ -32,19 +35,11 @@ def get_user_gender(user):
 class StrangerConsumer(AsyncWebsocketConsumer):
     """
     Handles random video-chat pairing (Omegle-style) over WebRTC.
-    
-    Gender filtering:
-      - Client sends `preferred_gender` via query param or in a 'set_preference' message.
-      - When matching, the system checks:
-        1. If the searching user has a preferred_gender, only match with users whose
-           profile gender matches that preference.
-        2. The candidate must also accept the searcher (i.e., if the candidate has a
-           preferred_gender, the searcher's gender must match it).
-      - If no preference is set, the user is matched with anyone (random mode).
     """
 
     async def connect(self):
-        self.user = self.scope.get("user")
+        # Upgrade from LazyTokenUser to real DB User (needed for username, first_name, etc.)
+        self.user = await get_user_from_scope(self.scope)
         if not self.user or not self.user.is_authenticated:
             await self.close()
             return
