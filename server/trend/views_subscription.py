@@ -179,14 +179,20 @@ def activate_subscription_from_session(session):
     if isinstance(session, dict):
         meta = session.get('metadata') or {}
     else:
-        # Crucial: convert StripeObject to a real dict because metadata may not have .get()
-        meta = dict(getattr(session, 'metadata', {})) if getattr(session, 'metadata', None) else {}
+        # Use getattr and then try .get directly on the Stripe metadata object
+        # which usually implements .get() even if dict() fails on it.
+        meta = getattr(session, 'metadata', None) or {}
     
-    subscriber_id_str = meta.get('subscriber_id')
-    creator_id_str = meta.get('creator_id')
-    plan_id_str = meta.get('plan_id')
-    tier = meta.get('tier')
-    plan_price_str = meta.get('plan_price', '0')
+    # Safe get helper for metadata (which could be a dict or StripeObject)
+    def safe_get(obj, key, default=None):
+        if hasattr(obj, 'get'): return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    subscriber_id_str = safe_get(meta, 'subscriber_id')
+    creator_id_str = safe_get(meta, 'creator_id')
+    plan_id_str = safe_get(meta, 'plan_id')
+    tier = safe_get(meta, 'tier')
+    plan_price_str = safe_get(meta, 'plan_price', '0')
 
     # Extremely thorough key check
     if not (subscriber_id_str and creator_id_str):
