@@ -1,14 +1,14 @@
 import os
+import django
 from django.core.asgi import get_asgi_application
 
-# 1. Set the settings module BEFORE importing anything else
+# Set settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trend_twist_api.settings')
 
-# 2. Initialize the Django ASGI application early to ensure the AppRegistry is populated
-# This must happen before importing routing, consumers, or middleware that use models.
+# Initialize Django ASGI early (required for models/auth in middleware)
 django_asgi_app = get_asgi_application()
 
-# 3. Now it's safe to import our custom consumers and middleware
+# Import routing AFTER django_asgi_app to ensure AppRegistry is ready
 from channels.routing import ProtocolTypeRouter, URLRouter
 from trend.middleware import JwtAuthMiddleware
 import trend.routing

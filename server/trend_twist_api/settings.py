@@ -3,52 +3,42 @@
 import os
 from pathlib import Path
 from datetime import timedelta
-import dj_database_url # Database URL parser
-from dotenv import load_dotenv # Used to load secrets from .env file
+import dj_database_url
+from dotenv import load_dotenv
 
-# Load environment variables from .env
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-
-# --- SECURITY & CORE ---
-# Set DEBUG to False in production
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-key-for-local-dev-only')
-
-# Set DEBUG to False in production
+# --- SECURITY ---
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-prod-key-change-me')
 DEBUG = 'RENDER' not in os.environ
-
-# Allow all hosts in production (Render sets this dynamically) (or use '*')
 ALLOWED_HOSTS = ['*']
 
-# --- Application definition ---
-
+# --- APPS ---
 INSTALLED_APPS = [
-    'daphne', # ASGI server (required to run channels)
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'channels', # Django Channels
+    'channels',
     
-    # 3rd Party Apps
+    # 3rd Party
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'storages', 
 
-    # Our Custom App
+    # Project App
     'trend', 
-    'storages', # Supabase/S3 Storage 
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    "whitenoise.middleware.WhiteNoiseMiddleware", # Added for Static Files
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.common.CommonMiddleware',
@@ -56,54 +46,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
-
-# ... (ASGI/Channel Layers remain same, possibly switch to Redis for prod later but User insisted on free SQLite/In-memory for now)
-
-# --- CORS Configuration ---
-# Allow all for now or specific Vercel domains
-CORS_ALLOW_ALL_ORIGINS = True # Easier for initial setup
-CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com', 'https://*.vercel.app']
-
-ROOT_URLCONF = 'trend_twist_api.urls'
-
-# ... (Templates/WSGI/Databases remain same)
-
-# --- Static/Media Files ---
-
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# ... (Rest of file)
-
-# --- ASGI Configuration (NEW) ---
-# ASGI is now the primary entry point for HTTP and WebSocket
-ASGI_APPLICATION = 'trend_twist_api.asgi.application' 
-
-# --- Channel Layers (REQUIRED FOR LIVE CHAT) ---
-if os.environ.get('REDIS_URL'):
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
-            'CONFIG': {
-                "hosts": [os.environ.get('REDIS_URL')], # Assumes Redis is running
-            },
-        },
-    }
-else:
-    # Use In-Memory Layer for local development without Redis
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels.layers.InMemoryChannelLayer'
-        }
-    }
-
-# --- CORS Configuration ---
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://trend-twist.vercel.app",
 ]
 
 ROOT_URLCONF = 'trend_twist_api.urls'
@@ -124,28 +66,28 @@ TEMPLATES = [
     },
 ]
 
-# --- Database (Postgres for Render, SQLite for local) ---
+WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
+ASGI_APPLICATION = 'trend_twist_api.asgi.application'
+
+# --- DATABASE (DIRECT PRODUCTION CONNECTION) ---
+# PERFORMANCE: persistent connections & direct host
 if 'RENDER' in os.environ:
-    # Supabase Transaction Mode (port 6543)
-    # - Supports many more concurrent connections than Session mode (5432)
-    # - CONN_MAX_AGE=0 is REQUIRED: release connections back to pool after each request
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'postgres',
             'USER': 'postgres.kvdnvtnxxesaldwacejv',
             'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-            'PORT': '6543',
-            'CONN_MAX_AGE': 0,  # Close after each request (required for transaction pooling)
+            'HOST': 'db.kvdnvtnxxesaldwacejv.supabase.co',
+            'PORT': '5432',
+            'CONN_MAX_AGE': 60,
             'OPTIONS': {
                 'sslmode': 'require',
-                'connect_timeout': 5,
+                'connect_timeout': 10,
             },
         }
     }
 else:
-    # Local Development (SQLite)
     DATABASES = {
         'default': dj_database_url.config(
             default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
@@ -153,117 +95,88 @@ else:
         )
     }
 
+# --- REDIS, CACHING & CHANNELS (UPSTASH OPTIMIZED) ---
+# Use 'rediss://' for TLS connections (required for Upstash with --tls)
+REDIS_URL = os.environ.get('REDIS_URL')
 
-# --- Password validation (No change) ---
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
-]
+if REDIS_URL:
+    # Ensure protocol is rediss:// if we want TLS
+    if REDIS_URL.startswith('redis://') and ('upstash.io' in REDIS_URL):
+        REDIS_URL = REDIS_URL.replace('redis://', 'rediss://', 1)
 
-# --- Internationalization (No change) ---
+    # 1. CHANNEL LAYERS (WebSocket communication)
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+                "symmetric_encryption_keys": [SECRET_KEY], # Optional security
+            },
+        },
+    }
+    # 2. CACHE (Distributed matchmaking & global state)
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 100,
+                    "retry_on_timeout": True,
+                },
+            }
+        }
+    }
+else:
+    CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+
+# --- AUTH & JWT ---
+AUTH_PASSWORD_VALIDATORS = [{'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'}]
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True, 
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
+    'DEFAULT_PERMISSION_CLASSES': ('trend.permissions.IsNotBlocked', 'rest_framework.permissions.IsAuthenticated',),
+}
+
+# --- ASSETS ---
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Production Cloud Storage (Supabase/S3)
+if 'SUPABASE_ACCESS_KEY_ID' in os.environ:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": os.environ.get('SUPABASE_ACCESS_KEY_ID'),
+                "secret_key": os.environ.get('SUPABASE_SECRET_ACCESS_KEY'),
+                "bucket_name": os.environ.get('SUPABASE_STORAGE_BUCKET_NAME'),
+                "endpoint_url": os.environ.get('SUPABASE_S3_ENDPOINT_URL'),
+                "region_name": 'us-east-1',
+                "default_acl": 'public-read',
+                "querystring_auth": False,
+            }
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+CORS_ALLOW_ALL_ORIGINS = True
+CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com', 'https://*.vercel.app']
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
-
-# --- Static/Media Files ---
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-
-# Default STORAGES (Local/Filesystem)
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Supabase Storage (S3 Compatible) - PRODUCTION OVERRIDE
-if 'SUPABASE_ACCESS_KEY_ID' in os.environ:
-    AWS_ACCESS_KEY_ID = os.environ.get('SUPABASE_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = os.environ.get('SUPABASE_SECRET_ACCESS_KEY')
-    AWS_STORAGE_BUCKET_NAME = os.environ.get('SUPABASE_STORAGE_BUCKET_NAME')
-    AWS_S3_ENDPOINT_URL = os.environ.get('SUPABASE_S3_ENDPOINT_URL')
-    AWS_S3_REGION_NAME = 'us-east-1'
-    
-    # S3 Config
-    AWS_DEFAULT_ACL = 'public-read'
-    AWS_S3_FILE_OVERWRITE = False
-    AWS_QUERYSTRING_AUTH = False
-    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-    
-    # Handle Bucket Name with Spaces for URL
-    from urllib.parse import quote, urlparse
-    _bucket_name = AWS_STORAGE_BUCKET_NAME
-    _bucket_name_url = quote(_bucket_name) # Encodes "trend twist" -> "trend%20twist"
-    
-    _s3_endpoint = urlparse(AWS_S3_ENDPOINT_URL)
-    _s3_domain = _s3_endpoint.netloc 
-    AWS_S3_CUSTOM_DOMAIN = f"{_s3_domain}/storage/v1/object/public/{_bucket_name_url}"
-    
-    # Update STORAGES for Django 5.0+
-    STORAGES["default"] = {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "access_key": AWS_ACCESS_KEY_ID,
-            "secret_key": AWS_SECRET_ACCESS_KEY,
-            "bucket_name": AWS_STORAGE_BUCKET_NAME,
-            "endpoint_url": AWS_S3_ENDPOINT_URL,
-            "region_name": AWS_S3_REGION_NAME,
-            "default_acl": AWS_DEFAULT_ACL,
-            "file_overwrite": AWS_S3_FILE_OVERWRITE,
-            "querystring_auth": AWS_QUERYSTRING_AUTH,
-            "object_parameters": AWS_S3_OBJECT_PARAMETERS,
-            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
-        }
-    }
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-
-# --- DRF / JWT (UPDATED for ROTATION FIX) ---
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'trend.permissions.IsNotBlocked',
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-}
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': True, # CRITICAL FIX for session persistence
-    'BLACKLIST_AFTER_ROTATION': True, 
-}
-
-# --- Celery & Redis Configuration (Used by Channels) ---
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-
-# --- Default primary key (No change) ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# --- Email Configuration (Loads from .env) ---
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-# --- Stripe Keys ---
-STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')

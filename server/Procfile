@@ -1,1 +1,4 @@
-web: daphne -b 0.0.0.0 -p $PORT --proxy-headers --application-close-timeout 3 trend_twist_api.asgi:application
+# High-performance Gunicorn + Uvicorn Production Runner
+# --worker-class: UvicornWorker to handle async ASGI (Django Channels)
+# --workers: Usually (2 x $CPU + 1). On Render free/starter, 2-3 is ideal.
+web: gunicorn trend_twist_api.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 120 --log-level info

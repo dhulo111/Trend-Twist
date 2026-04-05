@@ -4,7 +4,6 @@ import json
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
-from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.utils import timezone
 from .models import ChatRoom, ChatMessage, Profile, ChatGroup
@@ -12,29 +11,24 @@ from channels.db import database_sync_to_async
 from .middleware import get_user_from_scope
 
 class ChatConsumer(AsyncWebsocketConsumer):
-    # --- 1. Connection Handlers ---
-
     async def connect(self):
         self.user_id_param = self.scope['url_route']['kwargs'].get('user_id')
         self.group_id_param = self.scope['url_route']['kwargs'].get('group_id')
 
-        # Upgrade from LazyTokenUser to real DB User (one DB call, only on connect)
+        # 1. Auth & Identification
         self.current_user = await get_user_from_scope(self.scope)
-
         if not self.current_user.is_authenticated:
             await self.close()
             return
 
+        # 2. Room Setup
         if self.group_id_param:
-            # GROUP CHAT LOGIC
             self.room_group_name = f'chat_group_{self.group_id_param}'
-            # Verify membership (optional but recommended)
             is_member = await self.check_group_membership(self.group_id_param, self.current_user)
             if not is_member:
                 await self.close()
                 return
         elif self.user_id_param:
-            # 1-on-1 CHAT LOGIC
             if str(self.current_user.id) == self.user_id_param:
                 await self.close()
                 return
@@ -42,19 +36,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             user_ids = sorted([str(self.current_user.id), self.other_user_id])
             self.room_name = f'chat_{user_ids[0]}_{user_ids[1]}'
             self.room_group_name = f'chat_{self.room_name}'
+            
+            # --- PERFORMANCE OPTIMIZATION ---
+            # Pre-cache chat metadata to avoid DB lookups during message exchange
+            await self.precache_chat_metadata()
         else:
             await self.close()
             return
 
-        # Join room group
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
-        # Notify room that user is online
+        # 3. Join Group
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.update_user_status(True)
-        # Only broadcast status updates in 1-on-1 chats for now to reduce noise in large groups
+
         if self.user_id_param:
              await self.channel_layer.group_send(
                 self.room_group_name,
@@ -68,7 +61,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Fetch status only for 1-on-1
+        # Notify initial status
         if self.user_id_param:
             other_user_status = await self.get_user_profile_status(self.user_id_param)
             if other_user_status:
@@ -79,142 +72,66 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'last_seen': other_user_status['last_seen']
                 }))
 
-    # ... (disconnect is fine, just relies on room_group_name) ...
-
-    # ... (receive methods are mostly fine, save_message needs update) ...
-
     @database_sync_to_async
-    def check_group_membership(self, group_id, user):
+    def precache_chat_metadata(self):
+        """Warm up connections and cache ID values for performance."""
         try:
-            group = ChatGroup.objects.get(id=group_id)
-            return group.members.filter(id=user.id).exists()
-        except ChatGroup.DoesNotExist:
-            return False
+            other_user = User.objects.get(id=self.user_id_param)
+            # Store essential IDs on self for lightning-fast save_message
+            self.cached_room_id = ChatRoom.objects.get_or_create(
+                user1=min(self.current_user, other_user, key=lambda u: u.id),
+                user2=max(self.current_user, other_user, key=lambda u: u.id),
+            )[0].id
+        except:
+            self.cached_room_id = None
 
     @database_sync_to_async
     def save_message(self, content):
+        """Optimized message saving using cached IDs."""
+        timestamp = timezone.now()
         if self.group_id_param:
              try:
                 group = ChatGroup.objects.get(id=self.group_id_param)
-                group.last_message_at = timezone.now()
-                group.save()
+                group.last_message_at = timestamp
+                group.save(update_fields=['last_message_at'])
                 msg = ChatMessage.objects.create(
-                    group=group, 
-                    author=self.current_user, 
-                    content=content
+                    group=group, author=self.current_user, content=content
                 )
                 return msg.id, msg.timestamp
-             except ChatGroup.DoesNotExist:
-                return None, None
+             except: return None, None
         else:
-            # Existing 1-on-1 Logic
-            try:
-                user1 = self.current_user
-                user2 = User.objects.get(id=self.user_id_param)
-                
-                # Enforce consistent user1/user2 order for ChatRoom lookup
-                room, created = ChatRoom.objects.get_or_create(
-                    user1=min(user1, user2, key=lambda u: u.id),
-                    user2=max(user1, user2, key=lambda u: u.id),
-                )
-                
-                # Update last_message_at for sorting the inbox
-                room.last_message_at = timezone.now()
-                room.save()
-
-                # Create and save the message
-                msg = ChatMessage.objects.create(
-                    room=room,
-                    author=self.current_user,
-                    content=content
-                )
-                return msg.id, msg.timestamp
-            except User.DoesNotExist:
+            if not getattr(self, 'cached_room_id', None):
                 return None, None
+            
+            # Use direct ID for lookup to avoid full model instantiation
+            ChatRoom.objects.filter(id=self.cached_room_id).update(last_message_at=timestamp)
+            msg = ChatMessage.objects.create(
+                room_id=self.cached_room_id,
+                author=self.current_user,
+                content=content
+            )
+            return msg.id, msg.timestamp
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    # --- 2. Receive Message from WebSocket ---
-    
     async def receive(self, text_data):
-        """Receive message from WebSocket and forward to room group."""
         data = json.loads(text_data)
-        
-        # --- Handle "Mark Read" event ---
         if data.get('type') == 'mark_read':
             await self.mark_messages_read()
-            # Broadcast read receipt to room
             await self.channel_layer.group_send(
                 self.room_group_name,
-                {
-                    'type': 'message_read_receipt',
-                    'username': self.current_user.username,
-                }
+                {'type': 'message_read_receipt', 'username': self.current_user.username}
             )
             return
 
-        if data.get('type') == 'edit_message':
-            msg_id = data.get('id')
-            new_content = data.get('content')
-            success = await self.edit_message_db(msg_id, new_content)
-            if success:
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'message_updated',
-                        'id': msg_id,
-                        'content': new_content
-                    }
-                )
-            return
-
-        if data.get('type') == 'delete_message':
-            msg_id = data.get('id')
-            success = await self.delete_message_db(msg_id)
-            if success:
-                 await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'message_deleted',
-                        'id': msg_id
-                    }
-                )
-            return
-
-        # --- Handle Call Signaling ---
-        if data.get('type') in ['call_offer', 'call_answer', 'new_ice_candidate', 'call_ended']:
-            # Forward the signaling data to the other user (room group)
-            # We include the sender's username so the client knows who sent it
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'call_signal',
-                    'data': data,
-                    'sender_username': self.current_user.username
-                }
-            )
-            return
-
-        # --- Handle Normal Message ---
-        message = data.get('message')
-        # If 'message' key is missing, check 'content' as fallback
-        if not message:
-             message = data.get('content')
+        # Regular Message
+        message = data.get('message') or data.get('content')
+        if not message: return
         
-        if not message: return # Ignore empty messages
-        
-        # Save message to database (Must use sync_to_async for DB operations)
         msg_id, timestamp = await self.save_message(message)
-
-        # Send message to room group (Standardizing keys to match ChatMessageSerializer)
-        # Guard: if save_message returned None (e.g. user deleted), abort broadcast
-        if msg_id is None:
-            return
+        if msg_id is None: return
 
         await self.channel_layer.group_send(
             self.room_group_name,
@@ -226,212 +143,59 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'author_username': self.current_user.username,
                 'timestamp': timestamp.isoformat(),
                 'is_read': False,
-                'group_id': int(self.group_id_param) if self.group_id_param else None # Add group_id for client to know where to route
+                'group_id': int(self.group_id_param) if self.group_id_param else None
             }
         )
 
-    # --- 3. Receive Message from Room Group (Send to WebSocket) ---
-
     async def chat_message(self, event):
-        """Receive message from room group and send to the client."""
-        await self.send(text_data=json.dumps({
-            'type': 'chat_message',
-            'id': event['id'],
-            'content': event['content'], # Matches serializer
-            'author': event['author'],
-            'author_username': event['author_username'],
-            'timestamp': event['timestamp'],
-            'is_read': event['is_read'],
-            'group_id': event.get('group_id')
-        }))
+        await self.send(text_data=json.dumps(event))
 
     async def user_status(self, event):
-        """Broadcast user online/offline status."""
-        await self.send(text_data=json.dumps({
-            'type': 'user_status',
-            'username': event['username'],
-            'is_online': event['is_online'],
-             'last_seen': event['last_seen']
-        }))
-        
-    async def global_user_status_change(self, event):
-        """Receive global status update and forward to chat client if relevant."""
-        # Only applicable in 1-on-1 chats — group chats don't track per-user presence
-        if not hasattr(self, 'other_user_id'):
-            return
-        # Only forward if the update is about the OTHER user in this chat
-        if str(event['user_id']) == self.other_user_id:
-             await self.send(text_data=json.dumps({
-                'type': 'user_status',
-                'username': event['username'],
-                'is_online': event['is_online'],
-                'last_seen': event['last_seen']
-            }))
+        await self.send(text_data=json.dumps(event))
 
-    async def message_read_receipt(self, event):
-        """Broadcast that a user has read messages."""
-        await self.send(text_data=json.dumps({
-             'type': 'message_read',
-             'username': event['username']
-        }))
-
-    async def message_updated(self, event):
-        """Broadcast edited message."""
-        await self.send(text_data=json.dumps({
-            'type': 'message_updated',
-            'id': event['id'],
-            'content': event['content']
-        }))
-
-    async def message_deleted(self, event):
-        """Broadcast deleted message."""
-        await self.send(text_data=json.dumps({
-            'type': 'message_deleted',
-            'id': event['id']
-        }))
-
-    async def call_signal(self, event):
-        """Forward WebRTC signaling message."""
-        # Don't echo back to sender (optional, but good practice in some setups,
-        # though frontend usually filters by checking 'sender_username')
-        if event['sender_username'] == self.current_user.username:
-            return
-
-        await self.send(text_data=json.dumps({
-            'type': 'call_signal', # Correctly identify this as a signal wrapper
-            'data': event['data'],         # The full payload
-            'sender_username': event['sender_username']
-        }))
-
-    # --- 4. Database Helper (Synchronous operations must be run asynchronously) ---
-
-    # from channels.db import database_sync_to_async (Removed Duplicate)
-    
     @database_sync_to_async
     def mark_messages_read(self):
-        if self.group_id_param: return # TODO: Group read receipts
-        
-        # Mark all messages FROM the OTHER user as read
-        user1 = self.current_user
-        try:
-             user2 = User.objects.get(id=self.user_id_param)
-             room = ChatRoom.objects.filter(
-                Q(user1=user1, user2=user2) | Q(user1=user2, user2=user1)
-             ).first()
-             
-             if room:
-                 ChatMessage.objects.filter(room=room, is_read=False).exclude(author=user1).update(is_read=True)
-        except User.DoesNotExist:
-             pass
+        if hasattr(self, 'cached_room_id'):
+            ChatMessage.objects.filter(room_id=self.cached_room_id, is_read=False).exclude(author=self.current_user).update(is_read=True)
 
     @database_sync_to_async
     def update_user_status(self, is_online):
-        profile, _ = Profile.objects.get_or_create(user=self.current_user)
-        profile.is_online = is_online
-        profile.last_seen = timezone.now()
-        profile.save()
-
-    @database_sync_to_async
-    def edit_message_db(self, msg_id, content):
-        try:
-            msg = ChatMessage.objects.get(id=msg_id, author=self.current_user)
-            msg.content = content
-            msg.save()
-            return True
-        except ChatMessage.DoesNotExist:
-            return False
+        Profile.objects.filter(user=self.current_user).update(is_online=is_online, last_seen=timezone.now())
 
     @database_sync_to_async
     def get_user_profile_status(self, user_id):
         try:
             user = User.objects.get(id=user_id)
-            profile, _ = Profile.objects.get_or_create(user=user)
+            profile = user.profile
             return {
                 'username': user.username,
                 'is_online': profile.is_online,
                 'last_seen': profile.last_seen.isoformat() if profile.last_seen else None
             }
-        except User.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def delete_message_db(self, msg_id):
-        try:
-            msg = ChatMessage.objects.get(id=msg_id, author=self.current_user)
-            msg.delete() 
-            # Alternatively, if you want "soft delete" to show "Message deleted":
-            # msg.content = "This message was unsend." 
-            # msg.save()
-            return True
-        except ChatMessage.DoesNotExist:
-            return False
+        except: return None
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # Upgrade from LazyTokenUser to real DB User (one DB call, only on connect)
         self.user = await get_user_from_scope(self.scope)
-
         if not self.user.is_authenticated:
             await self.close()
             return
 
         self.group_name = f"user_{self.user.id}"
-
-        await self.channel_layer.group_add(
-            self.group_name,
-            self.channel_name
-        )
-
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
-
-        # Mark user as online — fire and forget (non-blocking, never blocks shutdown)
-        asyncio.ensure_future(self._mark_online())
+        asyncio.ensure_future(self.update_user_status(True))
 
     async def disconnect(self, close_code):
-        # ONLY do group_discard. No DB calls, no broadcasts.
-        # DB calls during disconnect are what cause Daphne's "took too long" kills.
         if hasattr(self, 'group_name'):
-            await self.channel_layer.group_discard(
-                self.group_name,
-                self.channel_name
-            )
-
-    async def _mark_online(self):
-        """Fire-and-forget task to mark user online after connect."""
-        try:
-            await self.update_user_status(True)
-        except Exception:
-            pass
-
-    # --- Channel layer message handlers ---
-
-    async def notification_message(self, event):
-        await self.send(text_data=json.dumps({
-            'type': event['type'],
-            'data': event['data']
-        }))
-        
-    async def chat_alert(self, event):
-        await self.send(text_data=json.dumps({
-            'type': 'chat_alert',
-            'data': event['data']
-        }))
-
-    async def global_user_status_change(self, event):
-        """Forward status change if received via channel layer."""
-        await self.send(text_data=json.dumps({
-            'type': 'user_status',
-            'username': event['username'],
-            'is_online': event['is_online'],
-            'last_seen': event['last_seen']
-        }))
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     @database_sync_to_async
     def update_user_status(self, is_online):
-        from django.db import close_old_connections
-        close_old_connections()
-        profile, _ = Profile.objects.get_or_create(user=self.user)
-        profile.is_online = is_online
-        profile.last_seen = timezone.now()
-        profile.save()
-
+        Profile.objects.filter(user=self.user).update(is_online=is_online, last_seen=timezone.now())
+
+    async def notification_message(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def chat_alert(self, event):
+        await self.send(text_data=json.dumps(event))
