@@ -5,7 +5,6 @@ import asyncio
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
-from django.db.models import Q
 from django.utils import timezone
 from .models import ChatRoom, ChatMessage, Profile, ChatGroup
 from channels.db import database_sync_to_async
@@ -16,18 +15,17 @@ logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        """Standard high-performance WebSocket connection for DM and Group chats."""
+        """Unified Real-time Hub for DMs, Groups, and WebRTC Signaling."""
         self.user_id_param = self.scope['url_route']['kwargs'].get('user_id')
         self.group_id_param = self.scope['url_route']['kwargs'].get('group_id')
 
         # 1. Auth & Identification
         self.current_user = await get_user_from_scope(self.scope)
         if not self.current_user or not self.current_user.is_authenticated:
-            logger.warning("Connection rejected: Unauthorized User")
             await self.close()
             return
 
-        # 2. Deterministic Room Naming
+        # 2. Room logic
         if self.group_id_param:
             self.room_group_name = f'chat_group_{self.group_id_param}'
             is_member = await self._ensure_db(self.check_group_membership, self.group_id_param, self.current_user)
@@ -39,24 +37,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 await self.close()
                 return
             self.other_user_id = str(self.user_id_param)
-            # Both clients (A and B) will generate the EXACT SAME room name
             uids = sorted([int(self.current_user.id), int(self.other_user_id)])
             self.room_group_name = f'chat_{uids[0]}_{uids[1]}'
-            
-            # Optimization: Pre-fetch or create room ID lazily
             await self._ensure_db(self.precache_chat_metadata)
         else:
             await self.close()
             return
 
-        # 3. Connection lifecycle
+        # 3. Lifecycle
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
         
-        # Fire-and-forget online status
         asyncio.create_task(self._ensure_db(self.update_user_status, True))
 
-        # Broadcast online status to partner
+        # Online Status Broadcast
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -66,28 +60,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'last_seen': timezone.now().isoformat()
             }
         )
-        logger.info(f"Connected: {self.current_user.username} joined {self.room_group_name}")
+        logger.info(f"Chat Linked: {self.current_user.username} -> {self.room_group_name}")
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-            # Fire-and-forget offline status
             asyncio.create_task(self._ensure_db(self.update_user_status, False))
-            logger.info(f"Disconnected: {getattr(self, 'current_user', 'Unknown')} left {self.room_group_name}")
+            logger.info(f"Chat Unlinked: {getattr(self.current_user, 'username', 'Unknown')}")
 
     async def receive(self, text_data):
-        """Unified entry point for both Chat (Text) and RTC (Voice/Video) signaling."""
+        """Processes Chat, Signals, and Inter-Consumer Alerts."""
         try:
             data = json.loads(text_data)
         except: return
 
         msg_type = data.get('type')
 
-        # 1. RTC SIGNALING (Voice & Video Calls)
-        # ------------------------------------
-        # For direct 1-to-1 calls, just forward the payload to the other user in the room.
+        # --- WEBRTC CALLING LOGIC ---
         if msg_type in ('offer', 'answer', 'ice_candidate', 'call_request', 'call_response', 'hangup'):
-            logger.info(f"RTC Signal ({msg_type}) from {self.current_user.username} in {self.room_group_name}")
+            # 1. Forward signal to everyone currently in the chat room
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -96,56 +87,63 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'payload': data
                 }
             )
+
+            # 2. TRIGGER EXTERNAL ALERT (For the Receiver who might not have the chat open)
+            # This is why the receiver wasn't "seeing" anything — they weren't in the room!
+            if msg_type == 'call_request':
+                # Target the partner's private group to trigger the ringtone/popup
+                if hasattr(self, 'other_user_id'):
+                    target_group = f"user_{self.other_user_id}"
+                    logger.info(f"Sending Global Call Alert from {self.current_user.username} to {target_group}")
+                    await self.channel_layer.group_send(
+                        target_group,
+                        {
+                            'type': 'chat_alert',
+                            'alert_type': 'incoming_call',
+                            'caller_id': self.current_user.id,
+                            'caller_username': self.current_user.username,
+                            'call_type': data.get('call_type', 'video'), # 'voice' or 'video'
+                            'room_id': self.room_group_name
+                        }
+                    )
             return
 
-        # 2. CHAT LOGIC (Text & Read Receipts)
-        # ------------------------------------
+        # --- TEXT CHAT & STATUS ---
         if msg_type == 'mark_read':
             await self._ensure_db(self.mark_messages_read)
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {'type': 'message_read_receipt', 'username': self.current_user.username}
-            )
+            await self.channel_layer.group_send(self.room_group_name, {'type': 'message_read_receipt', 'username': self.current_user.username})
             return
 
-        # Standard Direct Message
         content = data.get('message') or data.get('content')
         if not content: return
         
-        # Immediate persistence with wrapper to ensure live DB connection
         msg_id, ts = await self._ensure_db(self.save_message, content)
         if not msg_id: return
 
-        # Broadcast the new message to everyone in the room (including self)
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'id': msg_id,
-                'content': content,
-                'author': self.current_user.id,
-                'author_username': self.current_user.username,
-                'timestamp': ts.isoformat(),
-                'is_read': False,
+                'id': msg_id, 'content': content,
+                'author': self.current_user.id, 'author_username': self.current_user.username,
+                'timestamp': ts.isoformat(), 'is_read': False,
                 'group_id': int(self.group_id_param) if self.group_id_param else None
             }
         )
 
-    # --- Group Protocol Handlers ---
-
+    # --- Protocol Handlers ---
     async def chat_message(self, event): await self.send(text_data=json.dumps(event))
     async def user_status(self, event): await self.send(text_data=json.dumps(event))
     async def message_read_receipt(self, event): await self.send(text_data=json.dumps({'type': 'message_read', 'username': event['username']}))
     
     async def rtc_signal(self, event):
-        # Crucial for WebRTC: Avoid echoing own signaling messages back to self
+        # Don't echo signaling back to self
         if event['sender_id'] != self.current_user.id:
+            logger.debug(f"Relaying RTC signal to {self.current_user.username}")
             await self.send(text_data=json.dumps(event['payload']))
 
-    # --- Persistence Logic (Thread-safe & Resilient) ---
-
+    # --- Persistence & Utilities ---
     async def _ensure_db(self, func, *args):
-        """Wrapper to call DB functions with fresh connections to avoid Neon/cloud timeouts."""
         @database_sync_to_async
         def wrapper():
             close_old_connections()
@@ -185,6 +183,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        """Global Alert Center for Incoming Calls, Likes, and Mentions."""
         self.user = await get_user_from_scope(self.scope)
         if not self.user.is_authenticated:
             await self.close()
@@ -209,4 +208,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         Profile.objects.filter(user=self.user).update(is_online=online, last_seen=timezone.now())
 
     async def notification_message(self, event): await self.send(text_data=json.dumps(event))
-    async def chat_alert(self, event): await self.send(text_data=json.dumps(event))
+    
+    async def chat_alert(self, event): 
+        # Crucial for Voice/Video: Relays the incoming call popup globally
+        logger.info(f"Relaying Global Alert to {self.user.username}: {event.get('alert_type')}")
+        await self.send(text_data=json.dumps(event))
