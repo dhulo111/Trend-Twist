@@ -17,21 +17,23 @@ const MessagesPage = () => {
   const [targetGroupId, setTargetGroupId] = useState(null); // To auto-select group in Inbox
   const navigate = useNavigate();
 
-  // Check for navigation state (from Profile Page or Toast)
+  const [incomingCall, setIncomingCall] = useState(null);
+
+  // Check for navigation state (from Profile Page, Toast, or Global Call)
   useEffect(() => {
     const handleNavigation = async () => {
       if (location.state?.startChatUser) {
+        setIncomingCall(null);
         const targetUser = location.state.startChatUser;
         setActiveUser(targetUser);
         setActiveRoom({ id: 'temp_' + targetUser.id });
         setIsGroupChat(false);
-        // Clear state to prevent re-trigger on refresh/navigation back
         navigate({ ...location, state: {} }, { replace: true });
       } else if (location.state?.openUser) {
-        // From Toast: Username
+        setIncomingCall(location.state.incomingCall || null);
         try {
           const username = location.state.openUser;
-          const userProfile = await getUserProfile(username); // Fetch full user object
+          const userProfile = await getUserProfile(username);
           setActiveUser(userProfile);
           setActiveRoom({ id: 'temp_' + userProfile.id });
           setIsGroupChat(false);
@@ -40,9 +42,9 @@ const MessagesPage = () => {
           console.error("Failed to open chat with user:", e);
         }
       } else if (location.state?.openGroup) {
-        // From Toast: Group ID
+        setIncomingCall(null);
         setTargetGroupId(location.state.openGroup);
-        setIsGroupChat(true); // Hint
+        setIsGroupChat(true);
         navigate({ ...location, state: {} }, { replace: true });
       }
     };
@@ -80,6 +82,7 @@ const MessagesPage = () => {
             otherUser={activeUser}
             activeChat={activeRoom}
             isGroup={isGroupChat}
+            incomingCallDataFromState={incomingCall} // Pass the incoming call data!
             onBack={() => { setActiveRoom(null); setActiveUser(null); setIsGroupChat(false); }}
             onMessageUpdate={handleMessageSent}
           />

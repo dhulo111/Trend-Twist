@@ -1,10 +1,11 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import api from '../api/axiosInstance';
 import Toast from '../components/common/Toast';
 import { AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import config from '../config';
+import CallInterface from '../components/features/chat/CallInterface';
 
 export const SocketContext = createContext();
 
@@ -16,6 +17,13 @@ export const SocketProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
   const navigate = useNavigate();
 
+  // --- Global Calling State ---
+  const [callStatus, setCallStatus] = useState('idle');
+  const [callType, setCallType] = useState('video');
+  const [otherUser, setOtherUser] = useState(null);
+  const [incomingCallData, setIncomingCallData] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+
   // Connect to WebSocket
   useEffect(() => {
     if (!user || !authToken?.access) return;
@@ -25,7 +33,7 @@ export const SocketProvider = ({ children }) => {
     let newSocket;
 
     const connect = () => {
-      if (!isMounted) return; // Prevent connecting after cleanup
+      if (!isMounted) return;
 
       let wsProtocol = 'ws:';
       let wsHost = '127.0.0.1:8000';
@@ -45,12 +53,14 @@ export const SocketProvider = ({ children }) => {
       newSocket = new WebSocket(wsUrl);
 
       newSocket.onopen = () => {
-        console.log('[SocketContext] Notification Socket Connected');
+        console.log('[SocketContext] Global Feed Active');
       };
 
       newSocket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          
+          // 1. Regular Notifications
           if (message.type === 'notification_message') {
             const notifData = message.data;
             if (notifData.action === 'deleted') {
@@ -64,23 +74,40 @@ export const SocketProvider = ({ children }) => {
                 return [notifData, ...prev];
               });
             }
-          } else if (message.type === 'chat_alert') {
+          } 
+          // 2. Chat Toasts
+          else if (message.type === 'chat_alert') {
             setToasts(prev => [...prev, { id: Date.now(), ...message.data }]);
           }
+          // 3. GLOBAL CALLING SIGNAL (CRITICAL FIX)
+          else if (message.type === 'call_signal') {
+            console.log('[Socket] Incoming broadcast call signal:', message.data.type);
+            const data = message.data;
+            if (data.type === 'call_offer') {
+              // Trigger ringing screen globally
+              setIncomingCallData(data);
+              setCallType(data.callType);
+              setOtherUser({
+                id: message.caller_id,
+                username: message.caller_username
+              });
+              setCallStatus('incoming');
+            } else if (data.type === 'call_ended') {
+              setCallStatus('idle');
+              setIncomingCallData(null);
+              if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                setLocalStream(null);
+              }
+            }
+          }
         } catch (e) {
-          console.error('[SocketContext] Message parse error:', e);
+          console.error('[SocketContext] Relay error:', e);
         }
       };
 
-      newSocket.onerror = (e) => {
-        console.warn('[SocketContext] WebSocket error:', e);
-        // onclose will fire automatically after onerror — reconnect handled there
-      };
-
       newSocket.onclose = (e) => {
-        // code 1000 = normal closure (intentional), don't reconnect
         if (!isMounted || e.code === 1000) return;
-        console.log(`[SocketContext] Socket closed (code: ${e.code}), reconnecting in 3s...`);
         reconnectTimeout = setTimeout(connect, 3000);
       };
 
@@ -93,10 +120,7 @@ export const SocketProvider = ({ children }) => {
     return () => {
       isMounted = false;
       clearTimeout(reconnectTimeout);
-      if (newSocket && newSocket.readyState !== WebSocket.CLOSED) {
-        newSocket.onclose = null; // disable handler before intentional close
-        newSocket.close(1000, 'Component unmounted');
-      }
+      if (newSocket) newSocket.close(1000);
       setSocket(null);
     };
   }, [user, authToken]);
@@ -105,67 +129,55 @@ export const SocketProvider = ({ children }) => {
     try {
       const res = await api.get('/notifications/');
       setNotifications(res.data);
-      const unread = res.data.filter(n => !n.is_read).length;
-      setUnreadCount(unread);
-    } catch (e) { console.error("Failed to fetch notifications", e); }
+      setUnreadCount(res.data.filter(n => !n.is_read).length);
+    } catch (e) { console.error("Notif fetch failure", e); }
   };
 
-  const updateNotification = (id, updates) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
-    if (updates.is_read) setUnreadCount(prev => Math.max(0, prev - 1));
+  const onAcceptCall = async () => {
+    // Navigate to the chat page so ChatWindow can take over the WebRTC handshake
+    setCallStatus('idle'); // Hand over to ChatWindow
+    navigate('/messages', { state: { 
+      openUser: otherUser.username,
+      incomingCall: incomingCallData
+    }});
   };
 
-  const markAsRead = (id) => updateNotification(id, { is_read: true });
-
-  const markAllAsRead = async () => {
-    try {
-      await api.post('/notifications/read-all/');
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-    } catch (e) {
-      console.error("Failed to mark all notifications as read", e);
+  const onRejectCall = () => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'reject_call', caller_id: otherUser.id }));
     }
-  };
-
-  const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const addToast = (data) => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, ...data }]);
-  };
-
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleToastClick = (toast) => {
-    removeToast(toast.id);
-    if (toast.group_id) {
-      // Navigate to group chat (assuming MessagesPage handles generic /messages or query params)
-      // Ideally: /messages?group=123 or just /messages and let user find it?
-      // Let's assume MessagesPage is the inbox.
-      // Or if you have deep linking: /messages/group/:id or /messages?chat=group_123
-      // The current routing seems to only have /messages.
-      // We can push state or query param.
-      navigate('/messages', { state: { openGroup: toast.group_id } });
-    } else {
-      // Navigate to DM
-      navigate('/messages', { state: { openUser: toast.sender } }); // sender is username
-    }
+    setCallStatus('idle');
+    setIncomingCallData(null);
   };
 
   return (
-    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead, removeNotification, updateNotification }}>
+    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications }}>
       {children}
+      
+      {/* GLOBAL CALL INTERFACE (Ringing Screen) */}
+      <AnimatePresence>
+        {callStatus === 'incoming' && (
+          <CallInterface
+            callStatus="incoming"
+            callType={callType}
+            otherUser={otherUser}
+            onAccept={onAcceptCall}
+            onReject={onRejectCall}
+            onEnd={onRejectCall}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {toasts.length > 0 && (
           <Toast
             key={toasts[toasts.length - 1].id}
             message={toasts[toasts.length - 1]}
-            onClose={() => removeToast(toasts[toasts.length - 1].id)}
-            onClick={() => handleToastClick(toasts[toasts.length - 1])}
+            onClose={() => setToasts(prev => prev.filter(t => t.id !== toasts[toasts.length - 1].id))}
+            onClick={() => {
+              const t = toasts[toasts.length - 1];
+              navigate('/messages', { state: t.group_id ? { openGroup: t.group_id } : { openUser: t.sender } });
+            }}
           />
         )}
       </AnimatePresence>

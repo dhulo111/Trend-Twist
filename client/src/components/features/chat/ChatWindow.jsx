@@ -37,7 +37,7 @@ const iceServers = {
   iceCandidatePoolSize: 10,
 };
 
-const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeChat }) => {
+const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeChat, incomingCallDataFromState }) => {
   const { authToken, user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -141,6 +141,20 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
       fetchHistory();
     }
   }, [activeChat, otherUser, isGroup, roomId]);
+
+  // --- Auto-Accept Global Call Handover ---
+  useEffect(() => {
+    if (incomingCallDataFromState && callStatus === 'idle') {
+      console.log('[ChatWindow] Auto-accepting global handover call');
+      setIncomingCallData(incomingCallDataFromState);
+      setCallType(incomingCallDataFromState.callType);
+      
+      // We wrap in a small timeout to ensure the WebSocket 'accept' is finished first
+      setTimeout(() => {
+        acceptCall();
+      }, 500);
+    }
+  }, [incomingCallDataFromState]);
 
 
   // ====================================================================
@@ -482,7 +496,8 @@ const ChatWindow = ({ room, otherUser, onBack, onMessageUpdate, isGroup, activeC
       } else if (data.type === 'message_deleted') {
         setMessages(prev => prev.filter(m => m.id !== data.id));
       } else if (data.type === 'call_signal') {
-        if (!isGroup) handleCallSignalRef.current(data);
+        // Backend now relays as 'call_signal'
+        handleCallSignalRef.current(data);
       }
     };
 
