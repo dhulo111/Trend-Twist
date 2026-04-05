@@ -22,24 +22,28 @@ const PaymentSuccessPage = () => {
             }
 
             try {
-                // Use our global api instance which handles tokens automatically
+                // Ensure api is used correctly and include trailing slash
                 const response = await api.get(`/subscriptions/verify/?session_id=${sessionId}`);
                 
                 if (response.data.status === 'success') {
                     setVerificationStatus('success');
+                    setMessage('Your subscription has been successfully activated!');
                 } else {
                     setVerificationStatus('error');
-                    setMessage(response.data.error || 'Payment verification failed.');
+                    setMessage(response.data.error || response.data.message || 'Payment verification failed.');
                 }
             } catch (err) {
-                console.error("Verification error:", err);
+                console.error("Verification error detail:", err.response?.data || err.message);
                 setVerificationStatus('error');
-                setMessage(err.response?.data?.error || 'An error occurred during verification.');
+                
+                // Extract error specifically to prevent showing 'get' or crashing
+                const errorInfo = err.response?.data?.error || err.response?.data?.detail || err.message;
+                setMessage(typeof errorInfo === 'string' ? errorInfo : 'An error occurred during verification.');
             }
         };
 
         verifyPayment();
-    }, [sessionId]);
+    }, [sessionId, navigate]);
 
     if (verificationStatus === 'loading') {
         return (

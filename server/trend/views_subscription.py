@@ -163,8 +163,10 @@ class CreateCheckoutSessionView(APIView):
                 }
             )
             return Response({'checkout_url': session.url})
+        except stripe.error.StripeError as e:
+            return Response({'error': f'Stripe Error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Checkout Creation Error ({type(e).__name__}): {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 # Helper for both Webhook and Manual Verification
 def activate_subscription_from_session(session):
@@ -172,8 +174,11 @@ def activate_subscription_from_session(session):
     Shared logic to upsert UserSubscription and record earnings from a Stripe Session.
     Returns (True, "msg") or (False, "err_msg")
     """
-    # Access metadata from the session object safely
-    meta = session.get('metadata', {}) or getattr(session, 'metadata', {})
+    # Access metadata from the session object safely (works for both dict and Stripe Object)
+    if isinstance(session, dict):
+        meta = session.get('metadata') or {}
+    else:
+        meta = getattr(session, 'metadata', {}) or {}
     
     subscriber_id_str = meta.get('subscriber_id')
     creator_id_str = meta.get('creator_id')
@@ -194,9 +199,9 @@ def activate_subscription_from_session(session):
     except (ValueError, TypeError) as e:
         return False, f"Type Conversion Error. Meta: {meta}. Err: {str(e)}"
 
-    stripe_sub_id = session.get('subscription')
+    stripe_sub_id = session.get('subscription') if isinstance(session, dict) else getattr(session, 'subscription', None)
     if not stripe_sub_id:
-        return False, "Session does not contain a subscription ID (not mode=subscription?)"
+        return False, "Session does not contain a subscription ID (ensure checkout mode is 'subscription')"
 
     try:
         # Upsert subscription record
@@ -219,8 +224,14 @@ def activate_subscription_from_session(session):
             sub.save()
 
         # Record earnings split
-        pi = session.get('payment_intent')
-        dedupe_marker = pi or session.get('id')
+        if isinstance(session, dict):
+            pi = session.get('payment_intent')
+            session_id = session.get('id')
+        else:
+            pi = getattr(session, 'payment_intent', None)
+            session_id = getattr(session, 'id', None)
+            
+        dedupe_marker = pi or session_id
         
         if dedupe_marker:
             if not CreatorEarning.objects.filter(Q(stripe_payment_intent=dedupe_marker)).exists():
@@ -263,21 +274,28 @@ class VerifySubscriptionView(APIView):
     def get(self, request):
         session_id = request.query_params.get('session_id')
         if not session_id:
-            return Response({'error': 'Session ID required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Session ID is missing from the request.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Force key refresh from settings
+        api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
+        if not api_key:
+            return Response({'error': 'Stripe Secret Key is not configured on the server.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         try:
-            stripe.api_key = settings.STRIPE_SECRET_KEY
+            stripe.api_key = api_key
             session = stripe.checkout.Session.retrieve(session_id)
             
             if session.payment_status == 'paid':
                 success, reason = activate_subscription_from_session(session)
                 if success:
                     return Response({'status': 'success', 'message': 'Subscription verified and activated.'})
-                return Response({'error': f'Failed to process session: {reason}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Activation failed: {reason}'}, status=status.HTTP_400_BAD_REQUEST)
             
-            return Response({'status': 'pending', 'message': f'Payment status {session.payment_status} is not paid yet.'})
+            return Response({'status': 'pending', 'message': f'Payment status: {session.payment_status}'})
+        except stripe.error.StripeError as e:
+            return Response({'error': f'Stripe Error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Unexpected Error ({type(e).__name__}): {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 class DebugStatsView(APIView):
     permission_classes = [permissions.AllowAny]
