@@ -301,9 +301,11 @@ class VerifySubscriptionView(APIView):
         except Exception as e:
             tb_str = traceback.format_exc()
             print(f"[Verify Error] traceback: {tb_str}")
+            # Return last 3 lines for live debugging
+            tb_lines = tb_str.splitlines()
             return Response({
                 'error': f'Unexpected Error ({type(e).__name__}): {str(e)}',
-                'traceback': tb_str.splitlines()[-1] if not settings.DEBUG else tb_str
+                'traceback_summary': tb_lines[-3:] if len(tb_lines) >= 3 else tb_str
             }, status=status.HTTP_400_BAD_REQUEST)
 
 class DebugStatsView(APIView):
