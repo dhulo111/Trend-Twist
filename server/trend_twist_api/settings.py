@@ -53,6 +53,22 @@ ROOT_URLCONF = 'trend_twist_api.urls'
 WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 ASGI_APPLICATION = 'trend_twist_api.asgi.application'
 
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
 # --- DATABASE (NEON POSTGRESQL PRODUCTION) ---
 if 'RENDER' in os.environ:
     DATABASES = {
