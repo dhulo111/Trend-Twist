@@ -69,25 +69,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 ASGI_APPLICATION = 'trend_twist_api.asgi.application'
 
-# --- DATABASE (DIRECT PRODUCTION CONNECTION) ---
-# PERFORMANCE: persistent connections & direct host
+# --- DATABASE (NEON POSTGRESQL PRODUCTION) ---
+# Goal: Performance, Scalability & Standard DevOps best-practices.
 if 'RENDER' in os.environ:
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'postgres',
-            'USER': 'postgres.kvdnvtnxxesaldwacejv',
-            'PASSWORD': os.environ.get('DB_PASSWORD'),
-            'HOST': 'db.kvdnvtnxxesaldwacejv.supabase.co',
-            'PORT': '5432',
-            'CONN_MAX_AGE': 60,
-            'OPTIONS': {
-                'sslmode': 'require',
-                'connect_timeout': 10,
-            },
-        }
+        'default': dj_database_url.parse(
+            os.environ.get("DATABASE_URL"),
+            conn_max_age=60, # Persistent connections (reduces handshake latency)
+            ssl_require=True
+        )
     }
 else:
+    # 2. LOCAL SQLite (Fallback) / Manual .env connection
     DATABASES = {
         'default': dj_database_url.config(
             default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
