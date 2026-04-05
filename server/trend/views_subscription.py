@@ -212,55 +212,55 @@ def activate_subscription_from_session(session):
     if not stripe_sub_id:
         return False, "Session does not contain a subscription ID (ensure checkout mode is 'subscription')"
 
-        try:
-            # Upsert subscription record
-            sub, created = UserSubscription.objects.get_or_create(
-                subscriber_id=s_id,
-                creator_id=c_id,
-                defaults={
-                    'plan_id': p_id, 'tier': tier,
-                    'stripe_subscription_id': stripe_sub_id,
-                    'status': 'active',
-                    'expiry_date': timezone.now() + datetime.timedelta(days=30)
-                }
-            )
-            if not created:
-                sub.plan_id = p_id
-                sub.tier = tier
-                sub.stripe_subscription_id = stripe_sub_id
-                sub.status = 'active'
-                sub.expiry_date = timezone.now() + datetime.timedelta(days=30)
-                sub.save()
+    try:
+        # Upsert subscription record
+        sub, created = UserSubscription.objects.get_or_create(
+            subscriber_id=s_id,
+            creator_id=c_id,
+            defaults={
+                'plan_id': p_id, 'tier': tier,
+                'stripe_subscription_id': stripe_sub_id,
+                'status': 'active',
+                'expiry_date': timezone.now() + datetime.timedelta(days=30)
+            }
+        )
+        if not created:
+            sub.plan_id = p_id
+            sub.tier = tier
+            sub.stripe_subscription_id = stripe_sub_id
+            sub.status = 'active'
+            sub.expiry_date = timezone.now() + datetime.timedelta(days=30)
+            sub.save()
 
-            # Record earnings split
-            if isinstance(session, dict):
-                pi = session.get('payment_intent')
-                session_id = session.get('id', 'unknown_id')
-            else:
-                pi = getattr(session, 'payment_intent', None)
-                session_id = getattr(session, 'id', 'unknown_id')
-                
-            dedupe_marker = pi or session_id
+        # Record earnings split
+        if isinstance(session, dict):
+            pi = session.get('payment_intent')
+            session_id = session.get('id', 'unknown_id')
+        else:
+            pi = getattr(session, 'payment_intent', None)
+            session_id = getattr(session, 'id', 'unknown_id')
             
-            if dedupe_marker:
-                try:
-                    if not CreatorEarning.objects.filter(Q(stripe_payment_intent=dedupe_marker)).exists():
-                         _record_earning_helper(
-                            creator_id=c_id,
-                            subscriber_id=s_id,
-                            subscription=sub,
-                            tier=tier,
-                            gross=plan_price,
-                            payment_intent=dedupe_marker,
-                        )
-                except Exception as e:
-                    tb = traceback.format_exc()
-                    return False, f"Earning recording error: {str(e)} | {tb.splitlines()[-1]}"
-                    
-            return True, "Activation Successful"
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            return False, f"Database error during activation: {str(e)} | Context: {tb_str.splitlines()[-1]}"
+        dedupe_marker = pi or session_id
+        
+        if dedupe_marker:
+            try:
+                if not CreatorEarning.objects.filter(Q(stripe_payment_intent=dedupe_marker)).exists():
+                     _record_earning_helper(
+                        creator_id=c_id,
+                        subscriber_id=s_id,
+                        subscription=sub,
+                        tier=tier,
+                        gross=plan_price,
+                        payment_intent=dedupe_marker,
+                    )
+            except Exception as e:
+                tb = traceback.format_exc()
+                return False, f"Earning recording error: {str(e)} | {tb.splitlines()[-1]}"
+                
+        return True, "Activation Successful"
+    except Exception as e:
+        tb_str = traceback.format_exc()
+        return False, f"Database error during activation: {str(e)} | Context: {tb_str.splitlines()[-1]}"
 
 def _record_earning_helper(creator_id, subscriber_id, subscription, tier, gross, payment_intent=None):
     if gross <= 0: return
