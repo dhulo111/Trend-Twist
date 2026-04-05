@@ -305,12 +305,12 @@ class VerifySubscriptionView(APIView):
             return Response({'error': f'Stripe Error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             tb_str = traceback.format_exc()
-            print(f"[Verify Error] traceback: {tb_str}")
-            # Return last 3 lines for live debugging
+            print(f"[Verify Error] Full Traceback: {tb_str}")
+            # Return last 10 lines to see the caller in views_subscription.py
             tb_lines = tb_str.splitlines()
             return Response({
                 'error': f'Unexpected Error ({type(e).__name__}): {str(e)}',
-                'traceback_summary': tb_lines[-3:] if len(tb_lines) >= 3 else tb_str
+                'traceback_summary': tb_lines[-10:] if len(tb_lines) >= 10 else tb_lines
             }, status=status.HTTP_400_BAD_REQUEST)
 
 class DebugStatsView(APIView):
