@@ -2,6 +2,7 @@
 
 import json
 import asyncio
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -9,6 +10,8 @@ from django.utils import timezone
 from .models import ChatRoom, ChatMessage, Profile, ChatGroup
 from channels.db import database_sync_to_async
 from .middleware import get_user_from_scope
+
+logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -18,6 +21,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # 1. Auth & Identification
         self.current_user = await get_user_from_scope(self.scope)
         if not self.current_user.is_authenticated:
+            logger.warning(f"WebSocket Connect Denied: Anonymous User")
             await self.close()
             return
 
@@ -26,6 +30,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.room_group_name = f'chat_group_{self.group_id_param}'
             is_member = await self.check_group_membership(self.group_id_param, self.current_user)
             if not is_member:
+                logger.warning(f"WebSocket Connect Denied: User {self.current_user.username} not in group {self.group_id_param}")
                 await self.close()
                 return
         elif self.user_id_param:
@@ -60,6 +65,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
         await self.accept()
+        logger.info(f"WebSocket Connected: {self.current_user.username} joined {self.room_group_name}")
 
         # Notify initial status
         if self.user_id_param:
@@ -73,48 +79,46 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }))
 
     @database_sync_to_async
+    def check_group_membership(self, group_id, user):
+        try:
+            return ChatGroup.objects.get(id=group_id).members.filter(id=user.id).exists()
+        except: return False
+
+    @database_sync_to_async
     def precache_chat_metadata(self):
         """Warm up connections and cache ID values for performance."""
         try:
             other_user = User.objects.get(id=self.user_id_param)
-            # Store essential IDs on self for lightning-fast save_message
             self.cached_room_id = ChatRoom.objects.get_or_create(
                 user1=min(self.current_user, other_user, key=lambda u: u.id),
                 user2=max(self.current_user, other_user, key=lambda u: u.id),
             )[0].id
-        except:
-            self.cached_room_id = None
+        except: self.cached_room_id = None
 
     @database_sync_to_async
     def save_message(self, content):
         """Optimized message saving using cached IDs."""
         timestamp = timezone.now()
-        if self.group_id_param:
-             try:
+        try:
+            if self.group_id_param:
                 group = ChatGroup.objects.get(id=self.group_id_param)
                 group.last_message_at = timestamp
                 group.save(update_fields=['last_message_at'])
-                msg = ChatMessage.objects.create(
-                    group=group, author=self.current_user, content=content
-                )
+                msg = ChatMessage.objects.create(group=group, author=self.current_user, content=content)
                 return msg.id, msg.timestamp
-             except: return None, None
-        else:
-            if not getattr(self, 'cached_room_id', None):
-                return None, None
-            
-            # Use direct ID for lookup to avoid full model instantiation
-            ChatRoom.objects.filter(id=self.cached_room_id).update(last_message_at=timestamp)
-            msg = ChatMessage.objects.create(
-                room_id=self.cached_room_id,
-                author=self.current_user,
-                content=content
-            )
-            return msg.id, msg.timestamp
+            else:
+                if not getattr(self, 'cached_room_id', None): return None, None
+                ChatRoom.objects.filter(id=self.cached_room_id).update(last_message_at=timestamp)
+                msg = ChatMessage.objects.create(room_id=self.cached_room_id, author=self.current_user, content=content)
+                return msg.id, msg.timestamp
+        except Exception as e:
+            logger.error(f"Error saving message: {e}")
+            return None, None
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+            logger.info(f"WebSocket Disconnected (Code: {close_code}): {getattr(self.current_user, 'username', 'Unknown')} left {self.room_group_name}")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -184,11 +188,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.group_name = f"user_{self.user.id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
+        logger.info(f"Notification Socket Connected: {self.user.username}")
         asyncio.ensure_future(self.update_user_status(True))
 
     async def disconnect(self, close_code):
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            logger.info(f"Notification Socket Disconnected (Code: {close_code}): {getattr(self.user, 'username', 'Unknown')}")
 
     @database_sync_to_async
     def update_user_status(self, is_online):

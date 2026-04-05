@@ -1,4 +1,6 @@
-# High-performance Gunicorn + Uvicorn Production Runner
-# --worker-class: UvicornWorker to handle async ASGI (Django Channels)
-# --workers: Usually (2 x $CPU + 1). On Render free/starter, 2-3 is ideal.
-web: gunicorn trend_twist_api.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 120 --log-level info
+# Production High-Performance Start Command (Uvicorn-based ASGI)
+# --worker-class: uvicorn.workers.UvicornWorker (Required for async Channels/WebSockets)
+# --workers: 2 (Perfect for Render CPU/Memory balance, avoids instability)
+# --timeout: 120 (Prevents premature killing of long-lived WebSocket handshake)
+# --log-level: info (Standard production logging)
+web: gunicorn trend_twist_api.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-level info

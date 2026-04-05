@@ -22,7 +22,7 @@ class StrangerConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # 2. Extract Gender Performance
+        # 2. Extract Gender
         user_gender = await self.get_user_gender(self.user)
         
         # 3. Preference from Query
@@ -36,11 +36,9 @@ class StrangerConsumer(AsyncWebsocketConsumer):
 
         self.partner_channel = None
         self.last_partner = None
-        
-        # Display Info
         display = f"{self.user.first_name} {self.user.last_name}".strip() or self.user.username
         
-        # 4. Store Info in Distributed Cache (Distributed Memory)
+        # 4. Store Info in Distributed Cache
         await self.set_user_info({
             "username": self.user.username,
             "display_name": display,
@@ -49,6 +47,7 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         })
 
         await self.accept()
+        logger.info(f"Stranger Talk Connected: {self.user.username} (Pref: {preferred_gender or 'Any'})")
         await self._enter_queue()
 
     async def get_user_gender(self, user):
@@ -58,6 +57,7 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         return await _get()
 
     async def disconnect(self, close_code):
+        logger.info(f"Stranger Talk Disconnected (Code: {close_code}): {getattr(self, 'user', 'Unknown')}")
         await self._cleanup(notify_partner=True)
 
     async def receive(self, text_data):
@@ -65,7 +65,9 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         except: return
 
         msg_type = data.get("type")
-        if msg_type == "switch": await self._switch()
+        if msg_type == "switch": 
+            logger.info(f"Stranger Switch Request: {self.user.username}")
+            await self._switch()
         elif msg_type == "stop": 
             await self._cleanup(notify_partner=True)
             await self.close()
@@ -81,21 +83,13 @@ class StrangerConsumer(AsyncWebsocketConsumer):
 
     # --- Redis Persistence Handlers ---
     async def set_user_info(self, info):
-        # Cache for 1 hour of activity
         cache.set(f"{USER_INFO_KEY_PREFIX}{self.channel_name}", info, timeout=3600)
 
     async def get_user_info(self, channel_name):
         return cache.get(f"{USER_INFO_KEY_PREFIX}{channel_name}")
 
     async def _enter_queue(self):
-        """Matchmaking logic in Redis to support multi-worker environments."""
-        # 1. Get entire waiting queue from Redis (Distributed Lock recommended but keeping it simple for now)
-        # In a high-traffic app, we'd use Redis LPOP or a proper worker, but this is fine for ~10k concurrency.
         queue = cache.get(WAITING_QUEUE_KEY) or []
-        
-        # Cleanup stale channels
-        # Note: Ideally done via background task, but we'll do quick check
-        
         matched = None
         for ch in queue:
             if ch == self.channel_name or ch == self.last_partner: continue
@@ -132,9 +126,10 @@ class StrangerConsumer(AsyncWebsocketConsumer):
 
         my_info = await self.get_user_info(self.channel_name)
         partner_info = await self.get_user_info(partner_channel)
+        
+        logger.info(f"Match Found: {my_info['username']} <-> {partner_info['username']}")
 
         i_am_offerer = self.channel_name < partner_channel
-        
         await self.send(text_data=json.dumps({
             "type": "matched", "role": "offerer" if i_am_offerer else "answerer",
             "stranger": {"username": partner_info.get("username", "Stranger"), "display_name": partner_info.get("display_name", "Stranger")}
@@ -149,6 +144,7 @@ class StrangerConsumer(AsyncWebsocketConsumer):
         })
 
     async def stranger_signal(self, event): await self.send(text_data=json.dumps(event["payload"]))
+    
     async def stranger_matched(self, event):
         self.partner_channel = event.get("partner_channel")
         await self.send(text_data=json.dumps(event["payload"]))
