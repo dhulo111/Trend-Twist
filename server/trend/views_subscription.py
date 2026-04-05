@@ -1,4 +1,5 @@
 import stripe
+import traceback
 from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.utils import timezone
@@ -247,7 +248,8 @@ def activate_subscription_from_session(session):
                 )
         return True, "Activation Successful"
     except Exception as e:
-        return False, f"Database error during activation: {str(e)}"
+        tb_str = traceback.format_exc()
+        return False, f"Database error during activation: {str(e)} | Context: {tb_str.splitlines()[-1]}"
 
 def _record_earning_helper(creator_id, subscriber_id, subscription, tier, gross, payment_intent=None):
     if gross <= 0: return
@@ -297,7 +299,12 @@ class VerifySubscriptionView(APIView):
         except stripe.error.StripeError as e:
             return Response({'error': f'Stripe Error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'error': f'Unexpected Error ({type(e).__name__}): {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            tb_str = traceback.format_exc()
+            print(f"[Verify Error] traceback: {tb_str}")
+            return Response({
+                'error': f'Unexpected Error ({type(e).__name__}): {str(e)}',
+                'traceback': tb_str.splitlines()[-1] if not settings.DEBUG else tb_str
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class DebugStatsView(APIView):
     permission_classes = [permissions.AllowAny]
