@@ -25,14 +25,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
-    
-    # 3rd Party
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'storages', 
-
-    # Project App
     'trend', 
 ]
 
@@ -49,7 +45,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'trend_twist_api.urls'
-
 WSGI_APPLICATION = 'trend_twist_api.wsgi.application'
 ASGI_APPLICATION = 'trend_twist_api.asgi.application'
 
@@ -86,7 +81,7 @@ else:
         )
     }
 
-# --- REDIS, CACHING & CHANNELS (UPSTASH OPTIMIZED) ---
+# --- REDIS, CACHING & CHANNELS ---
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
     if REDIS_URL.startswith('redis://') and ('upstash.io' in REDIS_URL):
@@ -95,9 +90,7 @@ if REDIS_URL:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                "hosts": [REDIS_URL],
-            },
+            'CONFIG': {"hosts": [REDIS_URL]},
         },
     }
     CACHES = {
@@ -106,10 +99,7 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "CONNECTION_POOL_KWARGS": {
-                    "max_connections": 100,
-                    "retry_on_timeout": True,
-                },
+                "CONNECTION_POOL_KWARGS": {"max_connections": 100, "retry_on_timeout": True},
             }
         }
     }
@@ -117,41 +107,65 @@ else:
     CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
-# --- LOGGING (CRITICAL FOR DEPLOYMENT) ---
+# --- LOGGING ---
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'trend': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
+    'formatters': {'verbose': {'format': '{levelname} {asctime} {module} {message}', 'style': '{'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'verbose'}},
+    'root': {'handlers': ['console'], 'level': 'INFO'},
 }
 
-# --- AUTH & OTHER SETTINGS ---
+# --- ASSETS & MEDIA ---
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Production Cloud Storage (Supabase/S3 Compatible)
+if 'SUPABASE_ACCESS_KEY_ID' in os.environ:
+    AWS_ACCESS_KEY_ID = os.environ.get('SUPABASE_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('SUPABASE_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('SUPABASE_STORAGE_BUCKET_NAME')
+    AWS_S3_ENDPOINT_URL = os.environ.get('SUPABASE_S3_ENDPOINT_URL')
+    
+    # Supabase S3 Implementation Details
+    AWS_S3_REGION_NAME = 'us-east-1'
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = False
+    
+    # Optimized Custom Domain for Public URL generation
+    from urllib.parse import quote, urlparse
+    _bucket = quote(AWS_STORAGE_BUCKET_NAME) # Encodes spaces etc.
+    _endpoint_parts = urlparse(AWS_S3_ENDPOINT_URL)
+    _domain = _endpoint_parts.netloc # e.g. [project_id].supabase.co
+    
+    # Public URL Path: https://[project].supabase.co/storage/v1/object/public/[bucket]/
+    AWS_S3_CUSTOM_DOMAIN = f"{_domain}/storage/v1/object/public/{_bucket}"
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+    
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": AWS_ACCESS_KEY_ID,
+                "secret_key": AWS_SECRET_ACCESS_KEY,
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
+                "endpoint_url": AWS_S3_ENDPOINT_URL,
+                "region_name": AWS_S3_REGION_NAME,
+                "default_acl": AWS_DEFAULT_ACL,
+                "file_overwrite": AWS_S3_FILE_OVERWRITE,
+                "querystring_auth": AWS_QUERYSTRING_AUTH,
+                "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+            }
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+# --- OTHER SETTINGS ---
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -162,10 +176,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
     'DEFAULT_PERMISSION_CLASSES': ('trend.permissions.IsNotBlocked', 'rest_framework.permissions.IsAuthenticated',),
 }
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 CORS_ALLOW_ALL_ORIGINS = True
 CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com', 'https://*.vercel.app']
 LANGUAGE_CODE = 'en-us'
