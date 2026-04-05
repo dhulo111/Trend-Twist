@@ -1,5 +1,5 @@
 import stripe
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Sum, Q
@@ -178,7 +178,8 @@ def activate_subscription_from_session(session):
     if isinstance(session, dict):
         meta = session.get('metadata') or {}
     else:
-        meta = getattr(session, 'metadata', {}) or {}
+        # Crucial: convert StripeObject to a real dict because metadata may not have .get()
+        meta = dict(getattr(session, 'metadata', {})) if getattr(session, 'metadata', None) else {}
     
     subscriber_id_str = meta.get('subscriber_id')
     creator_id_str = meta.get('creator_id')
@@ -189,14 +190,15 @@ def activate_subscription_from_session(session):
     # Extremely thorough key check
     if not (subscriber_id_str and creator_id_str):
         keys = list(meta.keys()) if meta else "Empty"
-        return False, f"Metadata missing mandatory IDs. Found Keys: {keys}. Session ID: {getattr(session, 'id', 'unknown')}"
+        session_id = session.get('id') if isinstance(session, dict) else getattr(session, 'id', 'unknown')
+        return False, f"Metadata missing mandatory IDs. Found Keys: {keys}. Session ID: {session_id}"
 
     try:
         s_id = int(subscriber_id_str)
         c_id = int(creator_id_str)
         p_id = int(plan_id_str) if plan_id_str else None
         plan_price = Decimal(plan_price_str)
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, InvalidOperation) as e:
         return False, f"Type Conversion Error. Meta: {meta}. Err: {str(e)}"
 
     stripe_sub_id = session.get('subscription') if isinstance(session, dict) else getattr(session, 'subscription', None)
