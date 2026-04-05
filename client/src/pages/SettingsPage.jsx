@@ -320,7 +320,6 @@ const SettingsPage = () => {
                 id="creator-terms-checkbox"
               />
               <div
-                onClick={() => setTermsAccepted(v => !v)}
                 className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${
                   termsAccepted
                     ? 'bg-purple-500 border-purple-500'

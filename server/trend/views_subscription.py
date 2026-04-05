@@ -129,6 +129,7 @@ class CreateCheckoutSessionView(APIView):
         if not plan_id or not creator_username:
             return Response({'error': 'plan_id and creator_username are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
         plan = get_object_or_404(SubscriptionPlan, id=plan_id)
         creator = get_object_or_404(User, username=creator_username)
         origin = request.headers.get('origin', 'http://localhost:5173')
@@ -416,6 +417,7 @@ class CreateBillingPortalSessionView(APIView):
         if not sub:
             return Response({'error': 'No active Stripe subscription found.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
+            stripe.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
             stripe_sub = stripe.Subscription.retrieve(sub.stripe_subscription_id)
             portal_session = stripe.billing_portal.Session.create(
                 customer=stripe_sub.customer,
