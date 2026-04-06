@@ -10,6 +10,42 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 import random
+import urllib.request
+import json
+import os
+
+def send_email_via_api(to_email, subject, text_content):
+    """
+    Sends email via Brevo REST API (HTTPS port 443) 
+    to bypass Render's block on SMTP ports (25, 465, 587).
+    """
+    url = "https://api.brevo.com/v3/smtp/email"
+    
+    api_key = os.environ.get('EMAIL_HOST_PASSWORD')
+    sender_email = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@trendtwist.com')
+    
+    if not api_key:
+        raise Exception("EMAIL_HOST_PASSWORD (used as Brevo API key) is missing in environment variables.")
+        
+    data = {
+        "sender": {"name": "Trend Twist", "email": sender_email},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "textContent": text_content
+    }
+    
+    encoded_data = json.dumps(data).encode('utf-8')
+    req = urllib.request.Request(url, data=encoded_data)
+    req.add_header('api-key', api_key)
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('Accept', 'application/json')
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            return response.read()
+    except urllib.error.HTTPError as e:
+        error_msg = e.read().decode()
+        raise Exception(f"Brevo API Error {e.code}: {error_msg}")
 
 from rest_framework import generics, permissions, status, viewsets, serializers
 from rest_framework.response import Response
@@ -198,19 +234,15 @@ class SendSecurityOTPView(APIView):
             return Response({"error": "No email associated with this account."}, status=status.HTTP_400_BAD_REQUEST)
             
         import random
-        from django.core.mail import send_mail
-        from django.conf import settings
         from .models import OTPRequest
         
         otp = str(random.randint(100000, 999999))
         
         try:
-            send_mail(
-                'Trend Twist Security Update OTP',
-                f'Your OTP to change your password is {otp}. It is valid for 5 minutes.',
-                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
-                [email],
-                fail_silently=False,
+            send_email_via_api(
+                to_email=email,
+                subject='Trend Twist Security Update OTP',
+                text_content=f'Your OTP to change your password is {otp}. It is valid for 5 minutes.'
             )
         except Exception as e:
             print("Mail Error:", str(e))
@@ -278,19 +310,15 @@ class ForgotPasswordSendOTPView(APIView):
         email = user.email
             
         import random
-        from django.core.mail import send_mail
-        from django.conf import settings
         from .models import OTPRequest
         
         otp = str(random.randint(100000, 999999))
         
         try:
-            send_mail(
-                'Trend Twist Password Reset OTP',
-                f'Your OTP to reset your password is {otp}. It is valid for 5 minutes.',
-                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
-                [email],
-                fail_silently=False,
+            send_email_via_api(
+                to_email=email,
+                subject='Trend Twist Password Reset OTP',
+                text_content=f'Your OTP to reset your password is {otp}. It is valid for 5 minutes.'
             )
         except Exception as e:
             print("Mail Error:", str(e))
@@ -359,12 +387,10 @@ class SendOTPView(APIView):
         otp = str(random.randint(100000, 999999))
         
         try:
-            send_mail(
-                'Trend Twist Registration OTP',
-                f'Your OTP for registration is {otp}. It is valid for 5 minutes.',
-                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
-                [email],
-                fail_silently=False,
+            send_email_via_api(
+                to_email=email,
+                subject='Trend Twist Registration OTP',
+                text_content=f'Your OTP for registration is {otp}. It is valid for 5 minutes.'
             )
         except Exception as e:
             print("Mail Error:", str(e))
