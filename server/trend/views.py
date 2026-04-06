@@ -21,11 +21,16 @@ def send_email_via_api(to_email, subject, text_content):
     """
     url = "https://api.brevo.com/v3/smtp/email"
     
-    api_key = os.environ.get('EMAIL_HOST_PASSWORD')
-    sender_email = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@trendtwist.com')
+    # Brevo API keys typically start with 'xkeysib-'
+    api_key = os.environ.get('BREVO_API_KEY') or os.environ.get('SENDINBLUE_API_KEY')
     
     if not api_key:
-        raise Exception("EMAIL_HOST_PASSWORD (used as Brevo API key) is missing in environment variables.")
+        api_key = os.environ.get('EMAIL_HOST_PASSWORD')
+        
+    sender_email = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@trendtwist.com')
+    
+    if not api_key or api_key.startswith('xsmtpsib-'):
+        raise Exception("API Key required! The key 'xsmtpsib-...' is an SMTP password, NOT a REST API key. Generate a real API Key (starts with 'xkeysib-') from your Brevo Dashboard -> 'SMTP & API' -> 'API Keys'. Add it as 'BREVO_API_KEY' in your backend environment.")
         
     data = {
         "sender": {"name": "Trend Twist", "email": sender_email},
