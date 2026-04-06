@@ -213,8 +213,8 @@ class SendSecurityOTPView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            print("Mail Error:", e)
-            return Response({"error": "Failed to send email. Check configuration."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print("Mail Error:", str(e))
+            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         OTPRequest.objects.filter(email=email).delete()
         OTPRequest.objects.create(email=email, otp=otp)
@@ -293,7 +293,8 @@ class ForgotPasswordSendOTPView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            return Response({"error": "Failed to send email. Check configuration."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print("Mail Error:", str(e))
+            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         OTPRequest.objects.filter(email=email).delete()
         OTPRequest.objects.create(email=email, otp=otp)
@@ -366,8 +367,8 @@ class SendOTPView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            print("Mail Error:", e)
-            return Response({"error": "Failed to send email. Ensure Bravo Mail Service is configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print("Mail Error:", str(e))
+            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         OTPRequest.objects.filter(email=email).delete()
         OTPRequest.objects.create(email=email, otp=otp)
