@@ -180,10 +180,36 @@ class RegisterSerializer(serializers.ModelSerializer):
         choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other'), ('prefer_not_to_say', 'Prefer not to say')],
         required=False, allow_blank=True
     )
+    otp = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone_number', 'gender']
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'phone_number', 'gender', 'otp']
+
+    def validate(self, data):
+        email = data.get('email')
+        otp = data.get('otp')
+        
+        # Add OTP validation
+        if not otp:
+            raise serializers.ValidationError({"otp": "OTP is required."})
+            
+        try:
+             otp_req = OTPRequest.objects.filter(email=email).latest('created_at')
+        except OTPRequest.DoesNotExist:
+             raise serializers.ValidationError({"otp": "No OTP requested for this email."})
+             
+        if otp_req.otp != otp:
+             raise serializers.ValidationError({"otp": "Invalid OTP."})
+             
+        if otp_req.is_expired():
+             raise serializers.ValidationError({"otp": "OTP has expired."})
+             
+        # Mark as verified or just let it be deleted/ignored
+        otp_req.is_verified = True
+        otp_req.save()
+        
+        return data
 
     def validate_username(self, value):
         if User.objects.filter(username__iexact=value).exists():
@@ -212,6 +238,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         phone_number = validated_data.pop('phone_number', '')
         gender = validated_data.pop('gender', '')
+        otp = validated_data.pop('otp', '') # Remove OTP before creating User
         # Use create_user to handle password hashing
         user = User.objects.create_user(
             username=validated_data['username'],

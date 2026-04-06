@@ -89,13 +89,28 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
     case 'like_reel':
       icon = <IoHeart className="text-red-500" />;
       text = "liked your reel.";
-      link = `/reels`; // Ideally deeper link if reel detail page exists
+      link = `/reels`; 
+      break;
+    case 'like_twist':
+      icon = <IoHeart className="text-red-500" />;
+      text = "liked your twist.";
+      link = `/twists`; 
       break;
     case 'follow_request':
-    case 'req_approved':
-    case 'req_rejected':
       icon = <IoPersonAdd className="text-blue-500" />;
-      text = "wants to follow you.";
+      text = "requested to follow you.";
+      break;
+    case 'follow_accept':
+      icon = <IoPersonAdd className="text-green-500" />;
+      text = "accepted your follow request.";
+      break;
+    case 'req_approved':
+      icon = <IoCheckmark className="text-green-500" />;
+      text = "You approved their follow request.";
+      break;
+    case 'req_rejected':
+      icon = <IoClose className="text-red-500" />;
+      text = "You rejected their follow request.";
       break;
     case 'comment_post':
       icon = <IoChatbubble className="text-green-500" />;
@@ -106,6 +121,15 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
       icon = <IoChatbubble className="text-green-500" />;
       text = "commented on your reel.";
       link = `/reels`;
+      break;
+    case 'comment_twist':
+      icon = <IoChatbubble className="text-green-500" />;
+      text = "commented on your twist.";
+      link = `/twists`;
+      break;
+    case 'story_like':
+      icon = <IoHeart className="text-pink-500" />;
+      text = "liked your story.";
       break;
     default:
       icon = <IoPersonAdd />;
@@ -145,11 +169,7 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
             <span className="text-green-500 font-bold text-sm">Approved</span>
           ) : notification.notification_type === 'req_rejected' ? (
             <span className="text-red-500 font-bold text-sm">Rejected</span>
-          ) : notification.is_read ? (
-            <span className="text-sm text-text-secondary font-medium">
-              Request Handled
-            </span>
-          ) : (
+          ) : notification.notification_type === 'follow_request' ? (
             <div className="flex gap-3">
               <motion.button
                 whileHover={{ scale: 1.1 }}
@@ -170,6 +190,10 @@ const NotificationItem = ({ notification, onAction, navigate }) => {
                 <IoClose size={20} />
               </motion.button>
             </div>
+          ) : (
+            <span className="text-sm text-text-secondary font-medium">
+              Request Handled
+            </span>
           )
         ) : (
           <>

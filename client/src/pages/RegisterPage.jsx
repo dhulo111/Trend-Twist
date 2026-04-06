@@ -1,5 +1,5 @@
 // frontend/src/pages/RegisterPage.jsx
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
@@ -14,6 +14,7 @@ import { BsMoonStarsFill, BsSunFill, BsCheck2, BsX } from 'react-icons/bs';
 import { IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import axiosInstance from '../api/axiosInstance';
 
 const RegisterPage = () => {
   // --- States and Context ---
@@ -60,57 +61,113 @@ const RegisterPage = () => {
     { label: 'At least one special character', test: (p) => /[^A-Za-z0-9]/.test(p) },
   ];
 
+  const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
+  const handleResendOTP = async () => {
+    if (resendTimer > 0) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await axiosInstance.post('/auth/register/send-otp/', { email: userDetails.email });
+      setResendTimer(60); // 60 seconds cooldown
+    } catch (err) {
+      let errorMsg = 'Failed to resend OTP. Please try again.';
+      if (err.response?.data?.error) errorMsg = err.response.data.error;
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDetailsSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Password Match Check
-    if (!userDetails.google_token && userDetails.password !== userDetails.confirmPassword) {
-      setError('Passwords do not match.');
-      setLoading(false);
+    // Initial Registration Validation
+    if (step === 1) {
+      // Password Match Check
+      if (!userDetails.google_token && userDetails.password !== userDetails.confirmPassword) {
+        setError('Passwords do not match.');
+        setLoading(false);
+        return;
+      }
+
+      // Password Strength Check
+      if (!userDetails.google_token && strength < 5) {
+        setError('Please make sure your password meets all security requirements shown below.');
+        setLoading(false);
+        return;
+      }
+
+      // Final check for empty fields
+      if (!userDetails.username || !userDetails.email || (!userDetails.google_token && !userDetails.password) || !userDetails.first_name) {
+        setError('Username, Email, Password and First Name are required.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        if (userDetails.google_token) {
+          await googleLogin(userDetails.google_token);
+        } else {
+          // Send OTP
+          await axiosInstance.post('/auth/register/send-otp/', { email: userDetails.email });
+          setStep(2); // Move to OTP verification
+          setResendTimer(60); // Start 60s cooldown immediately on first send
+        }
+      } catch (err) {
+        let errorMsg = 'Failed to send OTP. Please try again.';
+        if (err.response?.data?.error) errorMsg = err.response.data.error;
+        setError(errorMsg);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
-    // Password Strength Check
-    if (!userDetails.google_token && strength < 5) {
-      setError('Please make sure your password meets all security requirements shown below.');
-      setLoading(false);
-      return;
-    }
+    // --- STEP 2: VERIFY OTP AND REGISTER ---
+    if (step === 2) {
+      if (!otp || otp.length < 6) {
+        setError('Please enter a valid 6-digit OTP.');
+        setLoading(false);
+        return;
+      }
 
-    // Final check for empty fields
-    if (!userDetails.username || !userDetails.email || (!userDetails.google_token && !userDetails.password) || !userDetails.first_name) {
-      setError('Username, Email, Password and First Name are required.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      if (userDetails.google_token) {
-        await googleLogin(userDetails.google_token);
-      } else {
-        // Remove confirmPassword before sending to backend
+      try {
         const { confirmPassword, ...dataToSend } = userDetails;
+        dataToSend.otp = otp;
         await registerWithPassword(dataToSend);
+      } catch (err) {
+        let errorMsg = 'Registration failed. Please try again.';
+        if (err.response?.data) {
+            const data = err.response.data;
+            if (data.error) errorMsg = data.error;
+            else if (typeof data === 'object') {
+                const firstKey = Object.keys(data)[0];
+                const firstVal = data[firstKey];
+                errorMsg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+                if (firstKey !== 'error' && firstKey !== 'detail') {
+                    errorMsg = `${firstKey}: ${errorMsg}`;
+                }
+            }
+        }
+        setError(errorMsg);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      let errorMsg = 'Registration failed. Please try again.';
-      if (err.response?.data) {
-          const data = err.response.data;
-          if (data.error) errorMsg = data.error;
-          else if (typeof data === 'object') {
-              const firstKey = Object.keys(data)[0];
-              const firstVal = data[firstKey];
-              errorMsg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
-              if (firstKey !== 'error' && firstKey !== 'detail') {
-                  errorMsg = `${firstKey}: ${errorMsg}`;
-              }
-          }
-      }
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -193,209 +250,252 @@ const RegisterPage = () => {
           {/* Form Container */}
           <div className="relative mt-8">
             <form onSubmit={handleDetailsSubmit} className="space-y-4">
-              <div className="flex flex-col gap-4">
-                <Input
-                  id="email"
-                  label="Email Address"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={userDetails.email}
-                  onChange={handleDetailsChange}
-                  disabled={loading || !!userDetails.google_token}
-                  required
-                />
-                
-                <div className="flex gap-4">
+              {step === 1 ? (
+                <div className="flex flex-col gap-4">
                   <Input
-                    id="username"
-                    label="Username"
-                    type="text"
-                    placeholder="unique_id"
-                    value={userDetails.username}
+                    id="email"
+                    label="Email Address"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={userDetails.email}
                     onChange={handleDetailsChange}
-                    disabled={loading}
+                    disabled={loading || !!userDetails.google_token}
                     required
                   />
-                  <Input
-                    id="phone_number"
-                    label="Phone"
-                    type="tel"
-                    placeholder="+1234567890"
-                    value={userDetails.phone_number}
-                    onChange={handleDetailsChange}
-                    disabled={loading}
-                  />
-                </div>
-
-                {!userDetails.google_token && (
-                  <div className="relative">
+                  
+                  <div className="flex gap-4">
                     <Input
-                      id="password"
-                      label="Password"
-                      type="password"
-                      placeholder="Min 8 characters"
-                      value={userDetails.password}
+                      id="username"
+                      label="Username"
+                      type="text"
+                      placeholder="unique_id"
+                      value={userDetails.username}
                       onChange={handleDetailsChange}
                       disabled={loading}
                       required
                     />
-                    
-                    {/* Floating Rules Animation */}
-                    <AnimatePresence>
-                      {showRules && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9, x: 20 }}
-                          animate={{ opacity: 1, scale: 1, x: 0 }}
-                          exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                          className="absolute left-full ml-6 top-0 z-50 hidden w-64 rounded-xl border border-border/50 bg-background-secondary/90 p-4 shadow-2xl backdrop-blur-md lg:block"
-                        >
-                          <div className="mb-2 flex items-center gap-2 font-semibold text-text-primary">
-                            <IoMdCheckmarkCircleOutline className="text-text-accent" />
-                            Password Requirements
-                          </div>
-                          <ul className="space-y-2 text-xs">
-                            {rules.map((rule, idx) => {
-                              const isPassed = rule.test(userDetails.password);
-                              return (
-                                <li key={idx} className={`flex items-center gap-2 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
-                                  {isPassed ? <BsCheck2 className="h-3 w-3" /> : <BsX className="h-3 w-3" />}
-                                  {rule.label}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                          
-                          {/* Triangle Pointer */}
-                          <div className="absolute top-6 -left-2 h-4 w-4 rotate-45 border-l border-b border-border/50 bg-background-secondary/90" />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <Input
+                      id="phone_number"
+                      label="Phone"
+                      type="tel"
+                      placeholder="+1234567890"
+                      value={userDetails.phone_number}
+                      onChange={handleDetailsChange}
+                      disabled={loading}
+                    />
+                  </div>
 
-                    {/* Mobile/Small Screen Rules (Inline) */}
-                    <AnimatePresence>
-                      {showRules && (
-                        <motion.div 
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="mt-2 overflow-hidden lg:hidden"
-                        >
-                          <div className="rounded-lg bg-background-accent/30 p-3">
-                            <ul className="space-y-1 text-[10px]">
+                  {!userDetails.google_token && (
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        label="Password"
+                        type="password"
+                        placeholder="Min 8 characters"
+                        value={userDetails.password}
+                        onChange={handleDetailsChange}
+                        disabled={loading}
+                        required
+                      />
+                      
+                      {/* Floating Rules Animation */}
+                      <AnimatePresence>
+                        {showRules && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                            className="absolute left-full ml-6 top-0 z-50 hidden w-64 rounded-xl border border-border/50 bg-background-secondary/90 p-4 shadow-2xl backdrop-blur-md lg:block"
+                          >
+                            <div className="mb-2 flex items-center gap-2 font-semibold text-text-primary">
+                              <IoMdCheckmarkCircleOutline className="text-text-accent" />
+                              Password Requirements
+                            </div>
+                            <ul className="space-y-2 text-xs">
                               {rules.map((rule, idx) => {
                                 const isPassed = rule.test(userDetails.password);
                                 return (
-                                  <li key={idx} className={`flex items-center gap-1.5 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
-                                    {isPassed ? <BsCheck2 className="h-2.5 w-2.5" /> : <BsX className="h-2.5 w-2.5" />}
+                                  <li key={idx} className={`flex items-center gap-2 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
+                                    {isPassed ? <BsCheck2 className="h-3 w-3" /> : <BsX className="h-3 w-3" />}
                                     {rule.label}
                                   </li>
                                 );
                               })}
                             </ul>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Strength Indicator */}
-                    {userDetails.password && (
-                      <div className="mt-2 text-left">
-                        <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-text-secondary">
-                          <span>Strength</span>
-                          <span className={`${strengthColors[strength].replace('bg-', 'text-')}`}>
-                            {strengthLabels[strength]}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex h-1 gap-1">
-                          {[0, 1, 2, 3, 4].map((i) => (
-                            <div 
-                              key={i} 
-                              className={`h-full flex-1 rounded-full transition-all duration-300 ${i < strength ? strengthColors[strength] : 'bg-border/30'}`} 
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!userDetails.google_token && (
-                  <Input
-                    id="confirmPassword"
-                    label="Confirm Password"
-                    type="password"
-                    placeholder="Repeat your password"
-                    value={userDetails.confirmPassword}
-                    onChange={handleDetailsChange}
-                    disabled={loading}
-                    required
-                    error={userDetails.confirmPassword && userDetails.password !== userDetails.confirmPassword ? 'Passwords do not match' : null}
-                  />
-                )}
-
-                <div className="flex gap-4">
-                  <Input
-                    id="first_name"
-                    label="First Name"
-                    type="text"
-                    placeholder="First"
-                    value={userDetails.first_name}
-                    onChange={handleDetailsChange}
-                    disabled={loading}
-                    required
-                  />
-                  <Input
-                    id="last_name"
-                    label="Last Name"
-                    type="text"
-                    placeholder="Last (Opt)"
-                    value={userDetails.last_name}
-                    onChange={handleDetailsChange}
-                    disabled={loading}
-                  />
-                </div>
-
-                {/* Gender Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">Gender <span className="text-text-secondary font-normal">(Optional)</span></label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { value: 'male', label: 'Male', icon: <IoMaleOutline className="h-4 w-4" />, gradient: 'from-blue-500 to-cyan-500' },
-                      { value: 'female', label: 'Female', icon: <IoFemaleOutline className="h-4 w-4" />, gradient: 'from-pink-500 to-rose-500' },
-                      { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="h-4 w-4" />, gradient: 'from-purple-500 to-violet-500' },
-                      { value: 'prefer_not_to_say', label: 'Skip', icon: null, gradient: 'from-gray-500 to-gray-600' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setUserDetails({ ...userDetails, gender: opt.value })}
-                        disabled={loading}
-                        className={`relative flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 transition-all duration-300 cursor-pointer
-                          ${
-                            userDetails.gender === opt.value
-                              ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg scale-[1.03]`
-                              : 'border-border/50 bg-background-primary/30 text-text-secondary hover:border-text-accent/30'
-                          }
-                        `}
-                      >
-                        {opt.icon && <span>{opt.icon}</span>}
-                        <span className="text-[10px] font-bold leading-tight">{opt.label}</span>
-                        {userDetails.gender === opt.value && (
-                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
-                            <IoCheckmarkCircleOutline className="text-green-600" style={{ fontSize: '10px' }} />
-                          </span>
+                            
+                            {/* Triangle Pointer */}
+                            <div className="absolute top-6 -left-2 h-4 w-4 rotate-45 border-l border-b border-border/50 bg-background-secondary/90" />
+                          </motion.div>
                         )}
-                      </button>
-                    ))}
+                      </AnimatePresence>
+
+                      {/* Mobile/Small Screen Rules (Inline) */}
+                      <AnimatePresence>
+                        {showRules && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="mt-2 overflow-hidden lg:hidden"
+                          >
+                            <div className="rounded-lg bg-background-accent/30 p-3">
+                              <ul className="space-y-1 text-[10px]">
+                                {rules.map((rule, idx) => {
+                                  const isPassed = rule.test(userDetails.password);
+                                  return (
+                                    <li key={idx} className={`flex items-center gap-1.5 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
+                                      {isPassed ? <BsCheck2 className="h-2.5 w-2.5" /> : <BsX className="h-2.5 w-2.5" />}
+                                      {rule.label}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Strength Indicator */}
+                      {userDetails.password && (
+                        <div className="mt-2 text-left">
+                          <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-text-secondary">
+                            <span>Strength</span>
+                            <span className={`${strengthColors[strength].replace('bg-', 'text-')}`}>
+                              {strengthLabels[strength]}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex h-1 gap-1">
+                            {[0, 1, 2, 3, 4].map((i) => (
+                              <div 
+                                key={i} 
+                                className={`h-full flex-1 rounded-full transition-all duration-300 ${i < strength ? strengthColors[strength] : 'bg-border/30'}`} 
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!userDetails.google_token && (
+                    <Input
+                      id="confirmPassword"
+                      label="Confirm Password"
+                      type="password"
+                      placeholder="Repeat your password"
+                      value={userDetails.confirmPassword}
+                      onChange={handleDetailsChange}
+                      disabled={loading}
+                      required
+                      error={userDetails.confirmPassword && userDetails.password !== userDetails.confirmPassword ? 'Passwords do not match' : null}
+                    />
+                  )}
+
+                  <div className="flex gap-4">
+                    <Input
+                      id="first_name"
+                      label="First Name"
+                      type="text"
+                      placeholder="First"
+                      value={userDetails.first_name}
+                      onChange={handleDetailsChange}
+                      disabled={loading}
+                      required
+                    />
+                    <Input
+                      id="last_name"
+                      label="Last Name"
+                      type="text"
+                      placeholder="Last (Opt)"
+                      value={userDetails.last_name}
+                      onChange={handleDetailsChange}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* Gender Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">Gender <span className="text-text-secondary font-normal">(Optional)</span></label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { value: 'male', label: 'Male', icon: <IoMaleOutline className="h-4 w-4" />, gradient: 'from-blue-500 to-cyan-500' },
+                        { value: 'female', label: 'Female', icon: <IoFemaleOutline className="h-4 w-4" />, gradient: 'from-pink-500 to-rose-500' },
+                        { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="h-4 w-4" />, gradient: 'from-purple-500 to-violet-500' },
+                        { value: 'prefer_not_to_say', label: 'Skip', icon: null, gradient: 'from-gray-500 to-gray-600' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setUserDetails({ ...userDetails, gender: opt.value })}
+                          disabled={loading}
+                          className={`relative flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 transition-all duration-300 cursor-pointer
+                            ${
+                              userDetails.gender === opt.value
+                                ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg scale-[1.03]`
+                                : 'border-border/50 bg-background-primary/30 text-text-secondary hover:border-text-accent/30'
+                            }
+                          `}
+                        >
+                          {opt.icon && <span>{opt.icon}</span>}
+                          <span className="text-[10px] font-bold leading-tight">{opt.label}</span>
+                          {userDetails.gender === opt.value && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
+                              <IoCheckmarkCircleOutline className="text-green-600" style={{ fontSize: '10px' }} />
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="text-center mb-4">
+                    <p className="text-sm text-text-secondary">
+                      We've sent a 6-digit OTP to <br/><span className="font-semibold text-text-primary">{userDetails.email}</span>
+                    </p>
+                  </div>
+                  <Input
+                    id="otp"
+                    label="Enter OTP"
+                    type="text"
+                    placeholder="123456"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    disabled={loading}
+                    required
+                    maxLength={6}
+                    className="text-center text-2xl tracking-[0.5em] font-semibold"
+                  />
+                  <div className="flex justify-between items-center text-sm">
+                    <button 
+                      type="button" 
+                      onClick={() => setStep(1)} 
+                      className="text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResendOTP}
+                      disabled={resendTimer > 0 || loading}
+                      className={`transition-colors ${
+                        resendTimer > 0 
+                          ? 'text-text-secondary cursor-not-allowed' 
+                          : 'text-text-accent hover:underline'
+                      }`}
+                    >
+                      {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                    </button>
+                  </div>
+                </div>
+              )}
               
               <Button type="submit" fullWidth disabled={loading}>
-                {loading ? <Spinner size="sm" /> : 'Create Account'}
+                {loading ? <Spinner size="sm" /> : (step === 1 ? 'Continue' : 'Verify & Create Account')}
               </Button>
 
-              {!userDetails.google_token && (
+              {step === 1 && !userDetails.google_token && (
                 <>
                   <div className="relative my-6">
                     <div className="absolute inset-0 flex items-center">

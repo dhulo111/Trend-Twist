@@ -24,7 +24,60 @@ export const SocketProvider = ({ children }) => {
   const [incomingCallData, setIncomingCallData] = useState(null);
   const [localStream, setLocalStream] = useState(null);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications/');
+      setNotifications(res.data);
+      setUnreadCount(res.data.filter(n => !n.is_read).length);
+    } catch (e) {
+      console.error("Notif fetch failure", e);
+    }
+  }, []);
+
+  const markAsRead = useCallback(async (id) => {
+    try {
+      await api.post(`/notifications/${id}/read/`);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (e) {
+      console.error("Failed to mark as read", e);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      await api.post('/notifications/read-all/');
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error("Failed to mark all as read", e);
+    }
+  }, []);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target && !target.is_read) {
+        setUnreadCount(c => Math.max(0, c - 1));
+      }
+      return prev.filter(n => n.id !== id);
+    });
+  }, []);
+
+  const updateNotification = useCallback((id, data) => {
+    setNotifications(prev => prev.map(notif => {
+      if (notif.id === id) {
+        if (data.is_read === true && notif.is_read === false) {
+          setUnreadCount(c => Math.max(0, c - 1));
+        }
+        return { ...notif, ...data };
+      }
+      return notif;
+    }));
+  }, []);
+
   // Connect to WebSocket
+
   useEffect(() => {
     if (!user || !authToken?.access) return;
 
@@ -123,15 +176,9 @@ export const SocketProvider = ({ children }) => {
       if (newSocket) newSocket.close(1000);
       setSocket(null);
     };
-  }, [user, authToken]);
+  }, [user, authToken, fetchNotifications]);
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await api.get('/notifications/');
-      setNotifications(res.data);
-      setUnreadCount(res.data.filter(n => !n.is_read).length);
-    } catch (e) { console.error("Notif fetch failure", e); }
-  };
+
 
   const onAcceptCall = async () => {
     // Navigate to the chat page so ChatWindow can take over the WebRTC handshake
@@ -150,8 +197,18 @@ export const SocketProvider = ({ children }) => {
     setIncomingCallData(null);
   };
 
+
   return (
-    <SocketContext.Provider value={{ socket, notifications, unreadCount, fetchNotifications }}>
+    <SocketContext.Provider value={{ 
+      socket, 
+      notifications, 
+      unreadCount, 
+      fetchNotifications, 
+      markAsRead, 
+      markAllAsRead, 
+      removeNotification, 
+      updateNotification 
+    }}>
       {children}
       
       {/* GLOBAL CALL INTERFACE (Ringing Screen) */}

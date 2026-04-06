@@ -188,6 +188,192 @@ class PasswordLoginView(APIView):
         
         return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
+class SendSecurityOTPView(APIView):
+    """Sends OTP to the authenticated user's current email for security changes."""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        email = request.user.email
+        if not email:
+            return Response({"error": "No email associated with this account."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        import random
+        from django.core.mail import send_mail
+        from django.conf import settings
+        from .models import OTPRequest
+        
+        otp = str(random.randint(100000, 999999))
+        
+        try:
+            send_mail(
+                'Trend Twist Security Update OTP',
+                f'Your OTP to change your password is {otp}. It is valid for 5 minutes.',
+                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
+                [email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print("Mail Error:", e)
+            return Response({"error": "Failed to send email. Check configuration."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        OTPRequest.objects.filter(email=email).delete()
+        OTPRequest.objects.create(email=email, otp=otp)
+        
+        return Response({"message": f"OTP sent to {email}."}, status=status.HTTP_200_OK)
+
+class UpdatePasswordView(APIView):
+    """Updates password of the authenticated user utilizing an OTP sent to their current email."""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        from .models import OTPRequest
+        
+        user = request.user
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        
+        if not otp:
+            return Response({"error": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not new_password:
+             return Response({"error": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        try:
+             otp_req = OTPRequest.objects.filter(email=user.email).latest('created_at')
+        except OTPRequest.DoesNotExist:
+             return Response({"error": "No OTP requested for this account."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        if otp_req.otp != otp:
+             return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        if otp_req.is_expired():
+             return Response({"error": "OTP has expired."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        otp_req.is_verified = True
+        otp_req.save()
+        
+        if len(new_password) < 8:
+             return Response({"error": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordSendOTPView(APIView):
+    """Sends OTP to the user's email if the account exists for password reset."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        from django.db.models import Q
+        query = request.data.get('email') or request.data.get('username_or_email')
+        if not query:
+            return Response({"error": "Email or Username is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user = User.objects.filter(Q(username__iexact=query) | Q(email__iexact=query)).first()
+        if not user or not user.email:
+            return Response({"error": "No valid account or email found for this user."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        email = user.email
+            
+        import random
+        from django.core.mail import send_mail
+        from django.conf import settings
+        from .models import OTPRequest
+        
+        otp = str(random.randint(100000, 999999))
+        
+        try:
+            send_mail(
+                'Trend Twist Password Reset OTP',
+                f'Your OTP to reset your password is {otp}. It is valid for 5 minutes.',
+                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
+                [email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            return Response({"error": "Failed to send email. Check configuration."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        OTPRequest.objects.filter(email=email).delete()
+        OTPRequest.objects.create(email=email, otp=otp)
+        
+        return Response({"message": f"OTP sent to {email}."}, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordResetView(APIView):
+    """Resets password using OTP."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        from .models import OTPRequest
+        
+        query = request.data.get('email') or request.data.get('username_or_email')
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        
+        if not query or not otp or not new_password:
+            return Response({"error": "Email/Username, OTP, and new password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from django.db.models import Q
+        user = User.objects.filter(Q(username__iexact=query) | Q(email__iexact=query)).first()
+        if not user or not user.email:
+             return Response({"error": "Invalid user or email."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        try:
+             otp_req = OTPRequest.objects.filter(email=user.email).latest('created_at')
+        except OTPRequest.DoesNotExist:
+             return Response({"error": "No OTP requested for this email."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        if otp_req.otp != otp:
+             return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        if otp_req.is_expired():
+             return Response({"error": "OTP has expired."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        otp_req.is_verified = True
+        otp_req.save()
+        
+        if len(new_password) < 8:
+             return Response({"error": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
+
+class SendOTPView(APIView):
+    """Sends OTP to user email for verification."""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if User.objects.filter(email__iexact=email).exists():
+            return Response({"error": "This email is already registered."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Generate 6 digit OTP
+        otp = str(random.randint(100000, 999999))
+        
+        try:
+            send_mail(
+                'Trend Twist Registration OTP',
+                f'Your OTP for registration is {otp}. It is valid for 5 minutes.',
+                settings.DEFAULT_FROM_EMAIL or 'noreply@trendtwist.com',
+                [email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print("Mail Error:", e)
+            return Response({"error": "Failed to send email. Ensure Bravo Mail Service is configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        OTPRequest.objects.filter(email=email).delete()
+        OTPRequest.objects.create(email=email, otp=otp)
+        
+        return Response({"message": "OTP sent successfully."}, status=status.HTTP_200_OK)
+
 class PasswordRegisterView(APIView):
     """Password-based registration with optional phone number."""
     permission_classes = [AllowAny]
@@ -1513,6 +1699,10 @@ class NotificationActionView(APIView):
             
             # Normal flow (Request exists)
             if action == 'accept_follow':
+                # Capture variables needed for broadcast before deletion/save
+                original_sender_id = follow_req.sender_id
+                receiver_user = follow_req.receiver
+                
                 Follow.objects.get_or_create(follower=follow_req.sender, following=follow_req.receiver)
                 follow_req.delete()
                 
@@ -1520,26 +1710,33 @@ class NotificationActionView(APIView):
                 notification.notification_type = 'req_approved'
                 notification.save()
                 
-                # OPTIONAL: Send "Follow Accept" notification back to sender
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                from .serializers import NotificationSerializer
+                channel_layer = get_channel_layer()
+
+                # 1. Create & BROADCAST "Follow Accept" notification back to the person who requested
                 try:
-                    Notification.objects.create(
-                        recipient=follow_req.sender,
-                        sender=follow_req.receiver,
+                    new_notif = Notification.objects.create(
+                        recipient_id=original_sender_id,
+                        sender=request.user,
                         notification_type='follow_accept'
                     )
-                except Exception:
-                    pass 
-                
-                # BROADCAST UPDATE
+                    
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{original_sender_id}",
+                        {
+                            'type': 'notification_message',
+                            'data': NotificationSerializer(new_notif, context={'request': request}).data
+                        }
+                    )
+                except Exception as e:
+                    print(f"Follow accept broadcast failed: {e}")
+
+                # 2. BROADCAST UPDATE to current user (the acceptor) to update UI state
                 try:
-                     from channels.layers import get_channel_layer
-                     from asgiref.sync import async_to_sync
-                     from .serializers import NotificationSerializer
-                     
-                     channel_layer = get_channel_layer()
                      group_name = f"user_{request.user.id}"
-                     data = NotificationSerializer(notification).data
-                     
+                     data = NotificationSerializer(notification, context={'request': request}).data
                      async_to_sync(channel_layer.group_send)(
                         group_name,
                         {
@@ -1547,8 +1744,7 @@ class NotificationActionView(APIView):
                             'data': data
                         }
                      )
-                except Exception as e:
-                     print(f"Socket update failed: {e}")
+                except Exception: pass
 
                 return Response({"status": "follow_accepted"}, status=status.HTTP_200_OK)
             
@@ -1566,7 +1762,7 @@ class NotificationActionView(APIView):
                      
                      channel_layer = get_channel_layer()
                      group_name = f"user_{request.user.id}"
-                     data = NotificationSerializer(notification).data
+                     data = NotificationSerializer(notification, context={'request': request}).data
                      
                      async_to_sync(channel_layer.group_send)(
                         group_name,

@@ -14,6 +14,7 @@ import { IoMdTrendingUp } from 'react-icons/io';
 import { BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import api from '../api/axiosInstance';
 
 // --- Animation Variants ---
 const formVariants = {
@@ -27,9 +28,23 @@ const LoginPage = () => {
   const [step, setStep] = useState(1);
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
   const [blockInfo, setBlockInfo] = useState(null);
+
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const { checkUserExists, loginWithPassword, googleLogin } = useContext(AuthContext);
   const { theme, toggleTheme } = useContext(ThemeContext);
@@ -96,6 +111,58 @@ const LoginPage = () => {
     setError('Google Login service failed. Please try again later.');
   };
 
+  const handleForgotPasswordRequest = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await api.post('/auth/forgot-password/send-otp/', { username_or_email: usernameOrEmail });
+      setStep(3);
+      setResendTimer(60);
+      setSuccessMsg(`OTP sent to the email associated with ${usernameOrEmail}.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (resendTimer > 0) return;
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await api.post('/auth/forgot-password/send-otp/', { username_or_email: usernameOrEmail });
+      setResendTimer(60);
+      setSuccessMsg('OTP resent successfully.');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to resend OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await api.post('/auth/forgot-password/reset/', {
+        username_or_email: usernameOrEmail,
+        otp,
+        new_password: newPassword
+      });
+      setSuccessMsg('Password reset successfully. You can now log in.');
+      setStep(2);
+      setPassword('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to reset password.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="relative flex min-h-screen w-full bg-gradient-to-br from-background-primary via-background-secondary to-background-primary">
@@ -139,14 +206,23 @@ const LoginPage = () => {
           <div className="flex flex-col items-center text-center">
             <IoMdTrendingUp className="h-10 w-10 text-text-accent" />
             <h1 className="mt-4 text-3xl font-bold text-text-primary">
-              {step === 1 ? 'Welcome Back' : 'Enter Password'}
+              {step === 1 ? 'Welcome Back' : step === 2 ? 'Enter Password' : 'Reset Password'}
             </h1>
             <p className="mt-2 text-text-secondary">
               {step === 1
                 ? 'Enter your username or email to continue.'
-                : `Enter password for ${usernameOrEmail}`}
+                : step === 2
+                ? `Enter password for ${usernameOrEmail}`
+                : `Enter OTP sent to your email and your new password`}
             </p>
           </div>
+
+          {/* --- Success Message Display --- */}
+          {successMsg && (
+            <p className="mt-4 rounded-md bg-green-500/10 p-3 text-center text-sm font-medium text-green-500">
+              {successMsg}
+            </p>
+          )}
 
           {/* --- Error Display --- */}
           {error && !blockInfo && (
@@ -255,6 +331,15 @@ const LoginPage = () => {
                     disabled={loading}
                     autoFocus
                   />
+                  <div className="flex justify-end mt-[-10px]">
+                    <button
+                      type="button"
+                      onClick={handleForgotPasswordRequest}
+                      className="text-xs font-semibold text-text-accent hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <Button type="submit" fullWidth disabled={loading}>
                     {loading ? <Spinner size="sm" /> : 'Log In'}
                   </Button>
@@ -263,7 +348,71 @@ const LoginPage = () => {
                     type="button"
                     variant="secondary"
                     fullWidth
-                    onClick={() => { setStep(1); setError(null); setPassword(''); }}
+                    onClick={() => { setStep(1); setError(null); setSuccessMsg(null); setPassword(''); }}
+                    disabled={loading}
+                  >
+                    Back
+                  </Button>
+                </motion.form>
+              )}
+
+              {/* --- Step 3: Reset Password Form --- */}
+              {step === 3 && (
+                <motion.form
+                  key="step3"
+                  variants={formVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  onSubmit={handleResetPasswordSubmit}
+                  className="space-y-6"
+                >
+                  <Input
+                    id="otp"
+                    label="Verification OTP"
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    disabled={loading}
+                    maxLength={6}
+                    required
+                  />
+                  <Input
+                    id="newPassword"
+                    label="New Password"
+                    type="password"
+                    placeholder="Min 8 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                  
+                  <div className="flex justify-end mt-[-10px]">
+                    <button
+                      type="button"
+                      onClick={handleResendOTP}
+                      disabled={resendTimer > 0 || loading}
+                       className={`text-xs font-semibold transition-colors ${
+                        resendTimer > 0 
+                          ? 'text-text-secondary cursor-not-allowed' 
+                          : 'text-text-accent hover:underline'
+                      }`}
+                    >
+                      {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                    </button>
+                  </div>
+
+                  <Button type="submit" fullWidth disabled={loading}>
+                    {loading ? <Spinner size="sm" /> : 'Reset Password'}
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => { setStep(2); setError(null); setSuccessMsg(null); }}
                     disabled={loading}
                   >
                     Back

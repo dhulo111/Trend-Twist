@@ -89,20 +89,88 @@ const SettingsPage = () => {
     </div>
   );
 
-  const SecuritySettings = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-text-primary">Security</h3>
-      <div className="rounded-lg border border-border bg-background-secondary p-4">
-        <p className="text-sm text-text-secondary">
-          Since we use passwordless login (OTP), your primary security is linked to your email.
-        </p>
-      </div>
+  const SecuritySettings = () => {
+    const [step, setStep] = useState(0); // 0 = idle, 1 = OTP sent / input new password
+    const [sendingOTP, setSendingOTP] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [updating, setUpdating] = useState(false);
 
-      <Button variant="secondary" disabled={true}>
-        Change Email/Password (Not implemented)
-      </Button>
-    </div>
-  );
+    const handleRequestOTP = async () => {
+      setSendingOTP(true);
+      try {
+        await api.post('/auth/settings/send-security-otp/');
+        setStep(1);
+      } catch (e) {
+        alert(e.response?.data?.error || 'Failed to send OTP.');
+      } finally {
+        setSendingOTP(false);
+      }
+    };
+
+    const handleUpdatePassword = async () => {
+      if (!otp || !newPassword) return alert("Please enter both OTP and a new password.");
+      if (newPassword.length < 8) return alert("Password must be at least 8 characters long.");
+      setUpdating(true);
+      try {
+        await api.post('/auth/settings/update-password/', { otp, new_password: newPassword });
+        alert('Password updated successfully!');
+        setStep(0);
+        setOtp('');
+        setNewPassword('');
+      } catch (e) {
+        alert(e.response?.data?.error || 'Failed to update password.');
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold text-text-primary">Security</h3>
+        <div className="rounded-lg border border-border bg-background-secondary p-4">
+          <p className="text-sm text-text-secondary">
+            Since we use passwordless login (OTP), your primary security is linked to your email.
+            You can securely update your password by verifying via your email address.
+          </p>
+        </div>
+
+        {step === 0 ? (
+          <Button variant="primary" onClick={handleRequestOTP} disabled={sendingOTP}>
+            {sendingOTP ? <Spinner size="sm" /> : 'Change Password'}
+          </Button>
+        ) : (
+          <div className="space-y-4 rounded-lg border border-border bg-background-secondary p-4">
+            <p className="text-sm text-text-secondary">
+              An OTP has been sent to your registered email address. Enter it below along with your new password.
+            </p>
+            <Input 
+              label="Verification OTP" 
+              placeholder="123456" 
+              value={otp} 
+              onChange={(e) => setOtp(e.target.value)} 
+              maxLength={6}
+            />
+            <Input 
+              label="New Password" 
+              type="password" 
+              placeholder="Min 8 characters" 
+              value={newPassword} 
+              onChange={(e) => setNewPassword(e.target.value)} 
+            />
+            <div className="flex items-center gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setStep(0)} disabled={updating}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleUpdatePassword} disabled={updating}>
+                {updating ? <Spinner size="sm" /> : 'Update Password'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const CreatorModeSettings = () => {
     const [toggling, setToggling] = useState(false);

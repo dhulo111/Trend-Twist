@@ -19,8 +19,13 @@ urlpatterns = [
     path('auth/google/', views.GoogleLoginView.as_view(), name='google_login'),
     path('auth/check-user/', views.CheckUserView.as_view(), name='check_user'),
     path('auth/login/password/', views.PasswordLoginView.as_view(), name='password_login'),
+    path('auth/register/send-otp/', views.SendOTPView.as_view(), name='send_otp'),
     path('auth/register/password/', views.PasswordRegisterView.as_view(), name='password_register'),
     path('auth/delete-account/', views.DeleteAccountView.as_view(), name='delete_account'),
+    path('auth/settings/send-security-otp/', views.SendSecurityOTPView.as_view(), name='send_security_otp'),
+    path('auth/settings/update-password/', views.UpdatePasswordView.as_view(), name='update_password'),
+    path('auth/forgot-password/send-otp/', views.ForgotPasswordSendOTPView.as_view(), name='forgot_password_send_otp'),
+    path('auth/forgot-password/reset/', views.ForgotPasswordResetView.as_view(), name='forgot_password_reset'),
 
 
     # ----------------------------------------------------------------------

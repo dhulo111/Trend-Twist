@@ -457,6 +457,8 @@ class Notification(models.Model):
         ('comment_reel', 'Comment Reel'),
         ('comment_twist', 'Comment Twist'),
         ('story_like', 'Story Like'),
+        ('req_approved', 'Request Approved'),
+        ('req_rejected', 'Request Rejected'),
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
