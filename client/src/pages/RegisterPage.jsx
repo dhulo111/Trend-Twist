@@ -15,6 +15,7 @@ import { IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline, IoCheckmarkCircleO
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import axiosInstance from '../api/axiosInstance';
+import loginHero from '../assets/login_hero.png';
 
 const RegisterPage = () => {
   // --- States and Context ---
@@ -205,58 +206,52 @@ const RegisterPage = () => {
     }
   };
 
-  return (
-    <div className="relative flex min-h-screen w-full bg-gradient-to-br from-background-primary via-background-secondary to-background-primary text-text-primary">
+  const handlePasswordFocus = () => {
+    if (userDetails.password.length >= 0) {
+      setShowRules(true);
+    }
+  };
 
-      {/* --- Theme Toggle Button --- */}
+  return (
+    <div className="flex min-h-screen w-full bg-background-primary font-sans relative overflow-x-hidden">
+      {/* Theme Toggle Button */}
       <button
         onClick={toggleTheme}
-        className="absolute top-6 right-6 z-10 rounded-full p-2.5 
-                   bg-background-secondary/70 border border-border/50
-                   text-text-secondary transition-colors hover:text-text-accent"
+        className="absolute top-6 right-6 z-50 rounded-full p-3 
+                   bg-background-secondary/80 border border-border/20
+                   text-text-primary shadow-lg transition-transform hover:scale-110"
       >
         {theme === 'light' ? <BsMoonStarsFill /> : <BsSunFill />}
       </button>
 
-      {/* --- 1. Left Column (Registration Form) --- */}
-      <div className="flex w-full items-center justify-center p-4 md:w-1/2 lg:w-2/5">
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md overflow-visible rounded-2xl 
-                        border border-border/50 bg-background-secondary/70 
-                        p-8 shadow-2xl backdrop-blur-lg"
-        >
-
-          {/* Header */}
-          <div className="flex flex-col items-center text-center">
-            <IoMdTrendingUp className="h-10 w-10 text-text-accent" />
-            <h1 className="mt-4 text-3xl font-bold">
-              Create Your Account
-            </h1>
-            <p className="mt-2 text-text-secondary">
-              Join the conversation today.
+      {/* Left Column (Registration Form) */}
+      <div className="flex w-full items-center justify-center lg:w-1/2 p-6 sm:p-12 relative overflow-y-auto no-scrollbar py-12 h-screen">
+        <div className="w-full max-w-lg space-y-6 my-auto pt-10 pb-16">
+          
+          <div className="text-center lg:text-left mb-8">
+            <img src="/logo1.png" alt="TrendTwist" className="h-14 w-14 object-contain drop-shadow-lg mb-6 lg:mx-0 mx-auto" />
+            <h2 className="text-4xl font-bold text-text-primary tracking-tight">Create your account</h2>
+            <p className="mt-3 text-text-secondary w-full text-base">
+              Join the conversation today and discover what's trending.
             </p>
           </div>
 
-          {/* Error Display */}
           {error && (
-            <p className="mt-4 rounded-md bg-red-500/10 p-3 text-center text-sm font-medium text-red-500">
-              {error}
-            </p>
+            <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 p-4 shadow-sm backdrop-blur-sm">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
+            </div>
           )}
 
-          {/* Form Container */}
-          <div className="relative mt-8">
+          <div className="relative">
             <form onSubmit={handleDetailsSubmit} className="space-y-4">
               {step === 1 ? (
                 <div className="flex flex-col gap-4">
                   <Input
                     id="email"
-                    label="Email Address"
+                    label=""
+                    className="h-14! text-lg rounded-xl!"
                     type="email"
-                    placeholder="name@example.com"
+                    placeholder="Email Address"
                     value={userDetails.email}
                     onChange={handleDetailsChange}
                     disabled={loading || !!userDetails.google_token}
@@ -266,9 +261,10 @@ const RegisterPage = () => {
                   <div className="flex gap-4">
                     <Input
                       id="username"
-                      label="Username"
+                      label=""
+                      className="h-14! rounded-xl!"
                       type="text"
-                      placeholder="unique_id"
+                      placeholder="Username"
                       value={userDetails.username}
                       onChange={handleDetailsChange}
                       disabled={loading}
@@ -276,9 +272,10 @@ const RegisterPage = () => {
                     />
                     <Input
                       id="phone_number"
-                      label="Phone"
+                      label=""
+                      className="h-14! rounded-xl!"
                       type="tel"
-                      placeholder="+1234567890"
+                      placeholder="Phone (Optional)"
                       value={userDetails.phone_number}
                       onChange={handleDetailsChange}
                       disabled={loading}
@@ -289,46 +286,19 @@ const RegisterPage = () => {
                     <div className="relative">
                       <Input
                         id="password"
-                        label="Password"
+                        label=""
+                        className="h-14! rounded-xl!"
                         type="password"
-                        placeholder="Min 8 characters"
+                        placeholder="Password (Min 8 characters)"
                         value={userDetails.password}
                         onChange={handleDetailsChange}
+                        onFocus={handlePasswordFocus}
                         disabled={loading}
                         required
                       />
                       
-                      {/* Floating Rules Animation */}
-                      <AnimatePresence>
-                        {showRules && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.9, x: 20 }}
-                            animate={{ opacity: 1, scale: 1, x: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                            className="absolute left-full ml-6 top-0 z-50 hidden w-64 rounded-xl border border-border/50 bg-background-secondary/90 p-4 shadow-2xl backdrop-blur-md lg:block"
-                          >
-                            <div className="mb-2 flex items-center gap-2 font-semibold text-text-primary">
-                              <IoMdCheckmarkCircleOutline className="text-text-accent" />
-                              Password Requirements
-                            </div>
-                            <ul className="space-y-2 text-xs">
-                              {rules.map((rule, idx) => {
-                                const isPassed = rule.test(userDetails.password);
-                                return (
-                                  <li key={idx} className={`flex items-center gap-2 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
-                                    {isPassed ? <BsCheck2 className="h-3 w-3" /> : <BsX className="h-3 w-3" />}
-                                    {rule.label}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                            
-                            {/* Triangle Pointer */}
-                            <div className="absolute top-6 -left-2 h-4 w-4 rotate-45 border-l border-b border-border/50 bg-background-secondary/90" />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
+                      {/* Floating Rules Animation - REMOVED from side, now on Image */}
+                      
                       {/* Mobile/Small Screen Rules (Inline) */}
                       <AnimatePresence>
                         {showRules && (
@@ -336,15 +306,15 @@ const RegisterPage = () => {
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            className="mt-2 overflow-hidden lg:hidden"
+                            className="mt-2 overflow-hidden xl:hidden"
                           >
-                            <div className="rounded-lg bg-background-accent/30 p-3">
-                              <ul className="space-y-1 text-[10px]">
+                            <div className="rounded-xl border border-border/50 bg-background-secondary/50 p-3">
+                              <ul className="space-y-1.5 text-[11px]">
                                 {rules.map((rule, idx) => {
                                   const isPassed = rule.test(userDetails.password);
                                   return (
                                     <li key={idx} className={`flex items-center gap-1.5 ${isPassed ? 'text-green-500' : 'text-text-secondary'}`}>
-                                      {isPassed ? <BsCheck2 className="h-2.5 w-2.5" /> : <BsX className="h-2.5 w-2.5" />}
+                                      {isPassed ? <BsCheck2 className="h-3 w-3" /> : <BsX className="h-3 w-3" />}
                                       {rule.label}
                                     </li>
                                   );
@@ -357,18 +327,18 @@ const RegisterPage = () => {
 
                       {/* Strength Indicator */}
                       {userDetails.password && (
-                        <div className="mt-2 text-left">
-                          <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-text-secondary">
+                        <div className="mt-3 text-left pl-1">
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-text-muted">
                             <span>Strength</span>
                             <span className={`${strengthColors[strength].replace('bg-', 'text-')}`}>
                               {strengthLabels[strength]}
                             </span>
                           </div>
-                          <div className="mt-1 flex h-1 gap-1">
+                          <div className="mt-1.5 flex h-1.5 gap-1.5">
                             {[0, 1, 2, 3, 4].map((i) => (
                               <div 
                                 key={i} 
-                                className={`h-full flex-1 rounded-full transition-all duration-300 ${i < strength ? strengthColors[strength] : 'bg-border/30'}`} 
+                                className={`h-full flex-1 rounded-full transition-all duration-500 ${i < strength ? strengthColors[strength] : 'bg-border/40'}`} 
                               />
                             ))}
                           </div>
@@ -380,9 +350,10 @@ const RegisterPage = () => {
                   {!userDetails.google_token && (
                     <Input
                       id="confirmPassword"
-                      label="Confirm Password"
+                      label=""
+                      className="h-14! rounded-xl!"
                       type="password"
-                      placeholder="Repeat your password"
+                      placeholder="Confirm Password"
                       value={userDetails.confirmPassword}
                       onChange={handleDetailsChange}
                       disabled={loading}
@@ -394,9 +365,10 @@ const RegisterPage = () => {
                   <div className="flex gap-4">
                     <Input
                       id="first_name"
-                      label="First Name"
+                      label=""
+                      className="h-14! rounded-xl!"
                       type="text"
-                      placeholder="First"
+                      placeholder="First Name"
                       value={userDetails.first_name}
                       onChange={handleDetailsChange}
                       disabled={loading}
@@ -404,9 +376,10 @@ const RegisterPage = () => {
                     />
                     <Input
                       id="last_name"
-                      label="Last Name"
+                      label=""
+                      className="h-14! rounded-xl!"
                       type="text"
-                      placeholder="Last (Opt)"
+                      placeholder="Last Name"
                       value={userDetails.last_name}
                       onChange={handleDetailsChange}
                       disabled={loading}
@@ -414,10 +387,10 @@ const RegisterPage = () => {
                   </div>
 
                   {/* Gender Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">Gender <span className="text-text-secondary font-normal">(Optional)</span></label>
+                  <div className="mt-2">
+                    <label className="block text-sm font-semibold text-text-primary mb-2">Gender <span className="text-text-muted font-normal">(Optional)</span></label>
                     <div className="grid grid-cols-4 gap-2">
-                      {[
+                       {[
                         { value: 'male', label: 'Male', icon: <IoMaleOutline className="h-4 w-4" />, gradient: 'from-blue-500 to-cyan-500' },
                         { value: 'female', label: 'Female', icon: <IoFemaleOutline className="h-4 w-4" />, gradient: 'from-pink-500 to-rose-500' },
                         { value: 'other', label: 'Other', icon: <IoMaleFemaleOutline className="h-4 w-4" />, gradient: 'from-purple-500 to-violet-500' },
@@ -428,19 +401,19 @@ const RegisterPage = () => {
                           type="button"
                           onClick={() => setUserDetails({ ...userDetails, gender: opt.value })}
                           disabled={loading}
-                          className={`relative flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl border-2 transition-all duration-300 cursor-pointer
+                          className={`relative flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-xl border-2 transition-all duration-300 cursor-pointer
                             ${
                               userDetails.gender === opt.value
-                                ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg scale-[1.03]`
-                                : 'border-border/50 bg-background-primary/30 text-text-secondary hover:border-text-accent/30'
+                                ? `border-transparent bg-gradient-to-br ${opt.gradient} text-white shadow-lg scale-[1.02]`
+                                : 'border-border/40 bg-background-primary text-text-secondary hover:border-blue-500/30'
                             }
                           `}
                         >
                           {opt.icon && <span>{opt.icon}</span>}
-                          <span className="text-[10px] font-bold leading-tight">{opt.label}</span>
+                          <span className="text-[11px] font-bold leading-tight">{opt.label}</span>
                           {userDetails.gender === opt.value && (
-                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
-                              <IoCheckmarkCircleOutline className="text-green-600" style={{ fontSize: '10px' }} />
+                            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow">
+                              <IoCheckmarkCircleOutline className="text-blue-500" style={{ fontSize: '12px' }} />
                             </span>
                           )}
                         </button>
@@ -452,22 +425,22 @@ const RegisterPage = () => {
                 <div className="flex flex-col gap-4">
                   <div className="text-center mb-4">
                     <p className="text-sm text-text-secondary">
-                      We've sent a 6-digit OTP to <br/><span className="font-semibold text-text-primary">{userDetails.email}</span>
+                      We've sent a 6-digit OTP to <br/><span className="font-bold text-text-primary">{userDetails.email}</span>
                     </p>
                   </div>
                   <Input
                     id="otp"
-                    label="Enter OTP"
+                    label=""
+                    className="h-16! rounded-2xl! text-center text-3xl tracking-[0.5em] font-bold"
                     type="text"
-                    placeholder="123456"
+                    placeholder="------"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     disabled={loading}
                     required
                     maxLength={6}
-                    className="text-center text-2xl tracking-[0.5em] font-semibold"
                   />
-                  <div className="flex justify-between items-center text-sm">
+                  <div className="flex justify-between items-center text-sm font-semibold mt-2">
                     <button 
                       type="button" 
                       onClick={() => setStep(1)} 
@@ -481,8 +454,8 @@ const RegisterPage = () => {
                       disabled={resendTimer > 0 || loading}
                       className={`transition-colors ${
                         resendTimer > 0 
-                          ? 'text-text-secondary cursor-not-allowed' 
-                          : 'text-text-accent hover:underline'
+                          ? 'text-text-muted cursor-not-allowed' 
+                          : 'text-blue-500 hover:text-blue-600'
                       }`}
                     >
                       {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
@@ -491,20 +464,18 @@ const RegisterPage = () => {
                 </div>
               )}
               
-              <Button type="submit" fullWidth disabled={loading}>
-                {loading ? <Spinner size="sm" /> : (step === 1 ? 'Continue' : 'Verify & Create Account')}
+              <Button type="submit" fullWidth disabled={loading} className="h-12 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/25 mt-6">
+                {loading ? <Spinner size="sm" /> : (step === 1 ? 'Verify & Continue' : 'Create Account')}
               </Button>
 
               {step === 1 && !userDetails.google_token && (
                 <>
-                  <div className="relative my-6">
+                  <div className="relative py-6">
                     <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-border/50" />
+                      <span className="w-full border-t border-border/60" />
                     </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="bg-background-secondary px-2 text-text-secondary">
-                        OR
-                      </span>
+                    <div className="relative flex justify-center text-sm font-medium">
+                      <span className="bg-background-primary px-4 text-text-muted">OR</span>
                     </div>
                   </div>
 
@@ -513,9 +484,10 @@ const RegisterPage = () => {
                       onSuccess={handleGoogleSuccess}
                       onError={handleGoogleError}
                       useOneTap={false}
-                      theme={theme === 'dark' ? 'filled_blue' : 'outline'}
+                      theme="filled_blue"
                       shape="rectangular"
-                      width="320px"
+                      size="large"
+                      width="100%"
                     />
                   </div>
                 </>
@@ -523,34 +495,93 @@ const RegisterPage = () => {
             </form>
           </div>
 
-          {/* Link to Login */}
           <p className="mt-8 text-center text-sm text-text-secondary">
             Already have an account?{' '}
             <Link
               to="/login"
-              className="font-medium text-text-accent transition-colors hover:underline"
+              className="font-semibold text-blue-500 hover:text-blue-600 transition-colors"
             >
               Log in
             </Link>
           </p>
-        </motion.div>
+        </div>
       </div>
 
-      {/* --- 2. Right Column (Image/Branding) --- */}
-      <div className="hidden md:flex md:w-1/2 lg:w-3/5 items-center justify-center p-12">
-        <div className="flex flex-col items-center text-center">
-          <h1 className="text-5xl font-extrabold">
-            Join the <span className="text-text-accent">Conversation</span>
+      {/* Right Column (Image Hero) */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-black">
+        <img
+          src={loginHero}
+          alt="Trend Twist Sign Up"
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ transform: "scaleX(-1)" }} // Flip image to make it look distinct from login page
+        />
+        {/* Black overlay for perfect contrast */}
+        <div className="absolute inset-0 bg-black/60"></div>
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-12">
+          <h1 className="text-5xl xl:text-6xl font-black text-white tracking-tight shadow-black drop-shadow-2xl mb-6">
+            Trend<span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Twist</span>
           </h1>
-          <p className="mt-4 max-w-md text-2xl text-text-secondary">
-            Create an account to start, follow, and twist the latest trends.
+          <p className="text-2xl font-medium text-gray-100 leading-relaxed shadow-black drop-shadow-md max-w-xl">
+            Sign in to catch up with friends, discover viral content, and ride the next wave.
           </p>
-          <img
-            src="https://gosharpener.com/content/uploads/photos/2024/09/sngine_554b7fb4220580094ff96ca152962eb8.jpg"
-            alt="Register Graphic"
-            className="mt-12 w-full max-w-lg rounded-2xl shadow-2xl"
-          />
         </div>
+
+        {/* Floating Password Requirements Card (Over Image) */}
+        <AnimatePresence>
+          {showRules && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 50 }}
+              className="absolute inset-0 z-20 flex items-center justify-center"
+            >
+              <div className="w-full max-w-sm bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl p-8 shadow-2xl overflow-hidden relative group">
+                {/* Decorative background elements */}
+                <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-colors duration-500" />
+                <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-colors duration-500" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-blue-500/20 rounded-lg">
+                      <IoMdCheckmarkCircleOutline className="text-blue-400 text-2xl" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white tracking-tight">Security Check</h3>
+                  </div>
+                  
+                  <ul className="space-y-4">
+                    {rules.map((rule, idx) => {
+                      const isPassed = rule.test(userDetails.password);
+                      return (
+                        <motion.li 
+                          key={idx} 
+                          initial={false}
+                          animate={{ x: isPassed ? 5 : 0 }}
+                          className={`flex items-center gap-3 text-sm transition-colors duration-300 ${isPassed ? 'text-green-400' : 'text-gray-300'}`}
+                        >
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                            isPassed ? 'bg-green-500 border-green-500' : 'bg-white/5 border-white/20'
+                          }`}>
+                            {isPassed ? <BsCheck2 className="text-white text-sm" /> : <BsX className="text-white text-sm" />}
+                          </div>
+                          <span className={isPassed ? 'font-semibold text-white' : 'font-normal'}>{rule.label}</span>
+                        </motion.li>
+                      );
+                    })}
+                  </ul>
+
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowRules(false); }}
+                    className="mt-8 w-full py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-sm font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/25 active:scale-[0.98]"
+                  >
+                    Got it, OK
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
     </div>

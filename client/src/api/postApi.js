@@ -2,10 +2,10 @@
 
 import axiosInstance from "./axiosInstance";
 
-export const getFeedPosts = async () => {
+export const getFeedPosts = async (page = 1) => {
   try {
-    const response = await axiosInstance.get("/posts/");
-    return response.data;
+    const response = await axiosInstance.get(`/posts/?page=${page}`);
+    return response.data; // Now returns { count, next, previous, results }
   } catch (error) {
     console.error("Error fetching feed posts:", error);
     throw error;

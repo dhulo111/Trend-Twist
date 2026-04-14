@@ -3,7 +3,9 @@
 import React from 'react';
 import Post from './Post'; // Assuming Post.jsx is in the same directory
 
-const PostList = ({ posts, onUpdateFeed }) => {
+import Spinner from '../../common/Spinner';
+
+const PostList = ({ posts, onUpdateFeed, lastPostElementRef, loadingMore }) => {
   if (!posts || posts.length === 0) {
     return (
       <div className="text-center py-12 text-text-secondary">
@@ -14,7 +16,7 @@ const PostList = ({ posts, onUpdateFeed }) => {
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 pb-20">
       {posts.map((post) => (
         <Post
           key={post.id}
@@ -22,6 +24,12 @@ const PostList = ({ posts, onUpdateFeed }) => {
           onUpdate={onUpdateFeed} // Pass the refresh function down
         />
       ))}
+      <div ref={lastPostElementRef} className="h-4"></div>
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <Spinner size="md" />
+        </div>
+      )}
     </div>
   );
 };

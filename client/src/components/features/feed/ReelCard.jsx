@@ -13,7 +13,7 @@ import { AuthContext } from '../../../context/AuthContext';
 import Avatar from '../../common/Avatar';
 import TierBadge from '../../common/TierBadge';
 
-const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
+const ReelCard = ({ reel, onReelDeleted, onVisible, preloadLevel = 'none' }) => {
   const { user: currentUser } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -43,6 +43,15 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
   const [progress, setProgress] = useState(0);
   const containerRef = useRef(null);
   const hasViewedRef = useRef(false);
+
+  // Derive the HTML `preload` attribute from the preloadLevel prop:
+  //   'active'   → 'auto'     : browser loads full video (currently playing)
+  //   'next'     → 'auto'     : browser pre-buffers next reel in background
+  //   'upcoming' → 'metadata' : browser fetches only duration/dimensions cheaply
+  //   'none'     → 'none'     : browser loads nothing (saves bandwidth)
+  const videoPreload = preloadLevel === 'none' ? 'none'
+    : preloadLevel === 'upcoming' ? 'metadata'
+    : 'auto';
 
   useEffect(() => {
     if (currentUser && reel.author === currentUser.id) {
@@ -356,6 +365,7 @@ const ReelCard = ({ reel, onReelDeleted, onVisible }) => {
             loop
             playsInline
             muted
+            preload={videoPreload}
           />
         ) : (
           <img

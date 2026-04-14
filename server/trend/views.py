@@ -915,17 +915,26 @@ class SendMessageView(APIView):
 # ----------------------------------------------------------------------
 
 
+from rest_framework.pagination import PageNumberPagination
+
+class FeedPagination(PageNumberPagination):
+    page_size = 2
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class PostListCreateView(generics.ListCreateAPIView):
     """List posts from followed users (Main Feed) or create a new post."""
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    pagination_class = FeedPagination
     
     def get_queryset(self):
+        from django.db.models import Case, When, Value, IntegerField
         user = self.request.user
         search_query = self.request.query_params.get('search', None) # Simplified search
         
-        # Base Feed: Following + Self
+        # Base Feed: Following + Self + Public users
         following_users = Follow.objects.filter(follower=user).values_list('following_id', flat=True)
         following_users = list(following_users) + [user.id]
 
@@ -938,7 +947,11 @@ class PostListCreateView(generics.ListCreateAPIView):
             Q(expiry_date__isnull=True) | Q(expiry_date__gt=timezone.now())
         ).values_list('creator_id', flat=True)
 
-        queryset = Post.objects.filter(author_id__in=following_users).exclude(
+        is_following_or_self = Q(author_id__in=following_users)
+
+        queryset = Post.objects.filter(
+            is_following_or_self | Q(author__profile__is_private=False)
+        ).exclude(
             author__profile__blocked_until__gt=timezone.now()
         ).filter(
             Q(is_exclusive=False) | Q(author=user) | Q(author_id__in=subscribed_to_ids)
@@ -948,7 +961,17 @@ class PostListCreateView(generics.ListCreateAPIView):
         if search_query:
             queryset = queryset.filter(content__icontains=search_query)
 
-        return queryset.order_by('-created_at')
+        # Annotate whether the user is followed (or self). 
+        # Then sort by 'is_followed' descending (followed users at top), then created_at descending.
+        queryset = queryset.annotate(
+            is_followed=Case(
+                When(author_id__in=following_users, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        )
+
+        return queryset.order_by('-is_followed', '-created_at')
 
     def perform_create(self, serializer): serializer.save(author=self.request.user)
     def get_serializer_context(self): return {'request': self.request}
@@ -2234,3 +2257,27 @@ class DeleteAccountView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class UserBlockListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import UserBlock
+        blocks = UserBlock.objects.filter(blocker=request.user).select_related('blocked__profile')
+        results = []
+        for block in blocks:
+            profile = block.blocked.profile
+            results.append({
+                "id": block.blocked.id,
+                "username": block.blocked.username,
+                "display_name": f"{block.blocked.first_name} {block.blocked.last_name}".strip() or block.blocked.username,
+                "profile_picture": request.build_absolute_uri(profile.profile_picture.url) if profile.profile_picture else None,
+            })
+        return Response(results)
+
+class UserUnblockView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id):
+        from .models import UserBlock
+        UserBlock.objects.filter(blocker=request.user, blocked_id=user_id).delete()
+        return Response({"message": "Successfully unblocked."})

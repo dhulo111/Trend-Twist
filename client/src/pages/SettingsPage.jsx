@@ -1,6 +1,7 @@
 // frontend/src/pages/SettingsPage.jsx
 
 import React, { useState, useContext } from 'react';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 import Button from '../components/common/Button';
@@ -9,7 +10,7 @@ import Spinner from '../components/common/Spinner';
 import { 
   IoLogOutOutline, IoColorPaletteOutline, IoPersonOutline, IoLockClosedOutline, 
   IoArchiveOutline, IoBookmarkOutline, IoCheckmarkCircle, IoCloseCircle, IoSparkles,
-  IoWalletOutline, IoInformationCircleOutline, IoCashOutline, IoRefreshOutline
+  IoWalletOutline, IoInformationCircleOutline, IoCashOutline, IoRefreshOutline, IoBanOutline
 } from 'react-icons/io5';
 
 import { FaCrown, FaStar, FaRocket, FaShieldAlt, FaHandshake, FaMoneyBillWave } from 'react-icons/fa';
@@ -829,6 +830,74 @@ const SettingsPage = () => {
     );
   };
 
+  const BlockedUsersSettings = () => {
+    const [blockedUsers, setBlockedUsers] = useState([]);
+    const [loadingBlocked, setLoadingBlocked] = useState(true);
+
+    React.useEffect(() => {
+      const fetchBlockedUsers = async () => {
+        try {
+          const res = await api.get('/blocks/');
+          setBlockedUsers(res.data);
+        } catch (e) {
+          console.error("Failed to fetch blocked users", e);
+        } finally {
+          setLoadingBlocked(false);
+        }
+      };
+      if (activeTab === 'blocked-users') {
+        fetchBlockedUsers();
+      }
+    }, [activeTab]);
+
+    const handleUnblock = async (userId) => {
+      try {
+        await api.post(`/blocks/${userId}/unblock/`);
+        setBlockedUsers(prev => prev.filter(u => u.id !== userId));
+      } catch (e) {
+        console.error("Failed to unblock", e);
+        alert("Failed to unblock user");
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold text-text-primary flex items-center gap-2">
+          <IoBanOutline className="text-red-400" /> Blocked Strangers
+        </h3>
+        
+        {loadingBlocked ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : blockedUsers.length > 0 ? (
+          <div className="space-y-3">
+            {blockedUsers.map(u => (
+              <div key={u.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-background-primary">
+                <Link to={`/profile/${u.username}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                  <img src={u.profile_picture || 'https://via.placeholder.com/150'} alt={u.username} className="w-10 h-10 rounded-full object-cover" />
+                  <div>
+                    <p className="font-bold text-text-primary">{u.display_name}</p>
+                    <p className="text-xs text-text-secondary">@{u.username}</p>
+                  </div>
+                </Link>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => handleUnblock(u.id)}
+                >
+                  Unblock
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-background-primary p-8 text-center text-text-secondary">
+            You haven't blocked any users from Stranger Talk yet.
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // --- Main Render ---
   return (
     <div className="mx-auto max-w-4xl pb-12">
@@ -886,6 +955,14 @@ const SettingsPage = () => {
             >
               <FaCrown className="h-5 w-5 text-pink-500" />
               <span>Subscriptions</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('blocked-users')}
+              className={`w-full text-left flex items-center space-x-3 p-3 rounded-lg transition-colors 
+                ${activeTab === 'blocked-users' ? 'bg-background-accent text-text-accent font-semibold' : 'text-text-primary hover:bg-background-accent/50'}`}
+            >
+              <IoBanOutline className="h-5 w-5 text-red-500" />
+              <span>Blocked Users</span>
             </button>
 
             {/* Creator Mode Tab — always visible so users can toggle */}
@@ -945,6 +1022,7 @@ const SettingsPage = () => {
             {activeTab === 'monetization' && <MonetizationSettings />}
             {activeTab === 'creator-mode' && <CreatorModeSettings />}
             {activeTab === 'creator' && isCreator && <CreatorEarningsSettings />}
+            {activeTab === 'blocked-users' && <BlockedUsersSettings />}
           </div>
         </div>
 

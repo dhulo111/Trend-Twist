@@ -15,7 +15,7 @@ import { FaRegChartBar, FaLock } from 'react-icons/fa';
 import Avatar from '../../common/Avatar';
 import TierBadge from '../../common/TierBadge';
 import { toggleLike, deletePost } from '../../../api/postApi';
-import { toggleSave } from '../../../api/userApi';
+import { toggleSave, toggleFollow } from '../../../api/userApi';
 import { AuthContext } from '../../../context/AuthContext';
 import SharePostModal from './SharePostModal';
 import CreateTwistModal from './CreateTwistModal';
@@ -42,6 +42,25 @@ const Post = ({ post, onUpdate }) => {
   // Double tap like state
   const [showBigHeart, setShowBigHeart] = useState(false);
   const lastTap = useRef(0);
+  
+  // Follow state
+  const [localIsFollowing, setLocalIsFollowing] = useState(post.is_following);
+
+  React.useEffect(() => {
+    setLocalIsFollowing(post.is_following);
+  }, [post.is_following]);
+
+  const handleFollowToggle = async (e) => {
+    e.stopPropagation();
+    const prev = localIsFollowing;
+    setLocalIsFollowing(!prev);
+    try {
+      await toggleFollow(post.author);
+    } catch (error) {
+      console.error('Failed to toggle follow:', error);
+      setLocalIsFollowing(prev);
+    }
+  };
 
   // --- Utility Functions ---
 
@@ -192,6 +211,17 @@ const Post = ({ post, onUpdate }) => {
                 </Link>
                 {post.is_exclusive && post.required_tier && (
                   <TierBadge tier={post.required_tier} />
+                )}
+                {!isAuthor && (
+                  <>
+                    <span className="text-text-secondary tracking-widest text-[10px] mx-1">•</span>
+                    <button 
+                      onClick={handleFollowToggle}
+                      className={`text-xs font-bold transition-colors ${localIsFollowing ? 'text-text-secondary hover:text-red-500' : 'text-blue-500 hover:text-blue-400'}`}
+                    >
+                      {localIsFollowing ? 'Following' : 'Follow'}
+                    </button>
+                  </>
                 )}
               </div>
               <div className="text-xs text-text-secondary">

@@ -284,6 +284,7 @@ class PostSerializer(serializers.ModelSerializer):
     comments_count = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
     has_access = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -291,9 +292,17 @@ class PostSerializer(serializers.ModelSerializer):
             'id', 'author', 'author_username', 'author_profile_picture', 
             'content', 'media_file', 'created_at', 
             'likes_count', 'is_liked', 'is_saved', 'hashtags', 'comments_count', 'twists_count',
-            'is_exclusive', 'required_tier', 'has_access'
+            'is_exclusive', 'required_tier', 'has_access', 'is_following'
         ]
         read_only_fields = ['author']
+
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            if request.user == obj.author:
+                return False
+            return Follow.objects.filter(follower=request.user, following=obj.author).exists()
+        return False
 
     def get_has_access(self, obj):
         if not obj.is_exclusive:

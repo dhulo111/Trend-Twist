@@ -59,6 +59,20 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+class UserBlock(models.Model):
+    """
+    Stores user-to-user blocks so they won't match in Stranger Talk or other parts of the app.
+    """
+    blocker = models.ForeignKey(User, related_name='blocking', on_delete=models.CASCADE)
+    blocked = models.ForeignKey(User, related_name='blocked_by', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('blocker', 'blocked')
+
+    def __str__(self):
+        return f"{self.blocker.username} blocked {self.blocked.username}"
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:

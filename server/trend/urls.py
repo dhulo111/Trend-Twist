@@ -42,6 +42,10 @@ urlpatterns = [
     # Live User Search (NEW)
     path('users/search/', views.UserSearchView.as_view(), name='user_search'),
 
+    # User Block functionality
+    path('blocks/', views.UserBlockListView.as_view(), name='user_block_list'),
+    path('blocks/<int:user_id>/unblock/', views.UserUnblockView.as_view(), name='user_unblock'),
+
 
     # ----------------------------------------------------------------------
     # 3. FOLLOW & REQUESTS (Private Accounts)

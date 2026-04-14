@@ -13,7 +13,7 @@ import {
   IoArrowBack, IoStop, IoWarning,
   IoPeople, IoWifi, IoPersonOutline,
   IoSend, IoChatboxOutline, IoClose,
-  IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline
+  IoMaleOutline, IoFemaleOutline, IoMaleFemaleOutline, IoBan
 } from 'react-icons/io5';
 import { FaRandom, FaUserSecret } from 'react-icons/fa';
 import { HiSwitchHorizontal } from 'react-icons/hi';
@@ -24,6 +24,10 @@ const ICE_SERVERS = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:stun.stunprotocol.org' },
   ],
 };
 
@@ -66,6 +70,7 @@ const StrangerTalkPage = () => {
   const [isCamOn, setIsCamOn] = useState(true);
   const [connectionTime, setConnectionTime] = useState(0);
   const [switchLoading, setSwitchLoading] = useState(false);
+  const [signalingSubStatus, setSignalingSubStatus] = useState(''); // Diagnostic info for "Linking..."
   
   // Chat state
   const [messages, setMessages] = useState([]);
@@ -141,12 +146,19 @@ const StrangerTalkPage = () => {
       localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
     }
     pc.onicecandidate = (event) => {
-      if (event.candidate && ws?.readyState === WebSocket.OPEN) {
+      // Send candidate if it exists or even if null (end of gathering signal)
+      if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ice_candidate', candidate: event.candidate }));
       }
     };
     pc.ontrack = (event) => {
-      if (remoteVideoRef.current && event.streams[0]) remoteVideoRef.current.srcObject = event.streams[0];
+      console.log('WebRTC ontrack received:', event.track.kind);
+      if (remoteVideoRef.current && event.streams[0]) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+        // Ensure playback
+        remoteVideoRef.current.play().catch(e => console.warn("Remote play failed:", e));
+        setStatus(STATUS.MATCHED);
+      }
     };
     pc.onconnectionstatechange = () => {
       console.log('WebRTC connectionState:', pc.connectionState);
@@ -175,14 +187,19 @@ const StrangerTalkPage = () => {
     return pc;
   }, []);  // No deps needed since we use refs for callbacks
 
-  const makeOffer = useCallback(async (ws) => {
-    const pc = createPeerConnection(ws);
+  const makeOffer = useCallback(async (ws, existingPc) => {
+    const pc = existingPc || createPeerConnection(ws);
     try {
+      setSignalingSubStatus('Creating Offer...');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      setSignalingSubStatus('Sending Offer...');
       ws.send(JSON.stringify({ type: 'offer', sdp: pc.localDescription }));
       setStatus(STATUS.CALLING);
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error('Error making offer:', err);
+      setSignalingSubStatus('Offer Failed');
+    }
   }, [createPeerConnection]);
 
   const startSession = useCallback(async () => {
@@ -226,27 +243,37 @@ const StrangerTalkPage = () => {
           break;
 
         case 'matched':
+          console.log('Match received:', data.role, data.stranger.username);
           setSwitchLoading(false);
           setStrangerInfo(data.stranger);
           roleRef.current = data.role;
           setStatus(STATUS.CALLING);
-          pendingIceCandidates.current = []; // Clear for NEW match
-          if (data.role === 'offerer') await makeOffer(ws);
+          setSignalingSubStatus('Initializing...');
+          pendingIceCandidates.current = []; 
+          
+          const pcMatch = createPeerConnection(ws);
+          if (data.role === 'offerer') await makeOffer(ws, pcMatch);
+          else setSignalingSubStatus('Waiting for offer...');
           break;
 
         case 'offer':
           if (roleRef.current === 'answerer') {
-            const pc = createPeerConnection(ws);
+            const pc = pcRef.current || createPeerConnection(ws);
             try {
+              setSignalingSubStatus('Processing Offer...');
               await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-              for (const c of pendingIceCandidates.current) {
-                pc.addIceCandidate(new RTCIceCandidate(c)).catch(console.error);
-              }
+              
+              const candidates = [...pendingIceCandidates.current];
               pendingIceCandidates.current = [];
+              for (const c of candidates) {
+                if (c) pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
+
+              setSignalingSubStatus('Creating Answer...');
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
+              setSignalingSubStatus('Sending Answer...');
               ws.send(JSON.stringify({ type: 'answer', sdp: pc.localDescription }));
-              setStatus(STATUS.CALLING);
             } catch (err) {
               console.error('Error handling offer:', err);
               handleSwitch();
@@ -255,13 +282,16 @@ const StrangerTalkPage = () => {
           break;
 
         case 'answer':
-          if (pcRef.current) {
+          if (roleRef.current === 'offerer' && pcRef.current) {
             try {
+              setSignalingSubStatus('Connecting...');
               await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
-              for (const c of pendingIceCandidates.current) {
-                pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(console.error);
-              }
+              
+              const candidates = [...pendingIceCandidates.current];
               pendingIceCandidates.current = [];
+              for (const c of candidates) {
+                if (c) pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
             } catch (err) {
               console.error('Error handling answer:', err);
               handleSwitch();
@@ -272,7 +302,9 @@ const StrangerTalkPage = () => {
         case 'ice_candidate':
           try {
             if (pcRef.current && pcRef.current.remoteDescription && pcRef.current.remoteDescription.type) {
-              pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(console.error);
+              if (data.candidate) {
+                pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.warn('Add ICE Failed:', e));
+              }
             } else {
               pendingIceCandidates.current.push(data.candidate);
             }
@@ -332,7 +364,16 @@ const StrangerTalkPage = () => {
     handleSwitchRef.current = handleSwitch;
   }, [handleSwitch]);
 
-  const handleStop = useCallback(() => {
+  const handleBlock = useCallback(() => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    setSwitchLoading(true); // Since it moves to next instantly
+    setStrangerInfo(null);
+    closePeerConnection();
+    wsRef.current.send(JSON.stringify({ type: 'block' }));
+  }, [closePeerConnection]);
+
+  // handleExit is now used when leaving the page entirely
+  const handleExit = useCallback(() => {
     setStatus(STATUS.STOPPED);
     closePeerConnection();
     if (wsRef.current) {
@@ -378,7 +419,7 @@ const StrangerTalkPage = () => {
       {/* --- HEADER --- */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border bg-background-secondary/90 backdrop-blur-md z-30">
         <div className="flex items-center gap-3">
-          <button onClick={() => { handleStop(); navigate('/'); }} className="p-2 rounded-full hover:bg-white/10 transition-colors text-text-secondary hover:text-text-primary">
+          <button onClick={() => { handleExit(); navigate('/'); }} className="p-2 rounded-full hover:bg-white/10 transition-colors text-text-secondary hover:text-text-primary">
             <IoArrowBack size={20} />
           </button>
           <div className="flex items-center gap-2">
@@ -403,7 +444,7 @@ const StrangerTalkPage = () => {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
               )}
            </button>
-           <button onClick={() => { handleStop(); navigate('/'); }} className="flex items-center gap-2 text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-md border border-red-500/20">
+           <button onClick={() => { handleExit(); navigate('/'); }} className="flex items-center gap-2 text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded-md border border-red-500/20">
             <IoClose size={16} /> <span className="hidden sm:inline">Exit</span>
            </button>
         </div>
@@ -435,6 +476,11 @@ const StrangerTalkPage = () => {
                    <IoWifi className="text-5xl text-orange-400 animate-pulse mx-auto mb-5" />
                    <h2 className="text-xl font-black italic tracking-tighter uppercase">Linking...</h2>
                    <p className="text-text-secondary text-xs">@{strangerInfo?.username || 'Stranger'} found</p>
+                   {signalingSubStatus && (
+                     <div className="mt-4 px-4 py-1.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-widest text-orange-400/80 animate-pulse">
+                       {signalingSubStatus}
+                     </div>
+                   )}
                 </div>
               )}
               {status === STATUS.IDLE && (
@@ -542,7 +588,7 @@ const StrangerTalkPage = () => {
             <button onClick={handleSwitch} disabled={switchLoading || isWaiting} className="px-5 md:px-6 h-10 md:h-12 rounded-full bg-orange-500 text-white font-black uppercase italic tracking-tighter text-xs md:text-sm flex items-center gap-2 hover:bg-orange-600 disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20">
               {switchLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <HiSwitchHorizontal size={18} />} Next
             </button>
-            <button onClick={handleStop} className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/10 hover:bg-red-500 text-white transition-all flex items-center justify-center"><IoStop size={18} /></button>
+            <button onClick={handleBlock} disabled={switchLoading || isWaiting || !isConnected} title="Block & Next" className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/10 hover:bg-red-500 text-white transition-all flex items-center justify-center disabled:opacity-50"><IoBan size={18} /></button>
           </div>
         </div>
 

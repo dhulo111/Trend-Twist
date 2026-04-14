@@ -440,6 +440,8 @@ class AdminUserUnblockView(views.APIView):
             profile = user.profile
             profile.blocked_until = None
             profile.block_reason = ''
+            profile.save()
+            return Response({'message': f'User {user.username} has been unblocked.'}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 

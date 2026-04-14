@@ -1,6 +1,6 @@
 // frontend/src/pages/HomePage.jsx
 
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { getStories } from '../api/storyApi';
 import * as PostApi from '../api/postApi';
 import { AuthContext } from '../context/AuthContext';
@@ -28,6 +28,22 @@ const HomePage = () => {
   const [loadingStories, setLoadingStories] = useState(true);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedError, setFeedError] = useState(null);
+
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const observer = useRef();
+
+  const lastElementRef = useCallback(node => {
+     if (loadingFeed || loadingMore) return;
+     if (observer.current) observer.current.disconnect();
+     observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMore) {
+             setPage(prev => prev + 1);
+        }
+     });
+     if (node) observer.current.observe(node);
+  }, [loadingFeed, loadingMore, hasMore]);
 
   // Modal States
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -79,24 +95,44 @@ const HomePage = () => {
     }
   }, []);
 
-  const fetchFeed = useCallback(async () => {
-    setLoadingFeed(true);
+  const fetchFeed = useCallback(async (pageNum = 1) => {
+    if (pageNum === 1) setLoadingFeed(true);
+    else setLoadingMore(true);
+    
     setFeedError(null);
     try {
-      const postData = await PostApi.getFeedPosts();
-      setFeedPosts(postData);
+      const data = await PostApi.getFeedPosts(pageNum);
+      // axiosInstance unwraps the results and attaches _paginationContext
+      const results = Array.isArray(data) ? data : (data.results || []);
+      
+      setFeedPosts(prev => {
+         if (pageNum === 1) return results;
+         return [...prev, ...results];
+      });
+
+      const paginationContext = data._paginationContext || {};
+      setHasMore(paginationContext.next !== null && paginationContext.next !== undefined);
     } catch (e) {
       setFeedError("Failed to load your feed.");
-      setFeedPosts([]);
+      if (pageNum === 1) setFeedPosts([]);
     } finally {
-      setLoadingFeed(false);
+      if (pageNum === 1) setLoadingFeed(false);
+      else setLoadingMore(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     fetchStories();
-    fetchFeed();
+    fetchFeed(1);
   }, [fetchStories, fetchFeed]);
+
+  // Load more
+  useEffect(() => {
+    if (page > 1) {
+       fetchFeed(page);
+    }
+  }, [page, fetchFeed]);
 
   const currentUserUsername = user?.username;
   const userStoryGroup = allStoryGroups.find((group) => group.username === currentUserUsername);
@@ -189,10 +225,15 @@ const HomePage = () => {
                   <IoCloudOfflineOutline className="h-10 w-10 mx-auto mb-3 text-red-500" />
                   <h3 className="text-lg text-text-primary font-bold">Connection Error</h3>
                   <p>{feedError}</p>
-                  <Button onClick={fetchFeed} className="mt-4">Try Again</Button>
+                  <Button onClick={() => fetchFeed(1)} className="mt-4">Try Again</Button>
                 </div>
               ) : feedPosts.length > 0 ? (
-                <PostList posts={feedPosts} onUpdateFeed={fetchFeed} />
+                <PostList 
+                   posts={feedPosts} 
+                   onUpdateFeed={() => fetchFeed(1)} 
+                   lastPostElementRef={lastElementRef} 
+                   loadingMore={loadingMore} 
+                />
               ) : (
                 <div className="text-center py-12 text-text-secondary rounded-xl card border-text-accent/50 border-2">
                   <h3 className="text-xl font-bold text-text-primary">Welcome to TrendTwist!</h3>

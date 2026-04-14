@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // --- Icon Imports from react-icons ---
 import { IoMdTrendingUp } from 'react-icons/io';
 import { BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
+import loginHero from '../assets/login_hero.png';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api/axiosInstance';
@@ -165,103 +166,94 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full bg-gradient-to-br from-background-primary via-background-secondary to-background-primary">
-
-      {/* --- Theme Toggle Button --- */}
+    <div className="flex min-h-screen w-full bg-background-primary font-sans relative overflow-hidden">
+      {/* Theme Toggle */}
       <button
         onClick={toggleTheme}
-        className="absolute top-6 right-6 z-10 rounded-full p-2.5 
-                   bg-background-secondary/70 border border-border/50
-                   text-text-secondary transition-colors hover:text-text-accent"
+        className="absolute top-6 right-6 z-50 rounded-full p-3 
+                   bg-background-secondary/80 border border-border/20
+                   text-text-primary shadow-lg transition-transform hover:scale-110"
       >
         {theme === 'light' ? <BsMoonStarsFill /> : <BsSunFill />}
       </button>
 
-      {/* --- 1. Left Column (Image/Branding) --- */}
-      <div className="hidden md:flex md:w-1/2 lg:w-3/5 items-center justify-center p-12">
-        <div className="flex flex-col items-center text-center">
-          <h1 className="text-5xl font-extrabold text-text-primary">
-            Trend<span className="text-text-accent">Twist</span>
+      {/* Left Column (Image Hero) */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-black">
+        <img
+          src={loginHero}
+          alt="Trend Twist Sign In"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        {/* Black overlay for perfect contrast */}
+        <div className="absolute inset-0 bg-black/60"></div>
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 px-12">
+          <h1 className="text-5xl xl:text-6xl font-black text-white tracking-tight shadow-black drop-shadow-2xl mb-6">
+            Trend<span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Twist</span>
           </h1>
-          <p className="mt-4 max-w-md text-2xl text-text-secondary">
-            Discover what's new. Join the next trend.
+          <p className="text-2xl font-medium text-gray-100 leading-relaxed shadow-black drop-shadow-md max-w-xl">
+            Sign in to catch up with friends, discover viral content, and ride the next wave.
           </p>
-          <img
-            src="https://gosharpener.com/content/uploads/photos/2024/09/sngine_554b7fb4220580094ff96ca152962eb8.jpg"
-            alt="Login Graphic"
-            className="mt-12 w-full max-w-lg rounded-2xl shadow-2xl"
-          />
         </div>
       </div>
 
-      {/* --- 2. Right Column (Login Form) --- */}
-      <div className="flex w-full items-center justify-center p-4 md:w-1/2 lg:w-2/5">
-
-        {/* Glassmorphism Panel */}
-        <div className="w-full max-w-md overflow-hidden rounded-2xl 
-                        border border-border/50 bg-background-secondary/70 
-                        p-8 shadow-2xl backdrop-blur-lg">
-
-          {/* --- Header --- */}
-          <div className="flex flex-col items-center text-center">
-            <IoMdTrendingUp className="h-10 w-10 text-text-accent" />
-            <h1 className="mt-4 text-3xl font-bold text-text-primary">
-              {step === 1 ? 'Welcome Back' : step === 2 ? 'Enter Password' : 'Reset Password'}
-            </h1>
-            <p className="mt-2 text-text-secondary">
+      {/* Right Column (Form) */}
+      <div className="flex w-full items-center justify-center lg:w-1/2 p-6 sm:p-12 relative">
+        <div className="w-full max-w-md">
+          
+          <div className="mb-10 text-center lg:text-left">
+            <img src="/logo1.png" alt="TrendTwist" className="h-14 w-14 object-contain drop-shadow-lg mb-6 lg:mx-0 mx-auto" />
+            <h2 className="text-4xl font-bold text-text-primary tracking-tight">
+              {step === 1 ? 'Welcome back' : step === 2 ? 'Enter password' : 'Reset password'}
+            </h2>
+            <p className="mt-3 text-text-secondary w-full text-base">
               {step === 1
-                ? 'Enter your username or email to continue.'
+                ? 'Please enter your details to sign in.'
                 : step === 2
                 ? `Enter password for ${usernameOrEmail}`
                 : `Enter OTP sent to your email and your new password`}
             </p>
           </div>
 
-          {/* --- Success Message Display --- */}
           {successMsg && (
-            <p className="mt-4 rounded-md bg-green-500/10 p-3 text-center text-sm font-medium text-green-500">
-              {successMsg}
-            </p>
+            <div className="mb-6 rounded-xl border border-green-500/20 bg-green-500/10 p-4 shadow-sm backdrop-blur-sm">
+              <p className="text-sm font-medium text-green-600 dark:text-green-400">{successMsg}</p>
+            </div>
           )}
 
-          {/* --- Error Display --- */}
           {error && !blockInfo && (
-            <p className="mt-4 rounded-md bg-red-500/10 p-3 text-center text-sm font-medium text-red-500">
-              {error}
-            </p>
+            <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 p-4 shadow-sm backdrop-blur-sm">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
+            </div>
           )}
 
-          {/* --- Block Info Display --- */}
           {blockInfo && (
-            <div className="mt-4 rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-center">
-              <h3 className="text-lg font-bold text-red-500 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">Account Blocked</h3>
+            <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-5 shadow-sm">
+              <h3 className="text-lg font-bold text-red-500 mb-2">Account Blocked</h3>
               <p className="text-sm text-text-secondary leading-relaxed mb-4">
                 Your account has been temporarily restricted for violating our community guidelines.
               </p>
-              <div className="flex flex-col gap-2 p-3 bg-red-500/5 dark:bg-black/20 rounded-lg text-sm font-medium text-text-primary mb-4 text-left">
-                <div className="flex flex-col">
-                  <span className="text-xs uppercase tracking-wider text-red-500/70 mb-0.5">Reason</span>
+              <div className="flex flex-col gap-3 p-4 bg-red-500/5 dark:bg-black/20 rounded-xl text-sm font-medium text-text-primary mb-4 border border-red-500/10">
+                <div>
+                  <span className="block text-xs uppercase tracking-wider text-red-500/70 mb-1">Reason</span>
                   <span>{blockInfo.block_reason || 'Administrative action'}</span>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs uppercase tracking-wider text-red-500/70 mb-0.5">Blocked Until</span>
+                <div>
+                  <span className="block text-xs uppercase tracking-wider text-red-500/70 mb-1">Blocked Until</span>
                   <span>{blockInfo.blocked_until}</span>
                 </div>
               </div>
               <p className="text-xs text-text-secondary">
                 If you believe this is a mistake, contact us at:{' '}
-                <a href={`mailto:${blockInfo.contact_email}`} className="text-text-accent font-bold hover:underline block mt-1 break-all">
+                <a href={`mailto:${blockInfo.contact_email}`} className="text-blue-500 font-semibold hover:underline block mt-1 break-all">
                   {blockInfo.contact_email}
                 </a>
               </p>
             </div>
           )}
 
-          {/* --- Animated Form Container --- */}
-          <div className="relative mt-8 h-auto">
+          <div className="relative">
             <AnimatePresence mode="wait">
-
-              {/* --- Step 1: User Check Form --- */}
               {step === 1 && (
                 <motion.form
                   key="step1"
@@ -270,47 +262,46 @@ const LoginPage = () => {
                   animate="visible"
                   exit="exit"
                   onSubmit={handleUserCheck}
-                  className="space-y-6"
+                  className="space-y-5"
                 >
                   <Input
                     id="usernameOrEmail"
-                    label="Username or Email"
+                    label=""
+                    className="h-14! text-lg rounded-xl!"
                     type="text"
-                    placeholder="Enter your username or email"
+                    placeholder="Username or email address"
                     value={usernameOrEmail}
                     onChange={(e) => setUsernameOrEmail(e.target.value)}
                     disabled={loading}
+                    autoFocus
                   />
-                  <Button type="submit" fullWidth disabled={loading}>
+                  <Button type="submit" fullWidth disabled={loading} className="h-12 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/25">
                     {loading ? <Spinner size="sm" /> : 'Continue'}
                   </Button>
 
-                  <div className="relative my-6">
+                  <div className="relative py-6">
                     <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-border/50" />
+                      <span className="w-full border-t border-border/60" />
                     </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="bg-background-secondary px-2 text-text-secondary">
-                        OR
-                      </span>
+                    <div className="relative flex justify-center text-sm font-medium">
+                      <span className="bg-background-primary px-4 text-text-muted">OR</span>
                     </div>
                   </div>
 
-                  {/* --- Google Login Button --- */}
-                  <div className="flex w-full justify-center">
+                  <div className="flex justify-center w-full">
                     <GoogleLogin
                       onSuccess={handleGoogleLoginSuccess}
                       onError={handleGoogleLoginError}
                       useOneTap={false}
                       theme="filled_blue"
                       shape="rectangular"
-                      width="320px"
+                      size="large"
+                      width="100%"
                     />
                   </div>
                 </motion.form>
               )}
 
-              {/* --- Step 2: Password Form --- */}
               {step === 2 && (
                 <motion.form
                   key="step2"
@@ -319,44 +310,48 @@ const LoginPage = () => {
                   animate="visible"
                   exit="exit"
                   onSubmit={handleLoginSubmit}
-                  className="space-y-6"
+                  className="space-y-5"
                 >
-                  <Input
-                    id="password"
-                    label="Password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
-                    autoFocus
-                  />
-                  <div className="flex justify-end mt-[-10px]">
-                    <button
-                      type="button"
-                      onClick={handleForgotPasswordRequest}
-                      className="text-xs font-semibold text-text-accent hover:underline"
-                    >
-                      Forgot Password?
-                    </button>
+                  <div className="space-y-3">
+                    <Input
+                      id="password"
+                      label=""
+                      className="h-14! text-lg rounded-xl!"
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                      autoFocus
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleForgotPasswordRequest}
+                        className="text-sm font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
                   </div>
-                  <Button type="submit" fullWidth disabled={loading}>
-                    {loading ? <Spinner size="sm" /> : 'Log In'}
+
+                  <Button type="submit" fullWidth disabled={loading} className="h-12 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/25 mt-2">
+                    {loading ? <Spinner size="sm" /> : 'Sign In'}
                   </Button>
                   
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     fullWidth
+                    className="h-12 rounded-xl font-semibold border-2"
                     onClick={() => { setStep(1); setError(null); setSuccessMsg(null); setPassword(''); }}
                     disabled={loading}
                   >
-                    Back
+                    Back to email
                   </Button>
                 </motion.form>
               )}
 
-              {/* --- Step 3: Reset Password Form --- */}
               {step === 3 && (
                 <motion.form
                   key="step3"
@@ -365,13 +360,14 @@ const LoginPage = () => {
                   animate="visible"
                   exit="exit"
                   onSubmit={handleResetPasswordSubmit}
-                  className="space-y-6"
+                  className="space-y-5"
                 >
                   <Input
                     id="otp"
-                    label="Verification OTP"
+                    label="Verification code"
+                    className="h-12! rounded-xl!"
                     type="text"
-                    placeholder="Enter 6-digit OTP"
+                    placeholder="6-digit code"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     disabled={loading}
@@ -380,7 +376,8 @@ const LoginPage = () => {
                   />
                   <Input
                     id="newPassword"
-                    label="New Password"
+                    label="New password"
+                    className="h-12! rounded-xl!"
                     type="password"
                     placeholder="Min 8 characters"
                     value={newPassword}
@@ -389,29 +386,30 @@ const LoginPage = () => {
                     required
                   />
                   
-                  <div className="flex justify-end mt-[-10px]">
+                  <div className="flex justify-end pt-1">
                     <button
                       type="button"
                       onClick={handleResendOTP}
                       disabled={resendTimer > 0 || loading}
-                       className={`text-xs font-semibold transition-colors ${
+                      className={`text-sm font-semibold transition-colors ${
                         resendTimer > 0 
-                          ? 'text-text-secondary cursor-not-allowed' 
-                          : 'text-text-accent hover:underline'
+                          ? 'text-text-muted cursor-not-allowed' 
+                          : 'text-blue-500 hover:text-blue-600'
                       }`}
                     >
-                      {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                      {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend code'}
                     </button>
                   </div>
 
-                  <Button type="submit" fullWidth disabled={loading}>
-                    {loading ? <Spinner size="sm" /> : 'Reset Password'}
+                  <Button type="submit" fullWidth disabled={loading} className="h-12 rounded-xl text-base font-semibold shadow-lg shadow-blue-500/25 mt-2">
+                    {loading ? <Spinner size="sm" /> : 'Update password'}
                   </Button>
                   
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     fullWidth
+                    className="h-12 rounded-xl font-semibold border-2"
                     onClick={() => { setStep(2); setError(null); setSuccessMsg(null); }}
                     disabled={loading}
                   >
@@ -422,16 +420,18 @@ const LoginPage = () => {
             </AnimatePresence>
           </div>
 
-          {/* --- Link to Register --- */}
-          <p className="mt-8 text-center text-sm text-text-secondary">
-            Don't have an account?{' '}
-            <Link
-              to="/register"
-              className="font-medium text-text-accent transition-colors hover:underline"
-            >
-              Sign up now
-            </Link>
-          </p>
+          <div className="mt-10 text-center">
+            <p className="text-text-secondary text-sm">
+              Don't have an account?{' '}
+              <Link
+                to="/register"
+                className="font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+              >
+                Sign up
+              </Link>
+            </p>
+          </div>
+
         </div>
       </div>
     </div>

@@ -9,6 +9,8 @@ const ReelsPage = () => {
   useSEO('Reels', 'Discover and watch the most engaging short-form videos on Trend Twist.');
   const [reels, setReels] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Track which reel is currently visible to drive progressive loading
+  const [currentIndex, setCurrentIndex] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const { reelId } = useParams();
@@ -65,6 +67,23 @@ const ReelsPage = () => {
     if (window.history.replaceState) {
       window.history.replaceState(null, '', `/reels/${id}`);
     }
+    // Update the current index so progressive loading can kick in
+    const idx = reels.findIndex(r => r.id === id);
+    if (idx !== -1) setCurrentIndex(idx);
+  };
+
+  /**
+   * Progressive loading strategy:
+   *   - current reel  → preload="auto"   (full load)
+   *   - next reel     → preload="auto"   (pre-buffer in background)
+   *   - reel after    → preload="metadata" (just metadata, minimal cost)
+   *   - all others    → preload="none"   (completely dormant)
+   */
+  const getPreloadLevel = (index) => {
+    if (index === currentIndex) return 'active';      // currently playing
+    if (index === currentIndex + 1) return 'next';    // preload fully
+    if (index === currentIndex + 2) return 'upcoming'; // preload metadata only
+    return 'none';
   };
 
   return (
@@ -83,19 +102,13 @@ const ReelsPage = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
             </div>
           ) : (
-            reels.map(reel => (
-              // On mobile, subtract nav heights (16 top + 16 bottom = 8rem or ~128px)
-              // We use min-h to ensure snap works
+            reels.map((reel, index) => (
               <div key={reel.id} className="w-full h-full snap-start [scroll-snap-stop:always] shrink-0 relative flex justify-center bg-black">
-                {/* 
-                     Pass basic props. 
-                     Note: ReelCard is now w-full h-full, so it fills this 420px container on desktop 
-                     and 100% on mobile. 
-                 */}
                 <ReelCard
                   reel={reel}
                   onReelDeleted={handleReelDeleted}
                   onVisible={handleReelVisible}
+                  preloadLevel={getPreloadLevel(index)}
                 />
               </div>
             ))
