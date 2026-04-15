@@ -32,19 +32,22 @@ import {
 
 // --- Constants & Assets ---
 const EDITOR_FONTS = [
-  { name: "Classic", value: "Inter", css: "font-sans" },
-  { name: "Modern", value: "Playfair Display", css: "font-serif" },
-  { name: "Neon", value: "Courier New", css: "font-mono" },
-  { name: "Typewriter", value: "Merriweather", css: "font-serif" },
-  { name: "Cursive", value: "cursive", css: "font-cursive" },
-  { name: "Bold", value: "Impact", css: "font-sans font-black" },
+  { name: "Classic", value: "Inter", style: { fontFamily: 'Inter', fontWeight: '500' } },
+  { name: "Modern", value: "Playfair Display", style: { fontFamily: 'Playfair Display', fontWeight: '700', fontStyle: 'italic' } },
+  { name: "Neon", value: "Courier New", style: { fontFamily: 'Courier New', fontWeight: '700' } },
+  { name: "Comic", value: "Bangers", style: { fontFamily: 'Bangers' } },
+  { name: "Marker", value: "Permanent Marker", style: { fontFamily: 'Permanent Marker' } },
+  { name: "Script", value: "Dancing Script", style: { fontFamily: 'Dancing Script', fontWeight: '700' } },
+  { name: "Typewriter", value: "Merriweather", style: { fontFamily: 'Merriweather' } },
+  { name: "Bold", value: "Impact", style: { fontFamily: 'Impact' } },
 ];
 
 const STICKERS = ["❤️", "🔥", "😂", "⭐", "✨", "💯", "😍", "👍", "🎉", "🍕", "🍔", "🎵", "📍", "👋", "🚀", "💡", "🌈", "🦋"];
 
 const COLORS = [
   "#ffffff", "#000000", "#ef4444", "#f97316", "#eab308",
-  "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#d946ef", "#f43f5e"
+  "#22c55e", "#10b981", "#06b6d4", "#3b82f6", "#6366f1", 
+  "#8b5cf6", "#d946ef", "#f43f5e", "#4ade80", "#fbbf24", "#fda4af"
 ];
 
 const FILTER_TYPES = ['none', 'vintage', 'bw', 'warm', 'cool', 'technicolor', 'kodachrome'];
@@ -97,8 +100,9 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
   const [trimRange, setTrimRange] = useState({ start: 0, end: 15 });
 
   const [textOptions, setTextOptions] = useState({
-    font: "Inter", color: "#ffffff", bgColor: "transparent", stroke: false, neon: false, align: "center",
+    font: EDITOR_FONTS[0].value, color: "#ffffff", bgColor: "transparent", align: "center",
   });
+  const [editingText, setEditingText] = useState(null);
 
   const [drawOptions, setDrawOptions] = useState({
     color: "#ffffff", width: 5, neon: false,
@@ -315,21 +319,61 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
 
   // Overlay Logic
   const handleAddText = () => {
+    setEditingText({
+      text: "",
+      font: textOptions.font,
+      color: textOptions.color,
+      bgColor: textOptions.bgColor,
+      align: textOptions.align,
+      isNew: true
+    });
+    setActiveTool("text_modal");
+  };
+
+  const saveTextEdit = (data) => {
     const c = canvasRef.current;
     if (!c) return;
-    const text = new fabric.Textbox("Type...", {
-      left: c.getWidth() / 2, top: c.getHeight() / 2,
-      originX: 'center', originY: 'center', width: 200, fontSize: 36,
-      fill: textOptions.color, fontFamily: textOptions.font,
-      backgroundColor: textOptions.bgColor !== 'transparent' ? textOptions.bgColor : '',
-      textAlign: 'center',
-      shadow: textOptions.neon ? new fabric.Shadow({ color: textOptions.color, blur: 20 }) : null,
-      stroke: textOptions.stroke ? '#000000' : null,
-      strokeWidth: textOptions.stroke ? 1 : 0,
-    });
-    c.add(text);
-    c.setActiveObject(text);
-    setActiveTool("text");
+
+    if (data.isNew) {
+      if (!data.text.trim()) {
+        setActiveTool("none");
+        setEditingText(null);
+        return;
+      }
+      const text = new fabric.Textbox(data.text, {
+        left: c.getWidth() / 2, top: c.getHeight() / 2,
+        originX: 'center', originY: 'center', width: 250, fontSize: 32,
+        fill: data.color, fontFamily: data.font,
+        backgroundColor: data.bgColor !== 'transparent' ? data.bgColor : '',
+        textAlign: data.align,
+        lineHeight: 1.1,
+        padding: 5,
+        cornerSize: 10,
+        transparentCorners: false,
+      });
+      c.add(text);
+      c.setActiveObject(text);
+    } else {
+      const obj = c.getActiveObject() || c.getObjects().find(o => o.id === data.id);
+      if (obj) {
+        if (!data.text.trim()) {
+          c.remove(obj);
+        } else {
+          obj.set({
+            text: data.text,
+            fill: data.color,
+            fontFamily: data.font,
+            backgroundColor: data.bgColor !== 'transparent' ? data.bgColor : '',
+            textAlign: data.align
+          });
+        }
+        c.renderAll();
+      }
+    }
+    setActiveTool("none");
+    setEditingText(null);
+    c.discardActiveObject();
+    c.renderAll();
     pushHistorySnapshot(c);
   };
 
@@ -413,13 +457,10 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
       if (obj.type === 'textbox') {
         setActiveTool('text');
         // Sync State
-        const matchedFont = EDITOR_FONTS.find(f => f.value === obj.fontFamily) || EDITOR_FONTS[0];
         setTextOptions({
-          font: matchedFont.name,
+          font: obj.fontFamily,
           color: obj.fill,
           bgColor: obj.backgroundColor === '' ? 'transparent' : obj.backgroundColor,
-          stroke: !!obj.stroke,
-          neon: !!obj.shadow,
           align: obj.textAlign
         });
       } else if (obj.type === 'text') {
@@ -429,19 +470,35 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
     };
 
     const handleCleared = () => {
-      if (activeTool === 'text' || activeTool === 'sticker_edit') {
-        setActiveTool('none');
+      setActiveTool(prev => (['text', 'sticker_edit'].includes(prev) ? 'none' : prev));
+    };
+
+    const handleDoubleClick = (e) => {
+      if (e.target && e.target.type === 'textbox') {
+        const obj = e.target;
+        setEditingText({
+          id: obj.id,
+          text: obj.text,
+          font: obj.fontFamily,
+          color: obj.fill,
+          bgColor: obj.backgroundColor === '' ? 'transparent' : obj.backgroundColor,
+          align: obj.textAlign,
+          isNew: false
+        });
+        setActiveTool('text_modal');
       }
     };
 
     c.on('selection:created', handleSelection);
     c.on('selection:updated', handleSelection);
     c.on('selection:cleared', handleCleared);
+    c.on('mouse:dblclick', handleDoubleClick);
 
     return () => {
       c.off('selection:created', handleSelection);
       c.off('selection:updated', handleSelection);
       c.off('selection:cleared', handleCleared);
+      c.off('mouse:dblclick', handleDoubleClick);
     };
   }, [ready]);
 
@@ -562,14 +619,38 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
         {/* Top Bar (Contextual Tools Only) */}
         {["text", "draw", "filter", "sticker_edit"].includes(activeTool) && (
           <div className="absolute top-0 inset-x-0 p-3 md:p-4 pt-[env(safe-area-inset-top,12px)] md:pt-6 flex justify-between items-start z-[100] bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-            <div className="w-full flex justify-between items-center">
-              <button
-                onClick={handleDeleteObject}
-                className="bg-red-500/80 p-2 rounded-full text-white backdrop-blur-md hover:bg-red-600 transition shadow-lg pointer-events-auto"
-              >
-                <IoTrash size={18} />
-              </button>
-              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 bg-white text-black rounded-full font-bold text-sm shadow-lg pointer-events-auto">
+            <div className="w-full flex justify-between items-center group pointer-events-none">
+              <div className="flex gap-2 pointer-events-auto">
+                <button
+                  onClick={handleDeleteObject}
+                  className="bg-red-500/80 p-2.5 rounded-full text-white backdrop-blur-md hover:bg-red-600 transition shadow-lg"
+                >
+                  <IoTrash size={18} />
+                </button>
+                {activeTool === 'text' && (
+                  <button
+                    onClick={() => {
+                      const obj = canvasRef.current?.getActiveObject();
+                      if (obj) {
+                        setEditingText({
+                          id: obj.id,
+                          text: obj.text,
+                          font: obj.fontFamily,
+                          color: obj.fill,
+                          bgColor: obj.backgroundColor === '' ? 'transparent' : obj.backgroundColor,
+                          align: obj.textAlign,
+                          isNew: false
+                        });
+                        setActiveTool('text_modal');
+                      }
+                    }}
+                    className="bg-white/20 p-2.5 rounded-full text-white backdrop-blur-md hover:bg-white/40 transition shadow-lg border border-white/20"
+                  >
+                    <IoBrushOutline size={18} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => { setActiveTool('none'); toggleDrawingMode(false); const c = canvasRef.current; if (c) c.discardActiveObject(); c?.requestRenderAll(); }} className="flex items-center gap-1.5 px-4 py-2 bg-white text-black rounded-full font-bold text-sm shadow-lg pointer-events-auto active:scale-95 transition-transform">
                 <IoCheckmark /> Done
               </button>
             </div>
@@ -690,37 +771,6 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
           </ToolbarContainer>
         )}
 
-        {/* Text Toolbar */}
-        {activeTool === 'text' && (
-          <ToolbarContainer className="bottom-14 md:bottom-28">
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-1">
-              {EDITOR_FONTS.map((font) => (
-                <button
-                  key={font.name}
-                  onClick={() => {
-                    setTextOptions(prev => ({ ...prev, font: font.name }));
-                    updateTextProp('fontFamily', font.value);
-                  }}
-                  className={`px-3 py-1 rounded-full whitespace-nowrap text-xs border transition-all ${textOptions.font === font.name
-                    ? "bg-white text-black border-white"
-                    : "bg-black/40 text-white border-white/20 hover:bg-black/60"}`}
-                >
-                  <span className={font.css}>{font.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1.5 md:gap-2 justify-center">
-              {COLORS.slice(0, 7).map(c => (
-                <button key={c} onClick={() => { setTextOptions(p => ({ ...p, color: c })); updateTextProp('fill', c); }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 ${textOptions.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
-              ))}
-              <button onClick={() => {
-                const n = !textOptions.neon; setTextOptions(p => ({ ...p, neon: n })); updateTextProp('neon', n);
-              }} className={`w-7 h-7 md:w-8 md:h-8 rounded-full border border-white/20 flex items-center justify-center ${textOptions.neon ? 'bg-fuchsia-500 text-white' : 'bg-black/50 text-white'}`}>
-                <IoFlash size={12} />
-              </button>
-            </div>
-          </ToolbarContainer>
-        )}
 
         {/* Draw Toolbar */}
         {activeTool === 'draw' && (
@@ -818,6 +868,112 @@ const ReelEditor = ({ mediaFile, initialJson, initialMetadata, onNext, onCancel 
                 </div>
               ))}
               {musicResults.length === 0 && !isSearchingMusic && <div className="text-center text-gray-500 mt-10 text-sm">Search for your favorite music</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Text Editor Modal */}
+        {activeTool === 'text_modal' && editingText && (
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-0 z-[500] bg-black/80 backdrop-blur-md flex flex-col p-4 animate-in fade-in duration-200"
+          >
+            {/* Top Bar */}
+            <div className="flex justify-between items-center mb-10 pt-4">
+              <button 
+                onClick={() => { setActiveTool('none'); setEditingText(null); }}
+                className="text-white bg-white/10 p-2 rounded-full"
+              >
+                <IoCloseOutline size={24} />
+              </button>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => {
+                    const nextAlign = editingText.align === 'center' ? 'left' : editingText.align === 'left' ? 'right' : 'center';
+                    setEditingText(p => ({ ...p, align: nextAlign }));
+                  }}
+                  className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full text-white"
+                >
+                  <IoGridOutline size={18} />
+                </button>
+                <button 
+                  onClick={() => {
+                    const hasBg = editingText.bgColor !== 'transparent';
+                    setEditingText(p => ({ ...p, bgColor: hasBg ? 'transparent' : editingText.color === '#ffffff' ? '#000000' : '#ffffff' }));
+                  }}
+                  className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${editingText.bgColor !== 'transparent' ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+                >
+                  <IoText size={18} />
+                </button>
+              </div>
+              <button 
+                onClick={() => saveTextEdit(editingText)}
+                className="px-6 py-2 bg-white text-black font-bold rounded-full text-sm shadow-xl active:scale-95 transition-transform"
+              >
+                Done
+              </button>
+            </div>
+
+            {/* Input Area */}
+            <div className="flex-1 flex items-center justify-center p-4">
+              <textarea
+                autoFocus
+                value={editingText.text}
+                onChange={(e) => setEditingText(p => ({ ...p, text: e.target.value }))}
+                placeholder="Type something..."
+                className={`w-full bg-transparent border-none outline-none text-center resize-none transition-all duration-300 placeholder:text-white/30`}
+                style={{
+                  fontFamily: editingText.font,
+                  color: editingText.color,
+                  backgroundColor: editingText.bgColor,
+                  textAlign: editingText.align,
+                  fontSize: '2.5rem',
+                  lineHeight: '1.2',
+                  padding: editingText.bgColor !== 'transparent' ? '12px 20px' : '0',
+                  borderRadius: editingText.bgColor !== 'transparent' ? '12px' : '0'
+                }}
+                rows={4}
+              />
+            </div>
+
+            {/* Bottom Controls */}
+            <div className="pb-10 space-y-6">
+              {/* Font Selector */}
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                {EDITOR_FONTS.map((inner) => (
+                  <button
+                    key={inner.name}
+                    onClick={() => {
+                      setEditingText(p => ({ ...p, font: inner.value }));
+                      setTextOptions(p => ({ ...p, font: inner.value }));
+                    }}
+                    className={`shrink-0 h-10 px-4 rounded-xl border transition-all ${editingText.font === inner.value 
+                      ? 'bg-white text-black border-white scale-105 shadow-lg' 
+                      : 'bg-black/40 text-white border-white/20'}`}
+                    style={inner.style}
+                  >
+                    {inner.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Color Selector */}
+              <div className="flex gap-2.5 overflow-x-auto no-scrollbar py-2">
+                {COLORS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      setEditingText(p => ({ ...p, color: c }));
+                      if (editingText.bgColor !== 'transparent') {
+                        setEditingText(p => ({ ...p, bgColor: c === '#ffffff' ? '#000000' : '#ffffff' }));
+                      }
+                      setTextOptions(p => ({ ...p, color: c }));
+                    }}
+                    className={`shrink-0 w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${editingText.color === c ? 'border-white scale-125' : 'border-transparent shadow-sm'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         )}
