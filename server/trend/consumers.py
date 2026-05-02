@@ -108,10 +108,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'data': source_data,
                     'caller_id': self.current_user.id,
                     'caller_username': self.current_user.username,
-                    'is_global': True # Instructs frontend to open CallInterface regardless of page
+                    'is_global': True
                 }
             }
         )
+        
+        # FCM push for killed / background state
+        if source_data.get('type') == 'call_offer':
+            try:
+                from django.contrib.auth.models import User as DjangoUser
+                from channels.db import database_sync_to_async
+                
+                @database_sync_to_async
+                def _push():
+                    from .services.fcm_service import send_call_notification
+                    try:
+                        recipient = DjangoUser.objects.get(id=int(target_user_id))
+                        send_call_notification(
+                            caller=self.current_user,
+                            recipient=recipient,
+                            call_type=source_data.get('callType', 'voice'),
+                            signal_data=source_data,
+                        )
+                    except DjangoUser.DoesNotExist:
+                        pass
+                await _push()
+            except Exception as e:
+                logger.warning(f"FCM call push failed: {e}")
+        
         logger.info(f"App-wide call bridge: {source_data.get('type')} -> {target_group}")
 
     async def call_signal_relay(self, event):
@@ -185,7 +209,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'group_name'): await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def notification_gateway(self, event): 
-        """Direct push to global UI context."""
+        """Direct push to global UI context (call signals etc.)."""
         await self.send(text_data=json.dumps(event['payload']))
+
+    async def chat_alert(self, event):
+        """Relays a new message alert to the client."""
+        await self.send(text_data=json.dumps({
+            'type': 'chat_alert',
+            'data': event['data']
+        }))
 
     async def notification_message(self, event): await self.send(text_data=json.dumps(event))

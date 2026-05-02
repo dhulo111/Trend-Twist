@@ -1,0 +1,56 @@
+TREND TWIST - API REQUIREMENT & WORK DETAILS
+
+BASE URL: http://<server-ip>:8000/api/
+AUTH: Bearer <JWT_ACCESS_TOKEN>
+
+--- API LIST & WORK DETAILS ---
+
+1. AUTHENTICATION
+- auth/login/password/ [POST]: Standard login.
+- auth/register/send-otp/ [POST]: Send OTP to email for signup.
+- auth/register/password/ [POST]: Verify OTP and create account.
+- auth/google/ [POST]: Google OAuth login.
+- token/refresh/ [POST]: Refresh expired access tokens.
+
+2. PROFILE
+- user/ [GET|PATCH]: Manage current user profile.
+- profiles/<username>/ [GET]: View user profile (respects privacy).
+- users/search/ [GET]: Search users.
+- users/<id>/follow/ [POST]: Follow/Unfollow/Send Request.
+
+3. CONTENT
+- posts/ [GET|POST]: Main feed posts (Images/Videos).
+- twists/ [GET|POST]: Short text content (Twitter-like).
+- reels/ [GET|POST]: Short vertical videos.
+- stories/ [GET|POST]: 24-hour stories.
+- stories/<id>/view/ [POST]: Register story view.
+
+4. ENGAGEMENT
+- <type>/<id>/like/ [POST]: Toggle like for post/reel/twist/story.
+- <type>/<id>/comments/ [GET|POST]: Comments for content.
+- save/ [POST]: Toggle bookmarking an item.
+
+5. MESSAGING (CHAT)
+- chats/ [GET]: Inbox list.
+- chats/<user_id>/ [GET]: Chat history.
+- messages/send/ [POST]: Send direct or group message.
+- groups/ [GET|POST]: Manage chat groups.
+
+6. NOTIFICATIONS
+- notifications/ [GET]: List notifications.
+- notifications/<id>/<action>/ [POST]: Read/Accept/Reject.
+
+7. SUBSCRIPTIONS
+- subscriptions/global-plans/ [GET]: List price tiers.
+- subscriptions/checkout/ [POST]: Get Stripe payment link.
+
+WEBSOCKETS:
+- Notifications: ws://<server>/ws/notifications/
+- Chat: ws://<server>/ws/chat/<room_name>/
+
+--- WORK FLOW FOR ANDROID ---
+1. Login/Register to get tokens.
+2. Use Access Token in headers for all other calls.
+3. Handle 401 errors by refreshing the token.
+4. Use Multipart for file uploads (media_file).
+5. Listen to WebSockets for real-time alerts.

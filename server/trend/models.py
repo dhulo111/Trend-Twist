@@ -95,6 +95,15 @@ class OTPRequest(models.Model):
     def is_expired(self):
         return timezone.now() > self.expires_at
 
+class FCMDevice(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='fcm_devices')
+    registration_id = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.registration_id[:10]}..."
+
 
 # --- 3. Social Graph Models (UPDATED for Follow Requests) ---
 

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "910904473751",
+    "project_id": "trend-twist-3afef",
+    "storage_bucket": "trend-twist-3afef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:910904473751:android:f7d3030b718a8ce988d1d2",
+        "android_client_info": {
+          "package_name": "com.anonymous.TrendTwist"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "910904473751-330epuij15ug81baakcom8eu7hp7ljr0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOqnETj2yVM3BCXkx2InQP2Nm9kZaNMfM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "910904473751-330epuij15ug81baakcom8eu7hp7ljr0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

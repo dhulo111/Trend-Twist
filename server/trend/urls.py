@@ -188,4 +188,5 @@ path('stories/<int:story_id>/analytics/', views.StoryAnalyticsView.as_view(), na
     # 8. KEEP-ALIVE (prevents Render free-tier cold starts)
     # ------------------------------------------------------------------
     path('ping/', views.PingView.as_view(), name='ping'),
+    path('auth/register-fcm/', views.RegisterFCMView.as_view(), name='register_fcm'),
 ]

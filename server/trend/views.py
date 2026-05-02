@@ -832,17 +832,25 @@ class SendMessageView(APIView):
                 # Broadcast Global Alert to all members (Except Sender)
                 for member in group.members.all():
                     if member != request.user:
-                        async_to_sync(channel_layer.group_send)(
-                             f"user_{member.id}",
-                            {
-                                'type': 'chat_alert',
-                                'data': {
-                                    'sender': request.user.username,
-                                    'content': msg.content[:30],
-                                    'group_id': group.id,
-                                    'group_name': group.name
-                                }
+                        alert_data = {
+                            'type': 'chat_alert',
+                            'data': {
+                                'sender_id': str(request.user.id),
+                                'sender': request.user.username,
+                                'sender_profile_picture': request.user.profile.profile_picture.url if request.user.profile.profile_picture else '',
+                                'content': msg.content[:100],
+                                'group_id': str(group.id),
+                                'group_name': group.name
                             }
+                        }
+                        async_to_sync(channel_layer.group_send)(f"user_{member.id}", alert_data)
+                        
+                        # Send FCM for background/killed state
+                        from .services.fcm_service import send_message_notification
+                        send_message_notification(
+                            sender=request.user,
+                            recipient=member,
+                            content=f"{request.user.username}: {msg.content}",
                         )
 
                 return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
@@ -891,16 +899,23 @@ class SendMessageView(APIView):
 
 
             # Broadcast Global Alert to Recipient
-            async_to_sync(channel_layer.group_send)(
-                 f"user_{recipient.id}",
-                {
-                    'type': 'chat_alert',
-                    'data': {
-                        'sender': request.user.username,
-                        'content': msg.content[:30],
-                        'recipient_username': request.user.username # The other person IS the sender from recipient POV
-                    }
+            alert_data = {
+                'type': 'chat_alert',
+                'data': {
+                    'sender_id': str(request.user.id),
+                    'sender': request.user.username,
+                    'sender_profile_picture': request.user.profile.profile_picture.url if request.user.profile.profile_picture else '',
+                    'content': msg.content[:100],
                 }
+            }
+            async_to_sync(channel_layer.group_send)(f"user_{recipient.id}", alert_data)
+
+            # Send FCM for background/killed state
+            from .services.fcm_service import send_message_notification
+            send_message_notification(
+                sender=request.user,
+                recipient=recipient,
+                content=msg.content,
             )
 
             return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
@@ -918,7 +933,7 @@ class SendMessageView(APIView):
 from rest_framework.pagination import PageNumberPagination
 
 class FeedPagination(PageNumberPagination):
-    page_size = 2
+    page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
 
@@ -2281,3 +2296,10 @@ class UserUnblockView(APIView):
         from .models import UserBlock
         UserBlock.objects.filter(blocker=request.user, blocked_id=user_id).delete()
         return Response({"message": "Successfully unblocked."})
+class RegisterFCMView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        token = request.data.get('registration_id')
+        if not token: return Response({"error": "No token provided."}, status=400)
+        FCMDevice.objects.update_or_create(registration_id=token, defaults={'user': request.user})
+        return Response({"status": "Token registered."})
